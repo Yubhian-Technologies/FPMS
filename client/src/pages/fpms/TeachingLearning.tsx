@@ -22,6 +22,8 @@ interface SubSubCriteria {
   hodScore?: number;
   hodDescription?: string;
   isVerified?: boolean;
+  committeeScore?: number;
+  committeeRemarks?: string;
 }
 
 interface SubCriteria {
@@ -32,13 +34,23 @@ interface SubCriteria {
   status: "not-started" | "in-progress" | "completed";
 }
 
+interface Appeal {
+  id: string;
+  subId: string;
+  criterionName: string;
+  committeeScore?: number;
+  committeeRemarks?: string;
+  status: string;
+}
+
 export default function TeachingLearning() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [subCriteria, setSubCriteria] = useState<SubCriteria[]>([]);
+  const [appeals, setAppeals] = useState<Appeal[]>([]);
 
- const defaultSubCriteria: SubCriteria[] = [
+  const defaultSubCriteria: SubCriteria[] = [
     {
       id: "1.1",
       title: "Curriculum Development",
@@ -48,7 +60,7 @@ export default function TeachingLearning() {
         { name: "Digital Content Creation", claimedScore: 0, maxScore: 3, evidence: "", description: "" },
         { name: "CO–PO–PSO Mapping", claimedScore: 0, maxScore: 2, evidence: "", description: "" },
       ],
-      status:'not-started'
+      status: 'not-started'
     },
     {
       id: "1.2",
@@ -62,7 +74,7 @@ export default function TeachingLearning() {
         { name: "SDG-related Complex Problem Integration", claimedScore: 0, maxScore: 3, evidence: "", description: "" },
         { name: "Support for Slow Learners", claimedScore: 0, maxScore: 2, evidence: "", description: "" },
       ],
-      status:'not-started'
+      status: 'not-started'
     },
     {
       id: "1.3",
@@ -73,7 +85,7 @@ export default function TeachingLearning() {
         { name: "Rubric-based Assessment", claimedScore: 0, maxScore: 2, evidence: "", description: "" },
         { name: "CO Attainment Calculation", claimedScore: 0, maxScore: 2, evidence: "", description: "" },
       ],
-      status:'not-started'
+      status: 'not-started'
     },
     {
       id: "1.4",
@@ -86,7 +98,7 @@ export default function TeachingLearning() {
         { name: "SWAYAM / NPTEL Facilitation", claimedScore: 0, maxScore: 2, evidence: "", description: "" },
         { name: "Mini / Micro Projects with PO–PSO Alignment", claimedScore: 0, maxScore: 2, evidence: "", description: "" },
       ],
-      status:'not-started'
+      status: 'not-started'
     },
     {
       id: "1.5",
@@ -96,7 +108,7 @@ export default function TeachingLearning() {
         { name: "Digital/Video Content Portfolio", claimedScore: 0, maxScore: 3, evidence: "", description: "" },
         { name: "Implementation Report (LMS/Classroom Usage)", claimedScore: 0, maxScore: 2, evidence: "", description: "" },
       ],
-      status:'not-started'
+      status: 'not-started'
     },
     {
       id: "1.6",
@@ -106,7 +118,7 @@ export default function TeachingLearning() {
         { name: "Excellent Feedback ≥85%", claimedScore: 0, maxScore: 4, evidence: "", description: "" },
         { name: "Good Feedback 75–84.9%", claimedScore: 0, maxScore: 4, evidence: "", description: "" },
       ],
-      status:'not-started'
+      status: 'not-started'
     },
     {
       id: "1.7",
@@ -116,7 +128,7 @@ export default function TeachingLearning() {
         { name: "≥60% Students scoring >60%", claimedScore: 0, maxScore: 5, evidence: "", description: "" },
         { name: "50–59.9% Students scoring >60%", claimedScore: 0, maxScore: 5, evidence: "", description: "" },
       ],
-      status:'not-started'
+      status: 'not-started'
     },
     {
       id: "1.8",
@@ -129,46 +141,59 @@ export default function TeachingLearning() {
         { name: "Assessment Plans & Bloom's-tagged Question Banks", claimedScore: 0, maxScore: 1, evidence: "", description: "" },
         { name: "Repeat for Second Semester", claimedScore: 0, maxScore: 4, evidence: "", description: "" },
       ],
-      status:'not-started'
+      status: 'not-started'
     },
   ];
 
-  const fetchFacultySubmissions = async () => {
-    if (!user) return;
+  const fetchData = async () => {
+    if (!user?.id) return;
     setLoading(true);
     try {
-      const res = await api.get(`/api/module1/faculty/${user.id}`);
-      const backendData = res.data?.data || [];
+      // Fetch module1 data
+      const subRes = await api.get(`/api/module1/faculty/${user.id}`);
+      const backendData = subRes.data?.data || [];
 
+      // Fetch appeals
+      const appealRes = await api.get(`/api/appeal/${user.id}`);
+      const facultyAppeals = appealRes.data?.data || [];
+      setAppeals(facultyAppeals);
+
+      // Merge everything
       const merged = defaultSubCriteria.map((sc) => {
-  const existing = backendData.find((b: any) => b.id === sc.id);
-  return {
-    ...sc,
-    subItems: sc.subItems.map((si) => {
-      const existingItem = existing?.criteria?.find((c: any) => c.name === si.name);
-      return existingItem
-        ? {
-            ...si,
-            claimedScore: existingItem.claimedScore ?? si.claimedScore,
-            evidence: existingItem.evidence ?? "",
-            description:
-  existingItem.facultyDescription !== undefined && existingItem.facultyDescription !== null
-    ? existingItem.facultyDescription
-    : si.description ?? "",
+        const existing = backendData.find((b: any) => b.id === sc.id);
+        return {
+          ...sc,
+          subItems: sc.subItems.map((si) => {
+            const existingItem = existing?.criteria?.find((c: any) => c.name === si.name);
 
-            hodScore: existingItem.hodScore ?? undefined,
-            hodDescription: existingItem.hodDescription ?? "",
-            isVerified: existingItem.isVerified ?? false,
-          }
-        : si;
-    }),
-    status: existing ? "in-progress" : "not-started",
-  };
-});
+            const matchingAppeal = facultyAppeals.find(
+              (a: Appeal) =>
+                a.subId === sc.id &&
+                a.criterionName === si.name &&
+                (a.status === "committee_verified" || a.committeeScore !== undefined)
+            );
 
+            return existingItem
+              ? {
+                  ...si,
+                  claimedScore: existingItem.claimedScore ?? si.claimedScore,
+                  evidence: existingItem.evidence ?? "",
+                  description: existingItem.facultyDescription ?? si.description ?? "",
+                  hodScore: existingItem.hodScore ?? undefined,
+                  hodDescription: existingItem.hodDescription ?? "",
+                  isVerified: existingItem.isVerified ?? false,
+                  committeeScore: matchingAppeal?.committeeScore ?? undefined,
+                  committeeRemarks: matchingAppeal?.committeeRemarks ?? "",
+                }
+              : si;
+          }),
+          status: existing ? "in-progress" : "not-started",
+        };
+      });
 
       setSubCriteria(merged);
-    } catch {
+    } catch (err) {
+      console.error(err);
       toast({ title: "Error", description: "Failed to load data", variant: "destructive" });
     } finally {
       setLoading(false);
@@ -176,7 +201,7 @@ export default function TeachingLearning() {
   };
 
   useEffect(() => {
-    fetchFacultySubmissions();
+    fetchData();
   }, [user]);
 
   const updateSubItem = (subId: string, index: number, field: keyof SubSubCriteria, value: string | number) => {
@@ -225,7 +250,7 @@ export default function TeachingLearning() {
     0
   );
   const totalVerified = subCriteria.reduce(
-    (sum, sc) => sum + sc.subItems.reduce((s, si) => s + (si.isVerified ? si.hodScore ?? 0 : 0), 0),
+    (sum, sc) => sum + sc.subItems.reduce((s, si) => s + (si.isVerified ? (si.committeeScore ?? si.hodScore ?? 0) : 0), 0),
     0
   );
   const totalNotStarted = totalMax - totalSubmitted - totalVerified;
@@ -233,14 +258,12 @@ export default function TeachingLearning() {
   return (
     <DashboardLayout title="Teaching & Learning" subtitle="Criterion 1 • Maximum 70 Points">
       <div className="space-y-6">
-        
-        
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Overall Progress</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 rounded-full">
-            <div className="relative group w-full h-4 rounded-full  flex">
+            <div className="relative group w-full h-4 rounded-full flex">
               <div
                 className="bg-primary h-4"
                 style={{ width: `${(totalVerified / totalMax) * 100}%` }}
@@ -249,10 +272,7 @@ export default function TeachingLearning() {
                 className="bg-primary h-4"
                 style={{ width: `${(totalSubmitted / totalMax) * 100}%` }}
               />
-              <div
-                className="bg-secondary h-4 flex-1"
-              />
-              {/* Tooltip on hover */}
+              <div className="bg-secondary h-4 flex-1" />
               <div className="absolute left-1/2 -translate-x-1/2 mt-2 hidden group-hover:block bg-black text-white text-xs rounded px-3 py-2 z-50 shadow-lg">
                 <div>Submitted: {totalSubmitted} / {totalMax}</div>
                 <div>Verified: {totalVerified} / {totalMax}</div>
@@ -296,6 +316,7 @@ export default function TeachingLearning() {
                     </CardHeader>
 
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Faculty Score - always shown */}
                       <div>
                         <label className="text-sm">
                           Faculty Score <span className="text-muted-foreground">(Max {si.maxScore})</span>
@@ -313,13 +334,14 @@ export default function TeachingLearning() {
                         />
                       </div>
 
-                      {si.isVerified && (
+                      {/* HOD Score & Description - restored, shown when verified */}
+                      {si.isVerified && si.hodScore !== undefined && (
                         <div>
                           <label className="text-sm">HOD Score</label>
                           <input
                             type="number"
                             className="w-full border rounded p-2 bg-green-50"
-                            value={si.hodScore ?? 0}
+                            value={si.hodScore}
                             disabled
                           />
                         </div>
@@ -349,15 +371,40 @@ export default function TeachingLearning() {
                         />
                       </div>
 
-                      {si.isVerified && (
+                      {/* HOD Description - shown when verified */}
+                      {si.isVerified && si.hodDescription && (
                         <div className="md:col-span-2">
                           <label className="text-sm">HOD Description</label>
                           <textarea
                             className="w-full border rounded p-2 min-h-[80px] bg-green-50"
-                            value={si.hodDescription ?? ""}
+                            value={si.hodDescription}
                             disabled
                           />
                         </div>
+                      )}
+
+                      {/* Committee Score & Remarks - added on top, shown if available */}
+                      {si.isVerified && si.committeeScore !== undefined && si.committeeScore !== null && (
+                        <>
+                          <div>
+                            <label className="text-sm font-medium text-purple-700">Committee Score (Final)</label>
+                            <input
+                              type="number"
+                              className="w-full border rounded p-2 bg-purple-50 font-medium"
+                              value={si.committeeScore}
+                              disabled
+                            />
+                          </div>
+
+                          <div className="md:col-span-2">
+                            <label className="text-sm font-medium text-purple-700">Committee Remarks</label>
+                            <textarea
+                              className="w-full border rounded p-2 min-h-[80px] bg-purple-50"
+                              value={si.committeeRemarks ?? "No remarks provided"}
+                              disabled
+                            />
+                          </div>
+                        </>
                       )}
 
                       {!si.isVerified && (
@@ -383,3 +430,5 @@ export default function TeachingLearning() {
     </DashboardLayout>
   );
 }
+
+ 

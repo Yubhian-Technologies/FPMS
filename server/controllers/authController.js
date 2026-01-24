@@ -199,3 +199,69 @@ export const updateAdmin = async (req, res) => {
   }
 };
 
+export const fetchAppealsForCommittee = async (req, res) => {
+  try {
+    const snapshot = await db.collection("appeals").get();
+    const appeals = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.claimedScore !== undefined && data.hodScore !== undefined) {
+        appeals.push({ id: doc.id, ...data });
+      }
+    });
+    return res.status(200).json({ success: true, data: appeals });
+  } catch (error) {
+    console.error("Fetch Committee Appeals Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
+export const verifyAppealByCommittee = async (req, res) => {
+  try {
+    const { appealId } = req.params;
+    const { committeeScore, committeeRemarks } = req.body;
+
+    if (committeeScore === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "Committee score is required"
+      });
+    }
+
+    const ref = db.collection("appeals").doc(appealId);
+    const doc = await ref.get();
+
+    if (!doc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Appeal not found"
+      });
+    }
+
+    const appealData = doc.data();
+
+    if (appealData.claimedScore === undefined || appealData.hodScore === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "Appeal cannot be verified: missing faculty or HOD score"
+      });
+    }
+
+    await ref.update({
+      committeeScore,
+      committeeRemarks: committeeRemarks || "",
+      verifiedByCommittee: true,
+      status: "committee_verified",
+      committeeVerifiedAt: new Date()
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Appeal successfully verified by committee"
+    });
+  } catch (error) {
+    console.error("Verify Appeal Error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};

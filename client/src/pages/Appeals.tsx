@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
@@ -52,6 +51,8 @@ interface Appeal {
   appealReason: string;
   evidence: string;
   status: string;
+  committeeScore?: number;      // Added for committee score
+  committeeRemarks?: string;    // Added for committee remarks
   createdAt: string;
 }
 
@@ -169,9 +170,8 @@ const Appeals = () => {
   }, {});
 
   return (
-    <DashboardLayout title="Appeals" subtitle="Submit and view your score appeals" >
-      <div className="space-y-4 text-sm">
-
+    <DashboardLayout title="Appeals" subtitle="Submit and view your score appeals">
+      <div className="space-y-6 text-sm">
         <div className="flex justify-end">
           <Button size="sm" onClick={() => setIsDialogOpen(true)}>New Appeal</Button>
         </div>
@@ -182,14 +182,12 @@ const Appeals = () => {
               <CardTitle className="text-base font-medium">Submit New Appeal</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3">
-
               <div className="grid gap-1">
                 <Label className="text-xs">Module</Label>
                 <Select value={formData.module} onValueChange={v => handleInputChange("module", v)}>
                   <SelectTrigger className="text-sm"><SelectValue placeholder="Select Module" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="module1">Module 1</SelectItem>
-               
                   </SelectContent>
                 </Select>
               </div>
@@ -251,29 +249,57 @@ const Appeals = () => {
         )}
 
         {Object.entries(groupedAppeals).map(([faculty, facultyAppeals]) => (
-          <div key={faculty} className="space-y-2">
-            <h2 className="text-sm font-semibold text-gray-700">{faculty}</h2>
+          <div key={faculty} className="space-y-3">
+            <div className="p-3 bg-slate-100 rounded-md shadow-sm">
+              <h2 className="text-sm font-semibold text-gray-800">{user.name}</h2>
+              <h2 className="text-sm text-gray-600">{user.email}</h2>
+              <h2 className="text-sm text-gray-600 capitalize">{user.role}</h2>
+            </div>
             {facultyAppeals.map(a => {
               const isExpanded = expandedAppealIds.includes(a.id);
+              let statusColor = "text-gray-600";
+              if (a.status === "pending") statusColor = "text-yellow-600";
+              if (a.status === "committee_verified") statusColor = "text-green-600";
+
               return (
-                <Card key={a.id} className="p-3 shadow-sm rounded-md">
-                  <CardHeader className="flex justify-between items-center">
-                    <CardTitle className="text-sm font-medium">{a.module} - {a.subId} - {a.criterionName}</CardTitle>
-                    <Button  variant="outline" onClick={() => toggleExpand(a.id)}>
+                <Card key={a.id} className="shadow-md rounded-lg border border-gray-200 hover:shadow-lg transition-shadow duration-300">
+                  <CardHeader className="flex flex-row justify-between items-center p-4 border-b">
+                    <CardTitle className="text-lg font-semibold text-gray-800">{a.module} - {a.subId} - {a.criterionName}</CardTitle>
+                    <Button variant="outline" size="sm" onClick={() => toggleExpand(a.id)} className="text-sm">
                       {isExpanded ? "Hide Details" : "View Details"}
                     </Button>
                   </CardHeader>
                   {isExpanded && (
-                    <CardContent className="space-y-1 text-xs">
-                      <div><strong>Faculty Score:</strong> {a.claimedScore}</div>
-                      <div><strong>Faculty Description:</strong> {a.facultyDescription}</div>
-                      <div><strong>HOD Score:</strong> {a.hodScore ?? "N/A"}</div>
-                      <div><strong>HOD Description:</strong> {a.hodDescription ?? "N/A"}</div>
-                      <div><strong className="text-blue-600">Requested Score:</strong> {a.requestedScore}</div>
-                      <div><strong>Evidence:</strong> {a.evidence}</div>
-                      <div><strong>Reason:</strong> {a.appealReason}</div>
-                      <div><strong>Status:</strong> {a.status}</div>
-                      <div><strong>Submitted On:</strong> {new Date(a.createdAt).toLocaleString()}</div>
+                    <CardContent className="p-4 space-y-3 text-sm">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <strong className="font-medium text-gray-700">Faculty Score:</strong> {a.claimedScore}
+                        </div>
+                        <div>
+                          <strong className="font-medium text-gray-700">HOD Score:</strong> {a.hodScore ?? "N/A"}
+                        </div>
+                        <div className="md:col-span-2">
+                          <strong className="font-medium text-gray-700">Faculty Description:</strong> {a.facultyDescription}
+                        </div>
+                        <div className="md:col-span-2">
+                          <strong className="font-medium text-gray-700">HOD Description:</strong> {a.hodDescription ?? "N/A"}
+                        </div>
+                        <div>
+                          <strong className="font-medium text-blue-600">Requested Score:</strong> {a.requestedScore}
+                        </div>
+                        <div>
+                          <strong className="font-medium text-purple-600">Committee Score:</strong> {a.committeeScore ?? "N/A"}
+                        </div>
+                        <div className="md:col-span-2">
+                          <strong className="font-medium text-purple-600">Committee Remarks:</strong> {a.committeeRemarks ?? "N/A"}
+                        </div>
+                      </div>
+                      <div className="border-t pt-3 mt-3 space-y-2">
+                        <div><strong className="font-medium text-gray-700">Evidence:</strong> {a.evidence}</div>
+                        <div><strong className="font-medium text-gray-700">Reason:</strong> {a.appealReason}</div>
+                        <div><strong className="font-medium text-gray-700">Status:</strong> <span className={`font-medium ${statusColor}`}>{a.status}</span></div>
+                        <div><strong className="font-medium text-gray-700">Submitted On:</strong> {new Date(a.createdAt).toLocaleString()}</div>
+                      </div>
                     </CardContent>
                   )}
                 </Card>
