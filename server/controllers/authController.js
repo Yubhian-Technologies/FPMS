@@ -203,18 +203,50 @@ export const fetchAppealsForCommittee = async (req, res) => {
   try {
     const snapshot = await db.collection("appeals").get();
     const appeals = [];
-    snapshot.forEach(doc => {
+
+    for (const doc of snapshot.docs) {
       const data = doc.data();
-      if (data.claimedScore !== undefined && data.hodScore !== undefined) {
-        appeals.push({ id: doc.id, ...data });
+
+      // Fetch faculty details
+      let faculty = {
+        name: "Unknown",
+        email: "Unknown",
+        department: "Unknown",
+        college: "Unknown",
+      };
+      try {
+        const facultyRef = db.collection("faculty").doc(data.facultyId);
+        const facultyDoc = await facultyRef.get();
+        if (facultyDoc.exists) {
+          const facultyData = facultyDoc.data();
+          faculty = {
+            name: facultyData.name || "Unknown",
+            email: facultyData.email || "Unknown",
+            department: facultyData.department || "Unknown",
+            college: facultyData.college || "Unknown",
+          };
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch faculty for ID: ${data.facultyId}`, err);
       }
-    });
+
+      // Only include appeals with claimedScore and hodScore
+      if (data.claimedScore !== undefined && data.hodScore !== undefined) {
+        appeals.push({
+          id: doc.id,
+          faculty,
+          ...data
+        });
+      }
+    }
+
     return res.status(200).json({ success: true, data: appeals });
   } catch (error) {
     console.error("Fetch Committee Appeals Error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
 
 
 export const verifyAppealByCommittee = async (req, res) => {
