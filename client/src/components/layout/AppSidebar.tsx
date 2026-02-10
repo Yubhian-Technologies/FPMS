@@ -35,10 +35,21 @@ const getNavItems = (role: string) => {
         { title: 'Institutional Development', href: '/fpms/institutional' },
       ],
     },
+    {
+      icon: FileText,
+      label: 'FPMS Form',
+      roles: ['hod'],
+      isDropdown: true,
+      children: [
+        { title: 'Teaching & Learning', href: '/fpms/hod-teaching' },
+        
+      ],
+    },
     { icon: MessageSquare, label: 'My Submissions', href: '/submissions', roles: ['faculty', 'hod'] },
-    { icon: ClipboardCheck, label: 'Appeals', href: '/appeals', roles: ['faculty', 'hod'] },
+    { icon: ClipboardCheck, label: 'Appeals', href: '/appeals', roles: ['faculty'] },
+    { icon: ClipboardCheck, label: 'Review Hod Submissions', href: '/hod-review', roles: ['admin'] },
     { icon: ClipboardCheck, label: 'Review Submissions', href: '/review', roles: ['hod', 'committee'] },
-    { icon: BarChart3, label: 'Reports', href: '/reports', roles: ['hod', 'committee', 'admin'] },
+    { icon: BarChart3, label: 'Reports', href: '/reports', roles: ['committee'] },
     { icon: Users, label: 'Faculty List', href: '/faculty', roles: ['hod'] },
     { icon: Building2, label: 'Departments', href: '/departments', roles: ['admin'] },
     { icon: MessageSquare, label: 'College', href: '/college', roles: ['committee'] },

@@ -25,6 +25,8 @@ import Submissions from "./pages/Submissions";
 import Appeals from "./pages/Appeals";
 import College from "./pages/College";
 import AddAdmin from "./pages/AddAdmin";
+import TeachingandLearning from './pages/hod-forms/TeachingandLearning'
+
 
 const queryClient = new QueryClient();
 
@@ -120,6 +122,8 @@ function AppRoutes() {
       <Route path="/college" element={<College></College>}></Route>
       <Route path="/add" element={<AddAdmin></AddAdmin>}></Route>
       <Route path="/settings" element={<Settings></Settings>}></Route>
+      <Route path="/fpms/hod-teaching" element={<TeachingandLearning></TeachingandLearning>}></Route>
+     
     </Routes>
   );
 }
