@@ -149,16 +149,16 @@ export default function TeachingLearning() {
     if (!user?.id) return;
     setLoading(true);
     try {
-      // Fetch module1 data
+     
       const subRes = await api.get(`/api/module1/faculty/${user.id}`);
       const backendData = subRes.data?.data || [];
 
-      // Fetch appeals
+      
       const appealRes = await api.get(`/api/appeal/${user.id}`);
       const facultyAppeals = appealRes.data?.data || [];
       setAppeals(facultyAppeals);
 
-      // Merge everything
+      
       const merged = defaultSubCriteria.map((sc) => {
         const existing = backendData.find((b: any) => b.id === sc.id);
         return {
@@ -316,7 +316,7 @@ export default function TeachingLearning() {
                     </CardHeader>
 
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Faculty Score - always shown */}
+                      
                       <div>
                         <label className="text-sm">
                           Faculty Score <span className="text-muted-foreground">(Max {si.maxScore})</span>
@@ -334,7 +334,7 @@ export default function TeachingLearning() {
                         />
                       </div>
 
-                      {/* HOD Score & Description - restored, shown when verified */}
+                     
                       {si.isVerified && si.hodScore !== undefined && (
                         <div>
                           <label className="text-sm">HOD Score</label>
@@ -371,7 +371,7 @@ export default function TeachingLearning() {
                         />
                       </div>
 
-                      {/* HOD Description - shown when verified */}
+                    
                       {si.isVerified && si.hodDescription && (
                         <div className="md:col-span-2">
                           <label className="text-sm">HOD Description</label>
@@ -383,7 +383,7 @@ export default function TeachingLearning() {
                         </div>
                       )}
 
-                      {/* Committee Score & Remarks - added on top, shown if available */}
+                    
                       {si.isVerified && si.committeeScore !== undefined && si.committeeScore !== null && (
                         <>
                           <div>

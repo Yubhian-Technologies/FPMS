@@ -14,7 +14,7 @@ export function DashboardLayout({
 }: DashboardLayoutProps) {
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Sidebar */}
+     
       <AppSidebar />
 
       {/* Main content */}

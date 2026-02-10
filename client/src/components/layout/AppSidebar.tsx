@@ -92,7 +92,7 @@ export function AppSidebar() {
 
   const handleLogout = () => {
     logout();
-    navigate('/'); // redirect to login
+    navigate('/');
   };
 
   const displayName = user.name || user.email;
@@ -105,7 +105,7 @@ export function AppSidebar() {
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border">
       <div className="flex h-full flex-col">
-        {/* Logo */}
+       
         <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary">
             <GraduationCap className="h-5 w-5 text-sidebar-primary-foreground" />
