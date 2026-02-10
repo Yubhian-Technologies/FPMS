@@ -10,6 +10,7 @@ import facultyRouter from "./routes/facultyRoutes.js";
 import module1Router from "./routes/module1Routes.js";
 import appealRouter from "./routes/appealRoutes.js";
 import module1HodRouter from "./routes/module1HodRoutes.js";
+import module5Router from "./routes/module5Routes.js";
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use('/api/admin',adminRouter);
 app.use('/api/hod',hodRouter);
 app.use('/api/faculty',facultyRouter);
 app.use('/api/module1',module1Router);
+app.use('/api/module5',module5Router)
 app.use('/api/appeal',appealRouter);
 app.use('/api/hod/parta',module1HodRouter)
 
