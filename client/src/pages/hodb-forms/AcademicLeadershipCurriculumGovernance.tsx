@@ -10,45 +10,67 @@ import { Link } from "react-router-dom";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useAuth } from "@/contexts/AuthContext";
 
-/* ---------- MODULE STRUCTURE ---------- */
-const MODULE1_STRUCTURE = {
-  "1.1": {
-    title: "Curriculum Development (Beyond Curriculum)",
-    maxPoints: 8,
+/* ---------- PART B KPA STRUCTURE ---------- */
+const KPA_STRUCTURE = {
+  "KPA-A": {
+    title: "Academic Leadership & Curriculum Governance",
+    maxPoints: 30,
     criteria: {
-      a: { label: "New course / module development", maxScore: 3 },
-      b: { label: "Digital content creation", maxScore: 3 },
-      c: { label: "CO–PO–PSO mapping", maxScore: 2 },
+      A1: { label: "Department Academic Plan & Execution", maxScore: 8 },
+      A2: { label: "OBE Implementation & Attainment Monitoring", maxScore: 8 },
+      A3: { label: "Curriculum Enrichment & BoS Inputs", maxScore: 7 },
+      A4: { label: "Academic Risk Identification & Mitigation", maxScore: 7 },
     },
   },
-  "1.2": {
-    title: "Teaching Load & Active Learning Pedagogy",
+  "KPA-B": {
+    title: "Student Success, Progression & Placements",
+    maxPoints: 25,
+    criteria: {
+      B1: { label: "Academic Performance Trends", maxScore: 6 },
+      B2: { label: "Placement Outcomes (Quantity & Quality)", maxScore: 6 },
+      B3: { label: "Higher Education Progression", maxScore: 4 },
+      B4: { label: "Mentoring & Remedial Systems", maxScore: 5 },
+      B5: { label: "Competency & Career Readiness Programs", maxScore: 4 },
+    },
+  },
+  "KPA-C": {
+    title: "Faculty Enablement & Research Ecosystem",
+    maxPoints: 20,
+    criteria: {
+      C1: { label: "Department R&D Plan", maxScore: 5 },
+      C2: { label: "Proposal Facilitation & Funding Enablement", maxScore: 5 },
+      C3: { label: "Research Culture & Review Mechanisms", maxScore: 5 },
+      C4: { label: "Faculty Participation Ratios", maxScore: 5 },
+    },
+  },
+  "KPA-D": {
+    title: "Accreditation, Quality & Data Governance",
+    maxPoints: 20,
+    criteria: {
+      D1: { label: "NBA/NAAC Preparedness", maxScore: 7 },
+      D2: { label: "Course Files & Attainment Records", maxScore: 5 },
+      D3: { label: "NIRF / AQAR Data Accuracy", maxScore: 4 },
+      D4: { label: "Internal Quality Review & Compliance", maxScore: 4 },
+    },
+  },
+  "KPA-E": {
+    title: "Industry, Alumni & External Engagement",
+    maxPoints: 20,
+    criteria: {
+      E1: { label: "Functional Industry MoUs", maxScore: 6 },
+      E2: { label: "Industry Projects & Internships", maxScore: 6 },
+      E3: { label: "Alumni Engagement & Contributions", maxScore: 4 },
+      E4: { label: "Industry Inputs to Curriculum", maxScore: 4 },
+    },
+  },
+  "KPA-F": {
+    title: "Department Administration & Governance",
     maxPoints: 10,
     criteria: {
-      a: { label: "LMS usage", maxScore: 2 },
-      b: { label: "Flipped classroom", maxScore: 2 },
-      c: { label: "Experiential learning", maxScore: 2 },
-      d: { label: "NPTEL facilitation", maxScore: 2 },
-      e: { label: "Mini projects", maxScore: 2 },
-    },
-  },
-  "1.3": {
-    title: "Student Feedback & Improvement",
-    maxPoints: 8,
-    criteria: {
-      a: { label: "Structured student feedback analysis", maxScore: 3 },
-      b: { label: "Corrective actions implemented", maxScore: 3 },
-      c: { label: "Outcome-based improvement measures", maxScore: 2 },
-    },
-  },
-  "1.4": {
-    title: "Student Academic Results",
-    maxPoints: 10,
-    criteria: {
-      a: { label: "Pass percentage analysis", maxScore: 3 },
-      b: { label: "University rank / distinction holders", maxScore: 3 },
-      c: { label: "Result comparison with previous years", maxScore: 2 },
-      d: { label: "Remedial measures for weak students", maxScore: 2 },
+      F1: { label: "Resource & Budget Utilisation", maxScore: 3 },
+      F2: { label: "Labs, Assets & Stock Audits", maxScore: 3 },
+      F3: { label: "Department Meetings & Documentation", maxScore: 2 },
+      F4: { label: "Non-Teaching Staff Development", maxScore: 2 },
     },
   },
 };
@@ -71,7 +93,7 @@ type Subsection = {
 };
 
 /* ---------- COMPONENT ---------- */
-export default function TeachingandLearning() {
+export default function PartBKPAPage() {
   const { user, isLoading } = useAuth();
   const hodId = user?.id;
 
@@ -81,41 +103,34 @@ export default function TeachingandLearning() {
 
   /* ---------- FETCH DATA ---------- */
   const fetchData = async () => {
-  if (!user || !hodId) return;
-  try {
-    const res = await api.get(`/api/hod/parta/${hodId}`);
-    const list = res.data?.data || [];
+    if (!user || !hodId) return;
+    try {
+      const res = await api.get(`/api/hod/partb/${hodId}`);
+      const list = res.data?.data || [];
 
-    const mapped: Record<string, Subsection> = {};
+      const mapped: Record<string, Subsection> = {};
+      list.forEach((s: any) => {
+        if (!KPA_STRUCTURE[s.id]) return; // Skip unknown KPA IDs
+        mapped[s.id] = {
+          id: s.id,
+          criteria: (s.criteria || []).map((c: any) => ({
+            name: c.name,
+            claimedScore: c.claimedScore ?? 0,
+            description: c.description ?? c.hodDescription ?? "",
+            evidence: c.evidence ?? "",
+            adminScore: c.adminScore ?? null,
+            adminDescription: c.adminDescription ?? c.adminRemark ?? "",
+            isVerified: c.isVerified ?? false,
+            maxScore: KPA_STRUCTURE[s.id].criteria[c.name]?.maxScore ?? 0,
+          })),
+        };
+      });
 
-    list.forEach((s: any) => {
-    
-      if (!s?.id) return;
-
-      mapped[s.id] = {
-        id: s.id,
-        criteria: Array.isArray(s.criteria)
-          ? s.criteria.map((c: any) => ({
-              name: c.name,
-              claimedScore: c.claimedScore ?? 0,
-              description: c.description ?? c.hodDescription ?? "",
-              evidence: c.evidence ?? "",
-              adminScore: c.adminScore ?? null,
-              adminDescription: c.adminDescription ?? c.adminRemark ?? "",
-              isVerified: c.isVerified ?? false,
-              
-              maxScore:
-                MODULE1_STRUCTURE[s.id]?.criteria?.[c.name]?.maxScore ?? 0,
-            }))
-          : [], 
-      };
-    });
-
-    setSubsections(mapped);
-  } catch (err) {
-    console.error("Fetch failed", err);
-  }
-};
+      setSubsections(mapped);
+    } catch (err) {
+      console.error("Fetch failed", err);
+    }
+  };
 
   useEffect(() => {
     if (!isLoading && user) fetchData();
@@ -124,36 +139,34 @@ export default function TeachingandLearning() {
   /* ---------- SCORE HELPERS ---------- */
   const getFinalScore = (existing: Criterion | undefined) => {
     if (!existing) return 0;
-    return existing.adminScore !== null && existing.adminScore !== undefined
-      ? existing.adminScore
-      : existing.claimedScore;
+    return existing.adminScore != null ? existing.adminScore : existing.claimedScore;
   };
 
-  const getSubsectionScore = (subId: string) => {
-    const subDef = MODULE1_STRUCTURE[subId as keyof typeof MODULE1_STRUCTURE];
-    if (!subDef) return 0;
-    return Object.keys(subDef.criteria).reduce((sum, key) => {
-      const existing = subsections[subId]?.criteria?.find((c) => c.name === key);
+  const getKPAScore = (kpaId: string) => {
+    const kpa = KPA_STRUCTURE[kpaId];
+    if (!kpa) return 0;
+    return Object.keys(kpa.criteria).reduce((sum, key) => {
+      const existing = subsections[kpaId]?.criteria.find((c) => c.name === key);
       return sum + getFinalScore(existing);
     }, 0);
   };
 
-  const totalMax = Object.values(MODULE1_STRUCTURE).reduce((s, m) => s + m.maxPoints, 0);
-  const totalCurrent = Object.keys(MODULE1_STRUCTURE).reduce((s, id) => s + getSubsectionScore(id), 0);
+  const totalMax = Object.values(KPA_STRUCTURE).reduce((sum, k) => sum + k.maxPoints, 0);
+  const totalCurrent = Object.keys(KPA_STRUCTURE).reduce((sum, id) => sum + getKPAScore(id), 0);
 
   /* ---------- SUBMIT CRITERION ---------- */
-  const submitCriterion = async (subId: string, key: string) => {
-    const formKey = `${subId}.${key}`;
+  const submitCriterion = async (kpaId: string, key: string) => {
+    const formKey = `${kpaId}.${key}`;
     const payload = form[formKey];
     if (!payload || !hodId) return;
 
     try {
-      await api.post(`/api/hod/parta/${hodId}/subsection/${subId}`, {
+      await api.post(`/api/hod/partb/${hodId}/subsection/${kpaId}`, {
         criteria: [
           {
             name: key,
             claimedScore: Number(payload.claimedScore ?? 0),
-            maxScore: MODULE1_STRUCTURE[subId as keyof typeof MODULE1_STRUCTURE].criteria[key].maxScore,
+            maxScore: KPA_STRUCTURE[kpaId].criteria[key].maxScore,
             description: payload.description ?? "",
             evidence: payload.evidence ?? "",
           },
@@ -169,7 +182,7 @@ export default function TeachingandLearning() {
 
   /* ---------- UI ---------- */
   return (
-    <DashboardLayout title="Teaching & Learning" subtitle="Module 1">
+    <DashboardLayout title="HOD Part B" subtitle="KPAs">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
@@ -178,7 +191,7 @@ export default function TeachingandLearning() {
               <ArrowLeft />
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold">Module 1</h1>
+          <h1 className="text-2xl font-bold">Part B – KPAs</h1>
         </div>
 
         {/* Progress */}
@@ -191,94 +204,38 @@ export default function TeachingandLearning() {
           </CardContent>
         </Card>
 
-        {/* Sections */}
-        <Accordion type="single" collapsible defaultValue="section-1.1">
-          {Object.entries(MODULE1_STRUCTURE).map(([subId, sub]) => (
-            <AccordionItem key={subId} value={`section-${subId}`}>
+        {/* KPAs */}
+        <Accordion type="single" collapsible defaultValue={Object.keys(KPA_STRUCTURE)[0]}>
+          {Object.entries(KPA_STRUCTURE).map(([kpaId, kpa]) => (
+            <AccordionItem key={kpaId} value={`section-${kpaId}`}>
               <AccordionTrigger>
                 <div className="flex justify-between w-full pr-4">
-                  <span>{subId} – {sub.title}</span>
-                  <Badge variant="outline">{getSubsectionScore(subId)} / {sub.maxPoints}</Badge>
+                  <span>{kpaId} – {kpa.title}</span>
+                  <Badge variant="outline">{getKPAScore(kpaId)} / {kpa.maxPoints}</Badge>
                 </div>
               </AccordionTrigger>
 
               <AccordionContent className="px-1 py-4 space-y-5">
-                {Object.entries(sub.criteria).map(([key, def]) => {
-                  const existing = subsections[subId]?.criteria?.find((cr) => cr.name === key);
-                  const formKey = `${subId}.${key}`;
+                {Object.entries(kpa.criteria).map(([key, def]) => {
+                  const existing = subsections[kpaId]?.criteria.find((c) => c.name === key);
+                  const formKey = `${kpaId}.${key}`;
                   const editing = editMode[formKey] && existing && !existing.isVerified;
 
-                  // ── IF NOTHING SAVED YET ──
-                  if (!existing) {
-                    return (
-                      <Card key={formKey} className="mb-3 border-2 border-primary/40 bg-muted/30">
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-base">{subId}.{key} – {def.label}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div>
-                            <label className="text-sm font-medium block mb-1.5">Score (0 – {def.maxScore})</label>
-                            <input
-                              type="number"
-                              min={0}
-                              max={def.maxScore}
-                              step={0.5}
-                              value={form[formKey]?.claimedScore ?? ""}
-                              onChange={(e) =>
-                                setForm((p) => ({ ...p, [formKey]: { ...p[formKey], claimedScore: Number(e.target.value) } }))
-                              }
-                              className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-sm font-medium block mb-1.5">Description</label>
-                            <textarea
-                              value={form[formKey]?.description ?? ""}
-                              onChange={(e) =>
-                                setForm((p) => ({ ...p, [formKey]: { ...p[formKey], description: e.target.value } }))
-                              }
-                              placeholder="Brief description..."
-                              className="w-full border rounded-md px-3 py-2 min-h-[90px] focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-sm font-medium block mb-1.5">Evidence / Proof</label>
-                            <textarea
-                              value={form[formKey]?.evidence ?? ""}
-                              onChange={(e) =>
-                                setForm((p) => ({ ...p, [formKey]: { ...p[formKey], evidence: e.target.value } }))
-                              }
-                              placeholder="Google Drive link, certificate number, screenshot filename..."
-                              className="w-full border rounded-md px-3 py-2 min-h-[90px] focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            />
-                          </div>
-
-                          <div className="flex justify-end">
-                            <Button size="sm" onClick={() => submitCriterion(subId, key)}>
-                              <Save className="mr-2 h-4 w-4" /> Save
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  }
-
-                  // ── EDIT MODE AFTER SAVE ──
-                  const claimedScore = existing.claimedScore;
-                  const description = existing.description ?? "";
-                  const evidence = existing.evidence ?? "";
-                  const adminScore = existing.adminScore ?? null;
-                  const adminDescription = existing.adminDescription ?? "";
-                  const isVerified = existing.isVerified ?? false;
+                  const claimedScore = existing?.claimedScore ?? 0;
+                  const description = existing?.description ?? "";
+                  const evidence = existing?.evidence ?? "";
+                  const adminScore = existing?.adminScore ?? null;
+                  const adminDescription = existing?.adminDescription ?? "";
+                  const isVerified = existing?.isVerified ?? false;
                   const finalScore = getFinalScore(existing);
 
-                  if (editing) {
+                  if (!existing || editing) {
                     return (
                       <Card key={formKey} className="mb-3 border-2 border-primary/40 bg-muted/30">
                         <CardHeader className="pb-2">
-                          <CardTitle className="text-base">Edit {subId}.{key} – {def.label}</CardTitle>
+                          <CardTitle className="text-base">
+                            {editing ? `Edit ${kpaId}.${key} – ${def.label}` : `${kpaId}.${key} – ${def.label}`}
+                          </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
                           <div>
@@ -319,7 +276,7 @@ export default function TeachingandLearning() {
                           </div>
 
                           <div className="flex justify-end">
-                            <Button size="sm" onClick={() => submitCriterion(subId, key)}>
+                            <Button size="sm" onClick={() => submitCriterion(kpaId, key)}>
                               <Save className="mr-2 h-4 w-4" /> Save
                             </Button>
                           </div>
@@ -328,12 +285,12 @@ export default function TeachingandLearning() {
                     );
                   }
 
-                  // ── VIEW MODE AFTER SAVE ──
+                  // VIEW MODE
                   return (
                     <Card key={formKey} className="mb-3">
                       <CardHeader className="pb-2">
                         <CardTitle className="text-base flex justify-between items-center">
-                          <span>{subId}.{key} – {def.label}</span>
+                          <span>{kpaId}.{key} – {def.label}</span>
                           {!isVerified && (
                             <Button
                               size="sm"
@@ -354,14 +311,12 @@ export default function TeachingandLearning() {
                           {description && <p className="text-muted-foreground mt-1.5"><b>Description:</b> {description}</p>}
                           {evidence && <p className="text-muted-foreground mt-1.5"><b>Evidence:</b> {evidence}</p>}
                         </div>
-
                         {adminScore !== null && (
                           <div className="pt-3 border-t">
                             <b>Admin Score:</b> {adminScore}
                             {adminDescription && <p className="text-muted-foreground mt-1.5"><b>Remark:</b> {adminDescription}</p>}
                           </div>
                         )}
-
                         <div className="font-semibold pt-2 border-t">
                           Final: {finalScore} / {def.maxScore}
                         </div>

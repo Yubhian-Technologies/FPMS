@@ -46,7 +46,8 @@ export const adminLogin = async (req, res) => {
       {
         id: adminDoc.id,
         role: 'admin',
-        email: adminData.email
+        email: adminData.email,
+        college: adminData.college 
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
@@ -60,6 +61,7 @@ export const adminLogin = async (req, res) => {
         id: adminDoc.id,
         name: adminData.name,
         email: adminData.email,
+        college: adminData.college,
         role: 'admin'
       }
     });

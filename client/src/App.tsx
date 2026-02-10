@@ -26,6 +26,8 @@ import Appeals from "./pages/Appeals";
 import College from "./pages/College";
 import AddAdmin from "./pages/AddAdmin";
 import TeachingandLearning from './pages/hod-forms/TeachingandLearning'
+import AdminReview from "./pages/AdminReview";
+import AcademicLeadershipCurriculumGovernance from "./pages/hodb-forms/AcademicLeadershipCurriculumGovernance";
 
 
 const queryClient = new QueryClient();
@@ -122,8 +124,9 @@ function AppRoutes() {
       <Route path="/college" element={<College></College>}></Route>
       <Route path="/add" element={<AddAdmin></AddAdmin>}></Route>
       <Route path="/settings" element={<Settings></Settings>}></Route>
+      <Route path="/hod-review" element={<AdminReview></AdminReview>}></Route>
       <Route path="/fpms/hod-teaching" element={<TeachingandLearning></TeachingandLearning>}></Route>
-     
+      <Route path="/fpms/hodb-teaching" element={<AcademicLeadershipCurriculumGovernance></AcademicLeadershipCurriculumGovernance>}></Route>
     </Routes>
   );
 }
