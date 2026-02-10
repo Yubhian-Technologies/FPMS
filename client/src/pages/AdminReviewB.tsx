@@ -14,7 +14,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-/* ================= TYPES ================= */
 
 type Criterion = {
   name: string;
@@ -39,7 +38,7 @@ type HodSubmission = {
   subsections: Subsection[];
 };
 
-/* ================= COMPONENT ================= */
+
 
 export default function AdminReviewB() {
   const { user } = useAuth();
@@ -52,7 +51,7 @@ export default function AdminReviewB() {
   const [expandedSubs, setExpandedSubs] = useState<string[]>([]);
   const [verifying, setVerifying] = useState<Record<string, boolean>>({});
 
-  /* ================= FETCH ================= */
+ 
 
   const loadData = async () => {
     try {
@@ -70,7 +69,6 @@ export default function AdminReviewB() {
     if (user?.role === "admin") loadData();
   }, [user]);
 
-  /* ================= VERIFY ================= */
 
   const verifyCriterion = async (
     hodId: string,
@@ -109,7 +107,6 @@ export default function AdminReviewB() {
     );
   }
 
-  /* ================= FILTER ================= */
 
   const filtered = data.filter(
     (h) =>
@@ -210,7 +207,7 @@ export default function AdminReviewB() {
                                 </div>
                               </div>
 
-                              {/* Middle - Score */}
+                            
                               <div className="space-y-1.5">
                                 <label className="text-xs font-medium text-muted-foreground block">
                                   Admin Score
@@ -295,7 +292,7 @@ export default function AdminReviewB() {
     );
   };
 
-  /* ================= UI ================= */
+
 
   return (
     <DashboardLayout title="Admin Review – Module 1">

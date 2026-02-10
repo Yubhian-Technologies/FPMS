@@ -10,7 +10,7 @@ import { Link } from "react-router-dom";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useAuth } from "@/contexts/AuthContext";
 
-/* ---------- PART B KPA STRUCTURE ---------- */
+
 const KPA_STRUCTURE = {
   "KPA-A": {
     title: "Academic Leadership & Curriculum Governance",
@@ -75,7 +75,7 @@ const KPA_STRUCTURE = {
   },
 };
 
-/* ---------- TYPES ---------- */
+
 type Criterion = {
   name: string;
   claimedScore: number;
@@ -92,7 +92,7 @@ type Subsection = {
   criteria: Criterion[];
 };
 
-/* ---------- COMPONENT ---------- */
+
 export default function PartBKPAPage() {
   const { user, isLoading } = useAuth();
   const hodId = user?.id;
@@ -101,7 +101,7 @@ export default function PartBKPAPage() {
   const [form, setForm] = useState<Record<string, Partial<Criterion>>>({});
   const [editMode, setEditMode] = useState<Record<string, boolean>>({});
 
-  /* ---------- FETCH DATA ---------- */
+
   const fetchData = async () => {
     if (!user || !hodId) return;
     try {
@@ -110,7 +110,7 @@ export default function PartBKPAPage() {
 
       const mapped: Record<string, Subsection> = {};
       list.forEach((s: any) => {
-        if (!KPA_STRUCTURE[s.id]) return; // Skip unknown KPA IDs
+        if (!KPA_STRUCTURE[s.id]) return;
         mapped[s.id] = {
           id: s.id,
           criteria: (s.criteria || []).map((c: any) => ({
@@ -136,7 +136,7 @@ export default function PartBKPAPage() {
     if (!isLoading && user) fetchData();
   }, [isLoading, user]);
 
-  /* ---------- SCORE HELPERS ---------- */
+ 
   const getFinalScore = (existing: Criterion | undefined) => {
     if (!existing) return 0;
     return existing.adminScore != null ? existing.adminScore : existing.claimedScore;
@@ -154,7 +154,6 @@ export default function PartBKPAPage() {
   const totalMax = Object.values(KPA_STRUCTURE).reduce((sum, k) => sum + k.maxPoints, 0);
   const totalCurrent = Object.keys(KPA_STRUCTURE).reduce((sum, id) => sum + getKPAScore(id), 0);
 
-  /* ---------- SUBMIT CRITERION ---------- */
   const submitCriterion = async (kpaId: string, key: string) => {
     const formKey = `${kpaId}.${key}`;
     const payload = form[formKey];
@@ -180,11 +179,10 @@ export default function PartBKPAPage() {
     }
   };
 
-  /* ---------- UI ---------- */
   return (
     <DashboardLayout title="HOD Part B" subtitle="KPAs">
       <div className="space-y-6">
-        {/* Header */}
+       
         <div className="flex items-center gap-4">
           <Link to="/dashboard">
             <Button variant="ghost" size="icon">
@@ -194,7 +192,7 @@ export default function PartBKPAPage() {
           <h1 className="text-2xl font-bold">Part B – KPAs</h1>
         </div>
 
-        {/* Progress */}
+        
         <Card>
           <CardContent className="pt-4">
             <Progress value={(totalCurrent / totalMax) * 100} />
@@ -204,7 +202,6 @@ export default function PartBKPAPage() {
           </CardContent>
         </Card>
 
-        {/* KPAs */}
         <Accordion type="single" collapsible defaultValue={Object.keys(KPA_STRUCTURE)[0]}>
           {Object.entries(KPA_STRUCTURE).map(([kpaId, kpa]) => (
             <AccordionItem key={kpaId} value={`section-${kpaId}`}>
@@ -285,7 +282,7 @@ export default function PartBKPAPage() {
                     );
                   }
 
-                  // VIEW MODE
+              
                   return (
                     <Card key={formKey} className="mb-3">
                       <CardHeader className="pb-2">

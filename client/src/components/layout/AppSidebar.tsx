@@ -27,7 +27,7 @@ const getNavItems = (role: string) => {
       label: 'FPMS Form',
       roles: ['faculty'],
       isDropdown: true,
-      dropdownId: 'FPMS Form', // unique key for faculty
+      dropdownId: 'FPMS Form',
       children: [
         { title: 'Teaching & Learning', href: '/fpms/teaching' },
         { title: 'Research & Consultancy', href: '/fpms/research' },
@@ -41,7 +41,7 @@ const getNavItems = (role: string) => {
       label: 'FPMS Form',
       roles: ['hod'],
       isDropdown: true,
-      dropdownId: 'HOD FPMS Form', // unique key for HOD
+      dropdownId: 'HOD FPMS Form', 
       children: [
         { title: 'Teaching & Learning', href: '/fpms/hod-teaching' },
       ],
@@ -51,7 +51,7 @@ const getNavItems = (role: string) => {
       label: 'FPMS-KPA Form',
       roles: ['hod'],
       isDropdown: true,
-      dropdownId: 'FPMS-KPA Form', // already different label → different key
+      dropdownId: 'FPMS-KPA Form', 
       children: [
         { title: 'Academic Leadership & Curriculum Governance', href: '/fpms/hodb-teaching' },
       ],
@@ -81,7 +81,7 @@ export function AppSidebar() {
   useEffect(() => {
     const isInFpmsSection = location.pathname.startsWith('/fpms/');
     if (isInFpmsSection) {
-      // Auto-expand the correct dropdown based on role
+     
       if (user?.role === 'faculty' && expandedDropdown !== 'FPMS Form') {
         setExpandedDropdown('FPMS Form');
       } else if (user?.role === 'hod') {
@@ -132,13 +132,12 @@ export function AppSidebar() {
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-3 py-4">
           {navItems.map((item) => {
-            // Use dropdownId if exists, otherwise use label
+            
             const dropdownId = item.dropdownId || item.label;
 
             if (item.isDropdown) {
               const isOpen = expandedDropdown === dropdownId;
 
-              // Check if any child is active
               const isAnyChildActive =
                 item.children?.some((child) => location.pathname.startsWith(child.href)) ?? false;
 

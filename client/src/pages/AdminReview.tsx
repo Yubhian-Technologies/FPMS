@@ -14,7 +14,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-/* ================= TYPES ================= */
 
 type Criterion = {
   name: string;
@@ -39,7 +38,6 @@ type HodSubmission = {
   subsections: Subsection[];
 };
 
-/* ================= COMPONENT ================= */
 
 export default function AdminReview() {
   const { user } = useAuth();
@@ -52,7 +50,7 @@ export default function AdminReview() {
   const [expandedSubs, setExpandedSubs] = useState<string[]>([]);
   const [verifying, setVerifying] = useState<Record<string, boolean>>({});
 
-  /* ================= FETCH ================= */
+
 
   const loadData = async () => {
     try {
@@ -70,7 +68,7 @@ export default function AdminReview() {
     if (user?.role === "admin") loadData();
   }, [user]);
 
-  /* ================= VERIFY ================= */
+
 
   const verifyCriterion = async (
     hodId: string,
@@ -109,7 +107,6 @@ export default function AdminReview() {
     );
   }
 
-  /* ================= FILTER ================= */
 
   const filtered = data.filter(
     (h) =>
@@ -200,7 +197,7 @@ export default function AdminReview() {
                             }`}
                           >
                             <div className="grid gap-5 md:grid-cols-3 items-start">
-                              {/* Left - Info */}
+                             
                               <div className="space-y-2 text-sm">
                                 <div className="font-medium">{c.name}</div>
                                 <div className="text-muted-foreground">
@@ -210,7 +207,6 @@ export default function AdminReview() {
                                 </div>
                               </div>
 
-                              {/* Middle - Score */}
                               <div className="space-y-1.5">
                                 <label className="text-xs font-medium text-muted-foreground block">
                                   Admin Score
@@ -226,7 +222,7 @@ export default function AdminReview() {
                                 />
                               </div>
 
-                              {/* Right - Remark + Action */}
+                         
                               <div className="space-y-3">
                                 <div className="space-y-1.5">
                                   <label className="text-xs font-medium text-muted-foreground block">
@@ -295,7 +291,6 @@ export default function AdminReview() {
     );
   };
 
-  /* ================= UI ================= */
 
   return (
     <DashboardLayout title="Admin Review – Module 1">

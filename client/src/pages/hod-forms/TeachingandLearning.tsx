@@ -10,7 +10,7 @@ import { Link } from "react-router-dom";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useAuth } from "@/contexts/AuthContext";
 
-/* ---------- MODULE STRUCTURE ---------- */
+
 const MODULE1_STRUCTURE = {
   "1.1": {
     title: "Curriculum Development (Beyond Curriculum)",
@@ -53,7 +53,6 @@ const MODULE1_STRUCTURE = {
   },
 };
 
-/* ---------- TYPES ---------- */
 type Criterion = {
   name: string;
   claimedScore: number;
@@ -70,7 +69,7 @@ type Subsection = {
   criteria: Criterion[];
 };
 
-/* ---------- COMPONENT ---------- */
+
 export default function TeachingandLearning() {
   const { user, isLoading } = useAuth();
   const hodId = user?.id;
@@ -79,7 +78,7 @@ export default function TeachingandLearning() {
   const [form, setForm] = useState<Record<string, Partial<Criterion>>>({});
   const [editMode, setEditMode] = useState<Record<string, boolean>>({});
 
-  /* ---------- FETCH DATA ---------- */
+
   const fetchData = async () => {
   if (!user || !hodId) return;
   try {
@@ -121,7 +120,7 @@ export default function TeachingandLearning() {
     if (!isLoading && user) fetchData();
   }, [isLoading, user]);
 
-  /* ---------- SCORE HELPERS ---------- */
+
   const getFinalScore = (existing: Criterion | undefined) => {
     if (!existing) return 0;
     return existing.adminScore !== null && existing.adminScore !== undefined
@@ -141,7 +140,7 @@ export default function TeachingandLearning() {
   const totalMax = Object.values(MODULE1_STRUCTURE).reduce((s, m) => s + m.maxPoints, 0);
   const totalCurrent = Object.keys(MODULE1_STRUCTURE).reduce((s, id) => s + getSubsectionScore(id), 0);
 
-  /* ---------- SUBMIT CRITERION ---------- */
+
   const submitCriterion = async (subId: string, key: string) => {
     const formKey = `${subId}.${key}`;
     const payload = form[formKey];
@@ -167,11 +166,11 @@ export default function TeachingandLearning() {
     }
   };
 
-  /* ---------- UI ---------- */
+
   return (
     <DashboardLayout title="Teaching & Learning" subtitle="Module 1">
       <div className="space-y-6">
-        {/* Header */}
+      
         <div className="flex items-center gap-4">
           <Link to="/dashboard">
             <Button variant="ghost" size="icon">
@@ -181,7 +180,7 @@ export default function TeachingandLearning() {
           <h1 className="text-2xl font-bold">Module 1</h1>
         </div>
 
-        {/* Progress */}
+      
         <Card>
           <CardContent className="pt-4">
             <Progress value={(totalCurrent / totalMax) * 100} />
@@ -191,7 +190,6 @@ export default function TeachingandLearning() {
           </CardContent>
         </Card>
 
-        {/* Sections */}
         <Accordion type="single" collapsible defaultValue="section-1.1">
           {Object.entries(MODULE1_STRUCTURE).map(([subId, sub]) => (
             <AccordionItem key={subId} value={`section-${subId}`}>
@@ -208,7 +206,6 @@ export default function TeachingandLearning() {
                   const formKey = `${subId}.${key}`;
                   const editing = editMode[formKey] && existing && !existing.isVerified;
 
-                  // ── IF NOTHING SAVED YET ──
                   if (!existing) {
                     return (
                       <Card key={formKey} className="mb-3 border-2 border-primary/40 bg-muted/30">
@@ -265,7 +262,7 @@ export default function TeachingandLearning() {
                     );
                   }
 
-                  // ── EDIT MODE AFTER SAVE ──
+               
                   const claimedScore = existing.claimedScore;
                   const description = existing.description ?? "";
                   const evidence = existing.evidence ?? "";
@@ -328,7 +325,7 @@ export default function TeachingandLearning() {
                     );
                   }
 
-                  // ── VIEW MODE AFTER SAVE ──
+
                   return (
                     <Card key={formKey} className="mb-3">
                       <CardHeader className="pb-2">
