@@ -35,7 +35,6 @@ export const submitSubsection = async (req, res) => {
     criteria.forEach(c => {
       const old = criteriaMap[c.name];
 
-    
       if (old?.isVerified) return;
 
       criteriaMap[c.name] = {
@@ -58,6 +57,7 @@ export const submitSubsection = async (req, res) => {
 
     const subsectionData = {
       id: subId,
+      module: "module1", // <-- Added this line to fix UNKNOWN issue
       name:
         subsections[subIndex]?.name ||
         criteria[0]?.subsectionName ||
@@ -90,8 +90,6 @@ export const submitSubsection = async (req, res) => {
   }
 };
 
-
-
 export const getFacultySubsections = async (req, res) => {
   try {
     const { facultyId } = req.params;
@@ -113,7 +111,6 @@ export const getFacultySubsections = async (req, res) => {
 
 export const hodViewAllSubmissions = async (req, res) => {
   try {
-
     const { college, department } = req.hod;
 
     if (!college || !department) {
@@ -135,16 +132,26 @@ export const hodViewAllSubmissions = async (req, res) => {
       name: d.data().name
     }));
 
+    const modules = ['module1', 'module5']; 
     const results = [];
 
     for (const f of facultyIds) {
-      const doc = await db.collection('module1').doc(f.id).get();
-      if (doc.exists) {
-        results.push({
-          facultyId: f.id,
-          facultyName: f.name,
-          subsections: doc.data().subsections
-        });
+      for (const moduleName of modules) {
+        const doc = await db.collection(moduleName).doc(f.id).get();
+        if (doc.exists) {
+          // Ensure every subsection has module field
+          const subsections = (doc.data().subsections || []).map(sub => ({
+            ...sub,
+            module: moduleName
+          }));
+
+          results.push({
+            facultyId: f.id,
+            facultyName: f.name,
+            module: moduleName,          
+            subsections
+          });
+        }
       }
     }
 
@@ -154,7 +161,6 @@ export const hodViewAllSubmissions = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
-
 
 export const hodVerifyCriterion = async (req, res) => {
   try {
@@ -199,4 +205,3 @@ export const hodVerifyCriterion = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
-

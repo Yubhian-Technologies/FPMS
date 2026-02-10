@@ -188,6 +188,8 @@ const Appeals = () => {
                   <SelectTrigger className="text-sm"><SelectValue placeholder="Select Module" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="module1">Module 1</SelectItem>
+                    <SelectItem value="module5">Module 5</SelectItem>
+                   
                   </SelectContent>
                 </Select>
               </div>
