@@ -1,107 +1,408 @@
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Save, Send, FileText, Upload, Info } from "lucide-react";
-import { Link } from "react-router-dom";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { api } from "@/api/api";
 
-const subCriteria = [
-  { id: "3.1", title: "Attending FDP/Refresher", maxPoints: 10, currentPoints: 0, description: "Offline/hybrid only + reflection report", status: "not-started" },
-  { id: "3.2", title: "Organizing FDP/Refresher", maxPoints: 10, currentPoints: 0, description: "Committee caps + expense report", status: "not-started" },
-  { id: "3.3", title: "NPTEL/Industry Certifications", maxPoints: 12, currentPoints: 0, description: "Elite Gold/Silver, implementation proof", status: "not-started" },
-  { id: "3.4", title: "Industry Certs/VEDIC/IGIP", maxPoints: 10, currentPoints: 0, description: "Professional certifications", status: "not-started" },
-  { id: "3.5", title: "Professional Society Activities", maxPoints: 10, currentPoints: 0, description: "Active participation, not membership alone", status: "not-started" },
-  { id: "3.6", title: "Academic Outreach", maxPoints: 4, currentPoints: 0, description: "Outside institute activities", status: "not-started" },
-  { id: "3.7", title: "Extension/Social Outreach", maxPoints: 4, currentPoints: 0, description: "≥30 students mandatory, committee caps", status: "not-started" },
-  { id: "3.8", title: "Awards/Recognitions", maxPoints: 5, currentPoints: 0, description: "Professional awards and recognitions", status: "not-started" },
-];
+export default function InstitutionalDevelopment() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [subCriteria, setSubCriteria] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-export default function ProfessionalDevelopment() {
-  const totalMax = subCriteria.reduce((sum, sc) => sum + sc.maxPoints, 0);
-  const totalCurrent = subCriteria.reduce((sum, sc) => sum + sc.currentPoints, 0);
-  const progress = totalMax > 0 ? (totalCurrent / totalMax) * 100 : 0;
+  /* ---------------- DEFAULT STRUCTURE ---------------- */
+  const defaultSubCriteria = [
+    {
+      id: "3.1",
+      title: "Attending FDP/Refresher",
+      maxPoints: 10,
+      subItems: [
+        {
+          name: "FDP Participation",
+          maxScore: 10,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+    {
+      id: "3.2",
+      title: "Organizing FDP/Refresher",
+      maxPoints: 10,
+      subItems: [
+        {
+          name: "FDP Organization",
+          maxScore: 10,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+    {
+      id: "3.3",
+      title: "NPTEL/Industry Certifications",
+      maxPoints: 12,
+      subItems: [
+        {
+          name: "Certification",
+          maxScore: 12,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+    {
+      id: "3.4",
+      title: "Industry Certs/VEDIC/IGIP",
+      maxPoints: 10,
+      subItems: [
+        {
+          name: "Professional Certification",
+          maxScore: 10,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+    {
+      id: "3.5",
+      title: "Professional Society Activities",
+      maxPoints: 10,
+      subItems: [
+        {
+          name: "Society Activity",
+          maxScore: 10,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+    {
+      id: "3.6",
+      title: "Academic Outreach",
+      maxPoints: 4,
+      subItems: [
+        {
+          name: "Outreach Activity",
+          maxScore: 4,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+    {
+      id: "3.7",
+      title: "Extension/Social Outreach",
+      maxPoints: 4,
+      subItems: [
+        {
+          name: "Social Outreach",
+          maxScore: 4,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+    {
+      id: "3.8",
+      title: "Awards/Recognitions",
+      maxPoints: 5,
+      subItems: [
+        {
+          name: "Award",
+          maxScore: 5,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+  ];
+
+  const fetchSubmissions = async () => {
+    if (!user?.id) return;
+    try {
+      setLoading(true);
+      const res = await api.get(`/api/module4/faculty/${user.id}`);
+      const backendData = res.data?.data || [];
+
+      const merged = defaultSubCriteria.map((sc) => {
+        const existing = backendData.find((b: any) => b.id === sc.id);
+
+        return {
+          ...sc,
+          subItems: sc.subItems.map((si) => {
+            const item = existing?.criteria?.find(
+              (c: any) => c.name === si.name,
+            );
+            return item
+              ? {
+                  ...si,
+                  claimedScore: item.claimedScore ?? si.claimedScore,
+                  evidence: item.evidence ?? "",
+                  description: item.facultyDescription ?? si.description,
+                  isVerified: item.isVerified ?? false,
+                  committeeScore: item.committeeScore,
+                }
+              : si;
+          }),
+        };
+      });
+
+      setSubCriteria(merged);
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to load data",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSubmissions();
+  }, [user]);
+
+  const updateSubItem = (
+    subId: string,
+    index: number,
+    field: string,
+    value: any,
+  ) => {
+    setSubCriteria((prev) =>
+      prev.map((sc) =>
+        sc.id !== subId
+          ? sc
+          : {
+              ...sc,
+              subItems: sc.subItems.map((si, i) =>
+                i === index ? { ...si, [field]: value } : si,
+              ),
+            },
+      ),
+    );
+  };
+
+  const getSubStatus = (sub: any) => {
+    const hasScore = sub.subItems.some((si: any) => si.claimedScore > 0);
+    const allVerified = sub.subItems.every((si: any) => si.isVerified);
+    if (allVerified) return "completed";
+    if (hasScore) return "in-progress";
+    return "not-started";
+  };
+
+  const saveSingleCriterion = async (subId: string, criterion: any) => {
+    if (!user) return;
+    try {
+      await api.post(
+        `/api/module4/faculty/${user.id}/subsection/${encodeURIComponent(subId)}`,
+        {
+          criteria: [
+            {
+              name: criterion.name,
+              claimedScore: criterion.claimedScore,
+              maxScore: criterion.maxScore,
+              description: criterion.description,
+              evidence: criterion.evidence,
+            },
+          ],
+        },
+      );
+      toast({ title: "Saved", description: "Criterion saved successfully" });
+      fetchSubmissions();
+    } catch (err) {
+      toast({
+        title: "Save failed",
+        description: "Check backend",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const saveSubsection = async (sub: any) => {
+    if (!user) return;
+    try {
+      await api.post(
+        `/api/module4/faculty/${user.id}/subsection/${encodeURIComponent(sub.id)}`,
+        {
+          criteria: sub.subItems.map((si: any) => ({
+            name: si.name,
+            claimedScore: si.claimedScore,
+            maxScore: si.maxScore,
+            description: si.description,
+            evidence: si.evidence,
+          })),
+        },
+      );
+      toast({ title: "Saved", description: "Subsection saved successfully" });
+      fetchSubmissions();
+    } catch (err) {
+      toast({
+        title: "Save failed",
+        description: "Check backend",
+        variant: "destructive",
+      });
+    }
+  };
+
+  if (loading) return <p>Loading...</p>;
+
+  const totalMax = subCriteria.reduce((s, sc) => s + sc.maxPoints, 0);
+  const totalClaimed = subCriteria.reduce(
+    (s, sc) =>
+      s +
+      sc.subItems.reduce((x: number, si: any) => x + (si.claimedScore || 0), 0),
+    0,
+  );
 
   return (
-    <DashboardLayout title="Professional Development" subtitle="Criterion 3 • Maximum 65 Points" currentPath="/fpms/professional">
+    <DashboardLayout
+      title="proffesional development"
+      subtitle="Criterion 4 • Maximum 65 Points"
+    >
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link to="/dashboard">
-              <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold">Professional Development</h1>
-              <p className="text-muted-foreground">Criterion 3 • Maximum 65 Points</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline"><Save className="mr-2 h-4 w-4" />Save Draft</Button>
-            <Button><Send className="mr-2 h-4 w-4" />Submit for Review</Button>
-          </div>
-        </div>
-
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">Overall Progress</span>
-              <span className="text-sm text-muted-foreground">{totalCurrent} / {totalMax} points</span>
+          <CardContent>
+            <div className="flex justify-between mb-2">
+              <span>Overall Progress</span>
+              <span>
+                {totalClaimed} / {totalMax}
+              </span>
             </div>
-            <Progress value={progress} className="h-2" />
-            <div className="flex justify-between mt-4 text-sm text-muted-foreground">
-              <span>0 of 8 sub-criteria completed</span>
-              <span>0 evidence files uploaded</span>
-            </div>
+            <Progress value={(totalClaimed / totalMax) * 100} className="h-3" />
           </CardContent>
         </Card>
 
         <Accordion type="single" collapsible className="space-y-4">
-          {subCriteria.map((sc) => (
-            <AccordionItem key={sc.id} value={sc.id} className="border rounded-lg px-4">
-              <AccordionTrigger className="hover:no-underline">
-                <div className="flex items-center justify-between w-full pr-4">
-                  <div className="flex items-center gap-4">
-                    <Badge variant="outline" className="font-mono">{sc.id}</Badge>
-                    <div className="text-left">
-                      <p className="font-medium">{sc.title}</p>
-                      <p className="text-sm text-muted-foreground">{sc.description}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <Badge variant="secondary">{sc.currentPoints} / {sc.maxPoints} pts</Badge>
-                    <Badge variant="outline">Not Started</Badge>
-                  </div>
-                </div>
+          {subCriteria.map((sub) => (
+            <AccordionItem
+              key={sub.id}
+              value={sub.id}
+              className="border rounded-lg"
+            >
+              <AccordionTrigger className="flex justify-between items-center px-4">
+                <span>
+                  {sub.id} - {sub.title}
+                </span>
+                <Badge
+                  variant={
+                    getSubStatus(sub) === "completed"
+                      ? "default"
+                      : getSubStatus(sub) === "in-progress"
+                        ? "secondary"
+                        : "destructive"
+                  }
+                >
+                  {getSubStatus(sub) === "completed"
+                    ? "Verified"
+                    : getSubStatus(sub) === "in-progress"
+                      ? "In Progress"
+                      : "Not Started"}
+                </Badge>
               </AccordionTrigger>
-              <AccordionContent className="pt-4 pb-6">
-                <div className="space-y-4">
-                  <div className="bg-muted/50 rounded-lg p-4">
-                    <div className="flex items-start gap-2">
-                      <Info className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                      <div className="text-sm text-muted-foreground">
-                        <p className="font-medium text-foreground mb-1">Scoring Guidelines</p>
-                        <p>Complete the required activities and upload supporting evidence.</p>
+
+              <AccordionContent className="px-4 pb-4 space-y-4">
+                {sub.subItems.map((si: any, i: number) => (
+                  <Card key={i}>
+                    <CardHeader className="flex flex-row justify-between items-center">
+                      <CardTitle>{si.name}</CardTitle>
+                      {si.isVerified && (
+                        <Badge className="bg-blue-800 text-white">
+                          Verified
+                        </Badge>
+                      )}
+                    </CardHeader>
+
+                    <CardContent className="space-y-3">
+                      <div>
+                        <label>Claimed Score (Max {si.maxScore})</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={si.maxScore}
+                          value={si.claimedScore}
+                          disabled={si.isVerified}
+                          onChange={(e) =>
+                            updateSubItem(
+                              sub.id,
+                              i,
+                              "claimedScore",
+                              Number(e.target.value),
+                            )
+                          }
+                          className="w-full border rounded p-2"
+                        />
                       </div>
-                    </div>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Card>
-                      <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><FileText className="h-4 w-4" />Claim Entry</CardTitle></CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground mb-4">No claims added yet</p>
-                        <Button variant="outline" size="sm" className="w-full">Add Claim</Button>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Upload className="h-4 w-4" />Evidence Documents</CardTitle></CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground mb-4">No evidence uploaded</p>
-                        <Button variant="outline" size="sm" className="w-full">Upload Evidence</Button>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
+
+                      <div>
+                        <label>Description</label>
+                        <textarea
+                          value={si.description}
+                          disabled={si.isVerified}
+                          onChange={(e) =>
+                            updateSubItem(
+                              sub.id,
+                              i,
+                              "description",
+                              e.target.value,
+                            )
+                          }
+                          className="w-full border rounded p-2"
+                        />
+                      </div>
+
+                      <div>
+                        <label>Evidence URL</label>
+                        <input
+                          type="text"
+                          value={si.evidence}
+                          disabled={si.isVerified}
+                          onChange={(e) =>
+                            updateSubItem(sub.id, i, "evidence", e.target.value)
+                          }
+                          className="w-full border rounded p-2"
+                        />
+                      </div>
+
+                      {!si.isVerified && (
+                        <Button onClick={() => saveSingleCriterion(sub.id, si)}>
+                          Save This Criterion
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+
+                <Button onClick={() => saveSubsection(sub)}>
+                  Save Entire Subsection
+                </Button>
               </AccordionContent>
             </AccordionItem>
           ))}
