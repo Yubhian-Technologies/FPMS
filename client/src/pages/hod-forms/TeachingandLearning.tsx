@@ -10,7 +10,6 @@ import { Link } from "react-router-dom";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useAuth } from "@/contexts/AuthContext";
 
-
 const MODULE1_STRUCTURE = {
   "1.1": {
     title: "Curriculum Development (Beyond Curriculum)",
@@ -60,6 +59,8 @@ type Criterion = {
   evidence?: string;
   adminScore?: number | null;
   adminDescription?: string;
+  committeeScore?: number | null;
+  committeeRemarks?: string;
   isVerified?: boolean;
   maxScore: number;
 };
@@ -69,7 +70,6 @@ type Subsection = {
   criteria: Criterion[];
 };
 
-
 export default function TeachingandLearning() {
   const { user, isLoading } = useAuth();
   const hodId = user?.id;
@@ -78,35 +78,49 @@ export default function TeachingandLearning() {
   const [form, setForm] = useState<Record<string, Partial<Criterion>>>({});
   const [editMode, setEditMode] = useState<Record<string, boolean>>({});
 
-
   const fetchData = async () => {
   if (!user || !hodId) return;
   try {
+    // Fetch Module 1 HOD data
     const res = await api.get(`/api/hod/parta/${hodId}`);
     const list = res.data?.data || [];
+
+    // Fetch HOD Appeals (committee verified)
+    const appealRes = await api.get("/api/hod/appeals/partab");
+    const appeals: Appeal[] = appealRes.data?.data || [];
 
     const mapped: Record<string, Subsection> = {};
 
     list.forEach((s: any) => {
-    
       if (!s?.id) return;
 
       mapped[s.id] = {
         id: s.id,
         criteria: Array.isArray(s.criteria)
-          ? s.criteria.map((c: any) => ({
-              name: c.name,
-              claimedScore: c.claimedScore ?? 0,
-              description: c.description ?? c.hodDescription ?? "",
-              evidence: c.evidence ?? "",
-              adminScore: c.adminScore ?? null,
-              adminDescription: c.adminDescription ?? c.adminRemark ?? "",
-              isVerified: c.isVerified ?? false,
-              
-              maxScore:
-                MODULE1_STRUCTURE[s.id]?.criteria?.[c.name]?.maxScore ?? 0,
-            }))
-          : [], 
+          ? s.criteria.map((c: any) => {
+              // Look for a verified appeal for this criterion
+              const appeal = appeals.find(
+                (a) =>
+                  a.subId === s.id &&
+                  a.criterionName === c.name &&
+                  a.status === "committee_verified"
+              );
+
+              return {
+                name: c.name,
+                claimedScore: c.claimedScore ?? 0,
+                description: c.description ?? c.hodDescription ?? "",
+                evidence: c.evidence ?? "",
+                adminScore: c.adminScore ?? null,
+                adminDescription: c.adminDescription ?? c.adminRemark ?? "",
+                // ✅ Merge committee-approved appeal
+                committeeScore: appeal?.committeeScore ?? c.committeeScore ?? null,
+                committeeRemarks: appeal?.committeeRemarks ?? c.committeeRemarks ?? "",
+                isVerified: c.isVerified ?? false,
+                maxScore: MODULE1_STRUCTURE[s.id]?.criteria?.[c.name]?.maxScore ?? 0,
+              };
+            })
+          : [],
       };
     });
 
@@ -120,12 +134,10 @@ export default function TeachingandLearning() {
     if (!isLoading && user) fetchData();
   }, [isLoading, user]);
 
-
   const getFinalScore = (existing: Criterion | undefined) => {
     if (!existing) return 0;
-    return existing.adminScore !== null && existing.adminScore !== undefined
-      ? existing.adminScore
-      : existing.claimedScore;
+    // Committee score takes precedence if available
+    return existing.committeeScore ?? existing.adminScore ?? existing.claimedScore;
   };
 
   const getSubsectionScore = (subId: string) => {
@@ -139,7 +151,6 @@ export default function TeachingandLearning() {
 
   const totalMax = Object.values(MODULE1_STRUCTURE).reduce((s, m) => s + m.maxPoints, 0);
   const totalCurrent = Object.keys(MODULE1_STRUCTURE).reduce((s, id) => s + getSubsectionScore(id), 0);
-
 
   const submitCriterion = async (subId: string, key: string) => {
     const formKey = `${subId}.${key}`;
@@ -166,11 +177,11 @@ export default function TeachingandLearning() {
     }
   };
 
-
   return (
     <DashboardLayout title="Teaching & Learning" subtitle="Module 1">
       <div className="space-y-6">
-      
+
+        {/* Header */}
         <div className="flex items-center gap-4">
           <Link to="/dashboard">
             <Button variant="ghost" size="icon">
@@ -180,7 +191,7 @@ export default function TeachingandLearning() {
           <h1 className="text-2xl font-bold">Module 1</h1>
         </div>
 
-      
+        {/* Total Progress */}
         <Card>
           <CardContent className="pt-4">
             <Progress value={(totalCurrent / totalMax) * 100} />
@@ -190,6 +201,7 @@ export default function TeachingandLearning() {
           </CardContent>
         </Card>
 
+        {/* Accordion Sections */}
         <Accordion type="single" collapsible defaultValue="section-1.1">
           {Object.entries(MODULE1_STRUCTURE).map(([subId, sub]) => (
             <AccordionItem key={subId} value={`section-${subId}`}>
@@ -206,6 +218,7 @@ export default function TeachingandLearning() {
                   const formKey = `${subId}.${key}`;
                   const editing = editMode[formKey] && existing && !existing.isVerified;
 
+                  // Empty criterion (new entry)
                   if (!existing) {
                     return (
                       <Card key={formKey} className="mb-3 border-2 border-primary/40 bg-muted/30">
@@ -262,12 +275,14 @@ export default function TeachingandLearning() {
                     );
                   }
 
-               
+                  // Existing criterion
                   const claimedScore = existing.claimedScore;
                   const description = existing.description ?? "";
                   const evidence = existing.evidence ?? "";
                   const adminScore = existing.adminScore ?? null;
                   const adminDescription = existing.adminDescription ?? "";
+                  const committeeScore = existing.committeeScore ?? null;
+                  const committeeRemarks = existing.committeeRemarks ?? "";
                   const isVerified = existing.isVerified ?? false;
                   const finalScore = getFinalScore(existing);
 
@@ -325,7 +340,7 @@ export default function TeachingandLearning() {
                     );
                   }
 
-
+                  // Display existing, non-editable
                   return (
                     <Card key={formKey} className="mb-3">
                       <CardHeader className="pb-2">
@@ -356,6 +371,13 @@ export default function TeachingandLearning() {
                           <div className="pt-3 border-t">
                             <b>Admin Score:</b> {adminScore}
                             {adminDescription && <p className="text-muted-foreground mt-1.5"><b>Remark:</b> {adminDescription}</p>}
+                          </div>
+                        )}
+
+                        {committeeScore !== null && (
+                          <div className="pt-3 border-t">
+                            <b>Committee Score:</b> {committeeScore}
+                            {committeeRemarks && <p className="text-muted-foreground mt-1.5"><b>Remarks:</b> {committeeRemarks}</p>}
                           </div>
                         )}
 
