@@ -41,7 +41,7 @@ export const submitHodAppeal = async (req, res) => {
       module,
       subId,
       criterionName,
-      type: "hod",
+      type: "hod" ,
       hodId,
       requestedScore,
       hodReason,
