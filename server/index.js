@@ -12,6 +12,7 @@ import appealRouter from "./routes/appealRoutes.js";
 import module1HodRouter from "./routes/module1HodRoutes.js";
 import module5Router from "./routes/module5Routes.js";
 import module1HodPartbRouter from "./routes/module1HodPartbRoutes.js";
+import appealHodRouter from "./routes/appealHodRoutes.js";
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ app.use('/api/module5',module5Router);
 app.use('/api/appeal',appealRouter);
 app.use('/api/hod/parta',module1HodRouter);
 app.use('/api/hod/partb',module1HodPartbRouter);
+app.use('/api/hod/appeals',appealHodRouter);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

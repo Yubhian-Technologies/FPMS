@@ -58,6 +58,7 @@ const getNavItems = (role: string) => {
     },
     { icon: MessageSquare, label: 'My Submissions', href: '/submissions', roles: ['faculty', 'hod'] },
     { icon: ClipboardCheck, label: 'Appeals', href: '/appeals', roles: ['faculty'] },
+    { icon: ClipboardCheck, label: 'Appeals', href: '/hod-appeals', roles: ['hod'] },
     { icon: ClipboardCheck, label: 'Review Hod Submissions', href: '/hod-review', roles: ['admin'] },
     { icon: ClipboardCheck, label: 'Review Submissions', href: '/review', roles: ['hod', 'committee'] },
     { icon: BarChart3, label: 'Reports', href: '/reports', roles: ['committee'] },
