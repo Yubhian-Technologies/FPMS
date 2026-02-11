@@ -4,10 +4,9 @@ import { fetchHodAppeals, submitHodAppeal } from '../controllers/appealHodContro
 
 const appealHodRouter = express.Router();
 
-// POST: Submit appeal
+
 appealHodRouter.post('/modules/:module/sub/:subId/criteria/:criterionName/appeal', hodAuth, submitHodAppeal);
 
-// GET: Fetch all appeals
 appealHodRouter.get('/partab', hodAuth, fetchHodAppeals);
 
 export default appealHodRouter;

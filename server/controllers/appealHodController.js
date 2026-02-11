@@ -1,9 +1,7 @@
 import { db } from "../config/firebase.js";
 import { Timestamp } from "firebase-admin/firestore";
 
-/* =========================================================
-   1️⃣ SUBMIT HOD APPEAL
-========================================================= */
+
 
 export const submitHodAppeal = async (req, res) => {
   try {
@@ -39,7 +37,6 @@ export const submitHodAppeal = async (req, res) => {
       return res.status(404).json({ success: false, message: "Criterion not found" });
     }
 
-    // Prevent duplicate pending appeal
     const existing = await db.collection("appeals-hod")
       .where("hodId", "==", hodId)
       .where("module", "==", module)
@@ -85,9 +82,7 @@ export const submitHodAppeal = async (req, res) => {
   }
 };
 
-/* =========================================================
-   2️⃣ FETCH HOD APPEALS (HOD SIDE)
-========================================================= */
+
 
 export const fetchHodAppeals = async (req, res) => {
   try {
@@ -120,9 +115,7 @@ export const fetchHodAppeals = async (req, res) => {
   }
 };
 
-/* =========================================================
-   3️⃣ FETCH ALL HOD APPEALS (COMMITTEE SIDE)
-========================================================= */
+
 
 export const fetchAllHodAppeals = async (req, res) => {
   try {
@@ -166,7 +159,7 @@ export const verifyHodAppeal = async (req, res) => {
 
     await db.runTransaction(async (transaction) => {
 
-      // ✅ READ EVERYTHING FIRST
+     
       const appealSnap = await transaction.get(appealRef);
 
       if (!appealSnap.exists) {
@@ -188,7 +181,7 @@ export const verifyHodAppeal = async (req, res) => {
         throw new Error("HOD record not found");
       }
 
-      // ✅ PREPARE UPDATED SUBSECTIONS
+     
       const data = hodSnap.data();
       let subsections = data.subsections || [];
 
@@ -207,7 +200,7 @@ export const verifyHodAppeal = async (req, res) => {
         return sub;
       });
 
-      // ✅ NOW DO ALL WRITES
+     
       transaction.update(appealRef, {
         committeeScore: Number(committeeScore),
         committeeRemarks: committeeRemarks || "",
