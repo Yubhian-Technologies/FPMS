@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, TrendingUp, BarChart3 } from "lucide-react";
+import { FileText, TrendingUp } from "lucide-react";
 
 export default function Reports() {
   const { user } = useAuth();
@@ -25,7 +25,7 @@ export default function Reports() {
     const fetchSubmissions = async () => {
       setLoading(true);
       try {
-        const res = await api.get("/api/module1/all-submissions");
+        const res = await api.get("/api/module1/all-submissions"); // your correct API
         setSubmissions(res.data.data || []);
       } catch {
         toast({
@@ -53,34 +53,16 @@ export default function Reports() {
     );
   }
 
+  // Filter by faculty name or ID
   const filteredSubmissions = submissions.filter(
     (f) =>
-      f.facultyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      f.facultyId.toLowerCase().includes(searchTerm.toLowerCase())
+      f.facultyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      f.facultyId?.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  // const totalSubmissions = submissions.length;
-  // const totalPending = submissions.reduce(
-  //   (acc, f) =>
-  //     acc +
-  //     f.subsections.reduce(
-  //       (sAcc, s) => sAcc + s.criteria.filter((c: any) => !c.isVerified).length,
-  //       0
-  //     ),
-  //   0
-  // );
-  // const totalVerified = submissions.reduce(
-  //   (acc, f) =>
-  //     acc +
-  //     f.subsections.reduce(
-  //       (sAcc, s) => sAcc + s.criteria.filter((c: any) => c.isVerified).length,
-  //       0
-  //     ),
-  //   0
-  // );
 
   const updateCriterionField = (
     facultyId: string,
+    module: string,
     subId: string,
     criterionName: string,
     field: "hodScore" | "hodDescription",
@@ -93,7 +75,7 @@ export default function Reports() {
           : {
               ...faculty,
               subsections: faculty.subsections.map((sub: any) =>
-                sub.id !== subId
+                sub.module !== module || sub.id !== subId
                   ? sub
                   : {
                       ...sub,
@@ -108,6 +90,8 @@ export default function Reports() {
   };
 
   const renderFacultyCard = (faculty: any, type: "pending" | "verified") => {
+    if (!faculty.subsections) return null;
+
     const filteredSubsections = faculty.subsections
       .map((sub: any) => ({
         ...sub,
@@ -120,14 +104,15 @@ export default function Reports() {
 
     if (filteredSubsections.length === 0) return null;
 
-    const facultyKey = `${faculty.facultyId}-${type}`;
+    // Unique key including all module IDs to avoid duplicates
+    const facultyKey = `${faculty.facultyId}-${type}-${filteredSubsections.map((s: any) => s.id).join(",")}`;
 
     return (
       <Card key={facultyKey} className="border shadow-sm">
         <CardHeader className="flex flex-row justify-between items-center">
           <div>
-            <CardTitle className="text-base font-semibold">{faculty.facultyName}</CardTitle>
-            <p className="text-xs text-muted-foreground">Faculty ID: {faculty.facultyId}</p>
+            <CardTitle className="text-base font-semibold">{faculty.facultyName || "-"}</CardTitle>
+            <p className="text-xs text-muted-foreground">Faculty ID: {faculty.facultyId || "-"}</p>
           </div>
 
           <Button
@@ -145,14 +130,15 @@ export default function Reports() {
         {expandedFaculty === facultyKey && (
           <CardContent className="space-y-4">
             {filteredSubsections.map((sub: any) => {
-              const subKey = `${faculty.facultyId}-${sub.id}-${type}`;
+              const subKey = `${faculty.facultyId}-${sub.module || "unknown"}-${sub.id}-${type}`;
               const isExpanded = expandedSubsections.includes(subKey);
 
               return (
-                <div key={sub.id} className="border rounded-md p-3">
-                 
+                <div key={subKey} className="border rounded-md p-3">
                   <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-sm font-semibold text-primary">{sub.name}</h3>
+                    <h3 className="text-sm font-semibold text-primary">
+                      [{(sub.module || "UNKNOWN").toUpperCase()}] {sub.name || "-"}
+                    </h3>
                     <Button
                       size="sm"
                       variant="outline"
@@ -172,16 +158,15 @@ export default function Reports() {
                   {isExpanded && (
                     <div className="space-y-4">
                       {sub.criteria.map((c: any) => {
-                        const key = `${faculty.facultyId}-${sub.id}-${c.name}`;
+                        const key = `${faculty.facultyId}-${sub.module || "unknown"}-${sub.id}-${c.name}`;
 
                         return (
                           <div
-                            key={c.name}
+                            key={key}
                             className={`grid md:grid-cols-3 gap-4 p-3 rounded-md border ${
                               c.isVerified ? "bg-green-50 border-green-200" : "bg-muted/40"
                             }`}
                           >
-                  
                             <div className="text-xs space-y-1">
                               <p>
                                 <strong>Criterion:</strong> {c.name}
@@ -196,7 +181,9 @@ export default function Reports() {
 
                             <div className="text-xs">
                               <p className="font-semibold mb-1">Faculty Description</p>
-                              <p className="whitespace-pre-wrap">{c.description || c.facultyDescription || "-"}</p>
+                              <p className="whitespace-pre-wrap">
+                                {c.description || c.facultyDescription || "-"}
+                              </p>
                             </div>
 
                             <div className="text-xs space-y-3">
@@ -211,6 +198,7 @@ export default function Reports() {
                                   onChange={(e) =>
                                     updateCriterionField(
                                       faculty.facultyId,
+                                      sub.module || "",
                                       sub.id,
                                       c.name,
                                       "hodScore",
@@ -230,6 +218,7 @@ export default function Reports() {
                                   onChange={(e) =>
                                     updateCriterionField(
                                       faculty.facultyId,
+                                      sub.module || "",
                                       sub.id,
                                       c.name,
                                       "hodDescription",
@@ -241,7 +230,11 @@ export default function Reports() {
                               </div>
 
                               {c.isVerified ? (
-                                <Button size="sm" disabled className="text-xs bg-green-600 hover:bg-green-600 text-white">
+                                <Button
+                                  size="sm"
+                                  disabled
+                                  className="text-xs bg-green-600 hover:bg-green-600 text-white"
+                                >
                                   Verified
                                 </Button>
                               ) : (
@@ -258,14 +251,15 @@ export default function Reports() {
                                     setVerifying((v) => ({ ...v, [key]: true }));
                                     try {
                                       await api.put(
-                                        `/api/module1/verify/${faculty.facultyId}/${sub.id}/${encodeURIComponent(c.name)}`,
+                                        `/api/${sub.module || "unknown"}/verify/${faculty.facultyId}/${sub.id}/${encodeURIComponent(
+                                          c.name
+                                        )}`,
                                         {
                                           hodScore: c.hodScore,
                                           hodDescription: c.hodDescription,
                                         }
                                       );
 
-                                    
                                       setSubmissions((prev) =>
                                         prev.map((f) =>
                                           f.facultyId !== faculty.facultyId
@@ -273,7 +267,7 @@ export default function Reports() {
                                             : {
                                                 ...f,
                                                 subsections: f.subsections.map((s: any) =>
-                                                  s.id !== sub.id
+                                                  s.id !== sub.id || s.module !== sub.module
                                                     ? s
                                                     : {
                                                         ...s,
@@ -288,9 +282,16 @@ export default function Reports() {
                                         )
                                       );
 
-                                      toast({ title: "Success", description: "Criterion verified successfully" });
+                                      toast({
+                                        title: "Success",
+                                        description: "Criterion verified successfully",
+                                      });
                                     } catch (err) {
-                                      toast({ title: "Error", description: "Verification failed", variant: "destructive" });
+                                      toast({
+                                        title: "Error",
+                                        description: "Verification failed",
+                                        variant: "destructive",
+                                      });
                                     } finally {
                                       setVerifying((v) => ({ ...v, [key]: false }));
                                     }
@@ -316,77 +317,82 @@ export default function Reports() {
 
   return (
     <DashboardLayout title="Review Submissions" subtitle="Faculty Submissions Review">
+      {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3 mb-6">
-  <Card>
-    <CardHeader className="flex justify-between items-center pb-2">
-      <CardTitle className="text-sm font-medium text-muted-foreground">Total Submissions</CardTitle>
-      <FileText className="h-5 w-5 text-muted-foreground" />
-    </CardHeader>
-    <CardContent>
-      <p className="text-3xl font-bold font-display">{submissions.length}</p>
-      <p className="text-xs text-muted-foreground">faculty members</p>
-    </CardContent>
-  </Card>
+        <Card>
+          <CardHeader className="flex justify-between items-center pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Submissions
+            </CardTitle>
+            <FileText className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold font-display">{submissions.length}</p>
+            <p className="text-xs text-muted-foreground">faculty members</p>
+          </CardContent>
+        </Card>
 
-  <Card>
-    <CardHeader className="flex justify-between items-center pb-2">
-      <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
-      <TrendingUp className="h-5 w-5 text-destructive rotate-180" />
-    </CardHeader>
-    <CardContent>
-      <p className="text-3xl font-bold font-display text-destructive">
-        {submissions.filter((f) =>
-          f.subsections.some((s: any) => s.criteria.some((c: any) => !c.isVerified))
-        ).length}
-      </p>
-      <p className="text-xs text-muted-foreground">submissions</p>
-    </CardContent>
-  </Card>
+        <Card>
+          <CardHeader className="flex justify-between items-center pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
+            <TrendingUp className="h-5 w-5 text-destructive rotate-180" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold font-display text-destructive">
+              {submissions.filter((f) =>
+                f.subsections?.some((s: any) => s.criteria?.some((c: any) => !c.isVerified))
+              ).length}
+            </p>
+            <p className="text-xs text-muted-foreground">submissions</p>
+          </CardContent>
+        </Card>
 
-  <Card>
-    <CardHeader className="flex justify-between items-center pb-2">
-      <CardTitle className="text-sm font-medium text-muted-foreground">Verified</CardTitle>
-      <TrendingUp className="h-5 w-5 text-success" />
-    </CardHeader>
-    <CardContent>
-      <p className="text-3xl font-bold font-display text-success">
-        {submissions.filter((f) =>
-          f.subsections.some((s: any) => s.criteria.some((c: any) => c.isVerified))
-        ).length}
-      </p>
-      <p className="text-xs text-muted-foreground">submissions</p>
-    </CardContent>
-  </Card>
+        <Card>
+          <CardHeader className="flex justify-between items-center pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Verified</CardTitle>
+            <TrendingUp className="h-5 w-5 text-success" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold font-display text-success">
+              {submissions.filter((f) =>
+                f.subsections?.some((s: any) => s.criteria?.some((c: any) => c.isVerified))
+              ).length}
+            </p>
+            <p className="text-xs text-muted-foreground">submissions</p>
+          </CardContent>
+        </Card>
+      </div>
 
-  
-</div>
-
-
+      {/* Search Box */}
       <div className="mb-6 w-full md:w-full">
-  <input
-    type="text"
-    placeholder="Search by Faculty Name or ID..."
-    value={searchTerm}
-    onChange={(e) => setSearchTerm(e.target.value)}
-    className="border rounded px-3 py-2 w-full text-sm"
-  />
-</div>
+        <input
+          type="text"
+          placeholder="Search by Faculty Name or ID..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="border rounded px-3 py-2 w-full text-sm"
+        />
+      </div>
 
+      {/* Pending Review */}
       <h2 className="text-lg font-semibold mb-4">Pending Review</h2>
       <div className="space-y-6 mb-12">
         {filteredSubmissions.map((f) => renderFacultyCard(f, "pending"))}
         {filteredSubmissions.every(
-          (f) => !f.subsections.some((s: any) => s.criteria.some((c: any) => !c.isVerified))
+          (f) => !f.submissions?.some((s: any) => s.criteria?.some((c: any) => !c.isVerified))
         ) && (
-          <p className="text-center text-muted-foreground py-8">No pending submissions to review.</p>
+          <p className="text-center text-muted-foreground py-8">
+            No pending submissions to review.
+          </p>
         )}
       </div>
 
+      {/* Verified Submissions */}
       <h2 className="text-lg font-semibold mb-4">Verified Submissions</h2>
       <div className="space-y-6">
         {filteredSubmissions.map((f) => renderFacultyCard(f, "verified"))}
         {filteredSubmissions.every(
-          (f) => !f.subsections.some((s: any) => s.criteria.some((c: any) => c.isVerified))
+          (f) => !f.submissions?.some((s: any) => s.criteria?.some((c: any) => c.isVerified))
         ) && (
           <p className="text-center text-muted-foreground py-8">No verified submissions yet.</p>
         )}

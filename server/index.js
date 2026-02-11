@@ -11,6 +11,10 @@ import module1Router from "./routes/module1Routes.js";
 import appealRouter from "./routes/appealRoutes.js";
 import module1HodRouter from "./routes/module1HodRoutes.js";
 import module5Router from "./routes/module5Routes.js";
+import module1HodPartbRouter from "./routes/module1HodPartbRoutes.js";
+import appealHodRouter from "./routes/appealHodRoutes.js";
+import module2Router from "./routes/module2Routes.js";
+import module3Router from "./routes/module3Routes.js";
 
 dotenv.config();
 
@@ -27,9 +31,13 @@ app.use('/api/admin',adminRouter);
 app.use('/api/hod',hodRouter);
 app.use('/api/faculty',facultyRouter);
 app.use('/api/module1',module1Router);
-app.use('/api/module5',module5Router)
+app.use('/api/module5',module5Router);
 app.use('/api/appeal',appealRouter);
-app.use('/api/hod/parta',module1HodRouter)
+app.use('/api/hod/parta',module1HodRouter);
+app.use('/api/hod/partb',module1HodPartbRouter);
+app.use('/api/hod/appeals',appealHodRouter);
+app.use('/api/module2',module2Router);
+app.use('/api/module3',module3Router);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

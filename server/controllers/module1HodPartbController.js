@@ -19,7 +19,7 @@ export const hodSubmitSubsection = async (req, res) => {
       });
     }
 
-    const ref = db.collection("module1_hod").doc(hodId);
+    const ref = db.collection("module1_B_hod").doc(hodId);
     const snap = await ref.get();
 
     let subsections = snap.exists ? snap.data().subsections || [] : [];
@@ -92,7 +92,7 @@ export const getHodSubsections = async (req, res) => {
       });
     }
 
-    const doc = await db.collection("module1_hod").doc(hodId).get();
+    const doc = await db.collection("module1_B_hod").doc(hodId).get();
 
     res.status(200).json({
       success: true,
@@ -136,7 +136,7 @@ export const adminViewHodSubmissions = async (req, res) => {
 
     for (const hodDoc of hodSnap.docs) {
       const submissionSnap = await db
-        .collection("module1_hod")
+        .collection("module1_B_hod")
         .doc(hodDoc.id)
         .get();
 
@@ -176,7 +176,7 @@ export const adminVerifyCriterion = async (req, res) => {
       });
     }
 
-    const ref = db.collection("module1_hod").doc(hodId);
+    const ref = db.collection("module1_B_hod").doc(hodId);
     const snap = await ref.get();
 
     if (!snap.exists) {

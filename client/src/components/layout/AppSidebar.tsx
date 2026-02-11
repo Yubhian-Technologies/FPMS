@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import {
@@ -17,7 +18,6 @@ import {
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { useState, useEffect } from 'react';
 
 const getNavItems = (role: string) => {
   const items = [
@@ -27,6 +27,7 @@ const getNavItems = (role: string) => {
       label: 'FPMS Form',
       roles: ['faculty'],
       isDropdown: true,
+      dropdownId: 'FPMS Form',
       children: [
         { title: 'Teaching & Learning', href: '/fpms/teaching' },
         { title: 'Research & Consultancy', href: '/fpms/research' },
@@ -40,13 +41,25 @@ const getNavItems = (role: string) => {
       label: 'FPMS Form',
       roles: ['hod'],
       isDropdown: true,
+      dropdownId: 'HOD FPMS Form', 
       children: [
         { title: 'Teaching & Learning', href: '/fpms/hod-teaching' },
-        
+      ],
+    },
+    {
+      icon: Building2,
+      label: 'FPMS-KPA Form',
+      roles: ['hod'],
+      isDropdown: true,
+      dropdownId: 'FPMS-KPA Form', 
+      children: [
+        { title: 'Academic Leadership & Curriculum Governance', href: '/fpms/hodb-teaching' },
       ],
     },
     { icon: MessageSquare, label: 'My Submissions', href: '/submissions', roles: ['faculty', 'hod'] },
     { icon: ClipboardCheck, label: 'Appeals', href: '/appeals', roles: ['faculty'] },
+    { icon: ClipboardCheck, label: 'Appeals', href: '/hod-appeals', roles: ['hod'] },
+    { icon: ClipboardCheck, label: 'Review Hod Appeals', href: '/committee-review', roles: ['committee'] },
     { icon: ClipboardCheck, label: 'Review Hod Submissions', href: '/hod-review', roles: ['admin'] },
     { icon: ClipboardCheck, label: 'Review Submissions', href: '/review', roles: ['hod', 'committee'] },
     { icon: BarChart3, label: 'Reports', href: '/reports', roles: ['committee'] },
@@ -70,25 +83,28 @@ export function AppSidebar() {
   useEffect(() => {
     const isInFpmsSection = location.pathname.startsWith('/fpms/');
     if (isInFpmsSection) {
-      if (expandedDropdown !== 'FPMS Form') setExpandedDropdown('FPMS Form');
+     
+      if (user?.role === 'faculty' && expandedDropdown !== 'FPMS Form') {
+        setExpandedDropdown('FPMS Form');
+      } else if (user?.role === 'hod') {
+        if (location.pathname.startsWith('/fpms/hod-')) {
+          setExpandedDropdown('HOD FPMS Form');
+        } else if (location.pathname.startsWith('/fpms/hodb-')) {
+          setExpandedDropdown('FPMS-KPA Form');
+        }
+      }
     } else {
       setExpandedDropdown(null);
     }
-  }, [location.pathname]);
+  }, [location.pathname, user?.role]);
 
   if (!user) return null;
 
   const navItems = getNavItems(user.role);
 
-  const toggleDropdown = (label: string) => {
-    setExpandedDropdown((current) => (current === label ? null : label));
+  const toggleDropdown = (dropdownId: string) => {
+    setExpandedDropdown((current) => (current === dropdownId ? null : dropdownId));
   };
-
-  const isFpmsDropdownOpen = expandedDropdown === 'FPMS Form';
-  const isAnyFpmsChildActive =
-    navItems
-      .find((item) => item.label === 'FPMS Form')
-      ?.children?.some((child) => location.pathname.startsWith(child.href)) ?? false;
 
   const handleLogout = () => {
     logout();
@@ -105,7 +121,6 @@ export function AppSidebar() {
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border">
       <div className="flex h-full flex-col">
-       
         <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary">
             <GraduationCap className="h-5 w-5 text-sidebar-primary-foreground" />
@@ -119,24 +134,32 @@ export function AppSidebar() {
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-3 py-4">
           {navItems.map((item) => {
+            
+            const dropdownId = item.dropdownId || item.label;
+
             if (item.isDropdown) {
+              const isOpen = expandedDropdown === dropdownId;
+
+              const isAnyChildActive =
+                item.children?.some((child) => location.pathname.startsWith(child.href)) ?? false;
+
               return (
-                <div key={item.label} className="space-y-1">
+                <div key={dropdownId} className="space-y-1">
                   <button
-                    onClick={() => toggleDropdown(item.label)}
+                    onClick={() => toggleDropdown(dropdownId)}
                     className={cn(
                       'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                      isAnyFpmsChildActive
+                      isAnyChildActive
                         ? 'bg-sidebar-primary text-sidebar-primary-foreground'
                         : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                     )}
                   >
                     <item.icon className="h-5 w-5" />
                     <span className="flex-1 text-left">{item.label}</span>
-                    {isFpmsDropdownOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </button>
 
-                  {isFpmsDropdownOpen && item.children && (
+                  {isOpen && item.children && (
                     <div className="ml-8 space-y-1">
                       {item.children.map((child) => {
                         const isActive = location.pathname === child.href;

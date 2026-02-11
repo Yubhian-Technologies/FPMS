@@ -27,8 +27,8 @@ export default function InstitutionalDevelopment() {
       title: "Industry Collaboration/MoU",
       maxPoints: 12,
       subItems: [
-        { name: "Guest Speakers", claimedScore: 0, maxScore: 4, evidence: "", description: "" },
-        { name: "Internship Monitoring", claimedScore: 0, maxScore: 8, evidence: "", description: "" },
+        { name: "Guest Speakers", claimedScore: 0, maxScore: 4, evidence: "", description: "", hodDescription: "", hodScore: undefined, committeeScore: undefined, committeeRemarks: "", isVerified: false },
+        { name: "Internship Monitoring", claimedScore: 0, maxScore: 8, evidence: "", description: "", hodDescription: "", hodScore: undefined, committeeScore: undefined, committeeRemarks: "", isVerified: false },
       ],
     },
     {
@@ -36,8 +36,8 @@ export default function InstitutionalDevelopment() {
       title: "University MoU + Implementation",
       maxPoints: 5,
       subItems: [
-        { name: "MoU Signed", claimedScore: 0, maxScore: 2, evidence: "", description: "" },
-        { name: "Implementation Report", claimedScore: 0, maxScore: 3, evidence: "", description: "" },
+        { name: "MoU Signed", claimedScore: 0, maxScore: 2, evidence: "", description: "", hodDescription: "", hodScore: undefined, committeeScore: undefined, committeeRemarks: "", isVerified: false },
+        { name: "Implementation Report", claimedScore: 0, maxScore: 3, evidence: "", description: "", hodDescription: "", hodScore: undefined, committeeScore: undefined, committeeRemarks: "", isVerified: false },
       ],
     },
     {
@@ -45,8 +45,8 @@ export default function InstitutionalDevelopment() {
       title: "Special Labs/CoE",
       maxPoints: 8,
       subItems: [
-        { name: "Coordinator Role", claimedScore: 0, maxScore: 4, evidence: "", description: "" },
-        { name: "Co-Coordinator Role", claimedScore: 0, maxScore: 4, evidence: "", description: "" },
+        { name: "Coordinator Role", claimedScore: 0, maxScore: 4, evidence: "", description: "", hodDescription: "", hodScore: undefined, committeeScore: undefined, committeeRemarks: "", isVerified: false },
+        { name: "Co-Coordinator Role", claimedScore: 0, maxScore: 4, evidence: "", description: "", hodDescription: "", hodScore: undefined, committeeScore: undefined, committeeRemarks: "", isVerified: false },
       ],
     },
     {
@@ -54,8 +54,8 @@ export default function InstitutionalDevelopment() {
       title: "Software/Apps/Hardware/Alumni",
       maxPoints: 8,
       subItems: [
-        { name: "Development", claimedScore: 0, maxScore: 4, evidence: "", description: "" },
-        { name: "Alumni Engagement", claimedScore: 0, maxScore: 4, evidence: "", description: "" },
+        { name: "Development", claimedScore: 0, maxScore: 4, evidence: "", description: "", hodDescription: "", hodScore: undefined, committeeScore: undefined, committeeRemarks: "", isVerified: false },
+        { name: "Alumni Engagement", claimedScore: 0, maxScore: 4, evidence: "", description: "", hodDescription: "", hodScore: undefined, committeeScore: undefined, committeeRemarks: "", isVerified: false },
       ],
     },
     {
@@ -63,20 +63,36 @@ export default function InstitutionalDevelopment() {
       title: "Institutional/Dept Responsibilities",
       maxPoints: 12,
       subItems: [
-        { name: "Institutional Responsibilities", claimedScore: 0, maxScore: 6, evidence: "", description: "" },
-        { name: "Department Responsibilities", claimedScore: 0, maxScore: 6, evidence: "", description: "" },
+        { name: "Institutional Responsibilities", claimedScore: 0, maxScore: 6, evidence: "", description: "", hodDescription: "", hodScore: undefined, committeeScore: undefined, committeeRemarks: "", isVerified: false },
+        { name: "Department Responsibilities", claimedScore: 0, maxScore: 6, evidence: "", description: "", hodDescription: "", hodScore: undefined, committeeScore: undefined, committeeRemarks: "", isVerified: false },
       ],
     },
   ];
 
-  
+  /* ---------------- FETCH BACKEND + APPEALS DATA ---------------- */
   const fetchSubmissions = async () => {
     if (!user?.id) return;
+
     try {
       setLoading(true);
+
+      // 1️⃣ Module 5 submission
       const res = await api.get(`/api/module5/faculty/${user.id}`);
       const backendData = res.data?.data || [];
 
+      // 2️⃣ Appeals submitted by faculty (committee verified)
+      const appealsRes = await api.get(`/api/appeal/${user.id}`);
+      const appealsData = appealsRes.data?.data || [];
+
+      // Map appeals for easy lookup
+      const appealsMap: Record<string, any> = {};
+      appealsData.forEach((a: any) => {
+        if (a.status === "committee_verified") {
+          appealsMap[`${a.subId}-${a.criterionName}`] = a;
+        }
+      });
+
+      // 3️⃣ Merge backend + default + appeals
       const merged = defaultSubCriteria.map((sc) => {
         const existing = backendData.find((b: any) => b.id === sc.id);
 
@@ -84,22 +100,39 @@ export default function InstitutionalDevelopment() {
           ...sc,
           subItems: sc.subItems.map((si) => {
             const item = existing?.criteria?.find((c: any) => c.name === si.name);
-            return item
-              ? {
-                  ...si,
-                  claimedScore: item.claimedScore ?? si.claimedScore,
-                  evidence: item.evidence ?? "",
-                  description: item.facultyDescription ?? si.description,
-                  isVerified: item.isVerified ?? false,
-                  committeeScore: item.committeeScore,
-                }
-              : si;
+            const appeal = appealsMap[`${sc.id}-${si.name}`];
+
+            // Compute final score
+            const finalScore =
+              appeal?.committeeScore != null
+                ? Number(appeal.committeeScore)
+                : item?.hodScore != null
+                ? Number(item.hodScore)
+                : Number(item?.claimedScore ?? 0);
+
+            return {
+              ...si,
+              claimedScore: item?.claimedScore ?? si.claimedScore,
+              evidence: item?.evidence ?? si.evidence,
+              description: item?.facultyDescription ?? si.description,
+              hodDescription: item?.hodDescription ?? si.hodDescription,
+              hodScore: item?.hodScore != null ? Number(item.hodScore) : undefined,
+              committeeScore: appeal?.committeeScore != null
+                ? Number(appeal.committeeScore)
+                : item?.committeeScore != null
+                ? Number(item.committeeScore)
+                : undefined,
+              committeeRemarks: appeal?.committeeRemarks ?? item?.committeeRemarks ?? "",
+              isVerified: appeal?.verifiedByCommittee ?? item?.isVerified ?? false,
+              finalScore,
+            };
           }),
         };
       });
 
       setSubCriteria(merged);
     } catch (err) {
+      console.error(err);
       toast({ title: "Error", description: "Failed to load data", variant: "destructive" });
     } finally {
       setLoading(false);
@@ -110,7 +143,7 @@ export default function InstitutionalDevelopment() {
     fetchSubmissions();
   }, [user]);
 
-  
+  /* ---------------- UPDATE FIELDS ---------------- */
   const updateSubItem = (subId: string, index: number, field: string, value: any) => {
     setSubCriteria((prev) =>
       prev.map((sc) =>
@@ -127,15 +160,16 @@ export default function InstitutionalDevelopment() {
   };
 
   const getSubStatus = (sub: any) => {
-    const hasScore = sub.subItems.some((si: any) => si.claimedScore > 0);
     const allVerified = sub.subItems.every((si: any) => si.isVerified);
+    const hasScore = sub.subItems.some((si: any) => si.claimedScore > 0);
     if (allVerified) return "completed";
     if (hasScore) return "in-progress";
     return "not-started";
   };
 
+  /* ---------------- SAVE FUNCTIONS ---------------- */
   const saveSingleCriterion = async (subId: string, criterion: any) => {
-    if (!user) return;
+    if (!user || criterion.hodScore != null || criterion.committeeScore != null) return;
     try {
       await api.post(
         `/api/module5/faculty/${user.id}/subsection/${encodeURIComponent(subId)}`,
@@ -143,57 +177,55 @@ export default function InstitutionalDevelopment() {
           criteria: [
             {
               name: criterion.name,
-              claimedScore: criterion.claimedScore,
-              maxScore: criterion.maxScore,
-              description: criterion.description,
-              evidence: criterion.evidence,
+              claimedScore: Number(criterion.claimedScore),
+              maxScore: Number(criterion.maxScore),
+              description: criterion.description ?? "",
+              evidence: criterion.evidence ?? "",
             },
           ],
         }
       );
       toast({ title: "Saved", description: "Criterion saved successfully" });
       fetchSubmissions();
-    } catch (err) {
+    } catch {
       toast({ title: "Save failed", description: "Check backend", variant: "destructive" });
     }
   };
 
   const saveSubsection = async (sub: any) => {
-    if (!user) return;
+    if (!user || sub.subItems.some((si) => si.hodScore != null || si.committeeScore != null)) return;
     try {
       await api.post(
         `/api/module5/faculty/${user.id}/subsection/${encodeURIComponent(sub.id)}`,
         {
           criteria: sub.subItems.map((si: any) => ({
             name: si.name,
-            claimedScore: si.claimedScore,
-            maxScore: si.maxScore,
-            description: si.description,
-            evidence: si.evidence,
+            claimedScore: Number(si.claimedScore),
+            maxScore: Number(si.maxScore),
+            description: si.description ?? "",
+            evidence: si.evidence ?? "",
           })),
         }
       );
       toast({ title: "Saved", description: "Subsection saved successfully" });
       fetchSubmissions();
-    } catch (err) {
+    } catch {
       toast({ title: "Save failed", description: "Check backend", variant: "destructive" });
     }
   };
 
   if (loading) return <p>Loading...</p>;
 
-  
-  const totalMax = subCriteria.reduce((s, sc) => s + sc.maxPoints, 0);
+  const totalMax = subCriteria.reduce((s, sc) => s + Number(sc.maxPoints), 0);
   const totalClaimed = subCriteria.reduce(
-    (s, sc) => s + sc.subItems.reduce((x: number, si: any) => x + (si.claimedScore || 0), 0),
+    (s, sc) => s + sc.subItems.reduce((x: number, si: any) => x + Number(si.finalScore || 0), 0),
     0
   );
 
-  
+  /* ---------------- RENDER ---------------- */
   return (
     <DashboardLayout title="Institutional Development" subtitle="Criterion 5 • Maximum 45 Points">
       <div className="space-y-6">
-       
         <Card>
           <CardContent>
             <div className="flex justify-between mb-2">
@@ -229,35 +261,40 @@ export default function InstitutionalDevelopment() {
               <AccordionContent className="px-4 pb-4 space-y-4">
                 {sub.subItems.map((si: any, i: number) => (
                   <Card key={i}>
-                    <CardHeader className="flex flex-row justify-between items-center">
+                    <CardHeader className="flex justify-between items-center">
                       <CardTitle>{si.name}</CardTitle>
                       {si.isVerified && <Badge className="bg-blue-800 text-white">Verified</Badge>}
                     </CardHeader>
 
                     <CardContent className="space-y-3">
                       <div>
-                        <label>Claimed Score (Max {si.maxScore})</label>
+                        <label>Final Score (Max {si.maxScore})</label>
                         <input
                           type="number"
-                          min={0}
-                          max={si.maxScore}
-                          value={si.claimedScore}
-                          disabled={si.isVerified}
-                          onChange={(e) =>
-                            updateSubItem(sub.id, i, "claimedScore", Number(e.target.value))
-                          }
-                          className="w-full border rounded p-2"
+                          value={si.finalScore}
+                          disabled
+                          className="w-full border rounded p-2 bg-gray-100"
                         />
                       </div>
+
+                      {si.hodScore != null && (
+                        <p className="text-sm text-blue-700">
+                          HOD Score: {si.hodScore} | HOD Notes: {si.hodDescription}
+                        </p>
+                      )}
+
+                      {si.committeeScore != null && (
+                        <p className="text-sm text-purple-700 font-medium">
+                          Committee Score: {si.committeeScore} | Committee Remarks: {si.committeeRemarks}
+                        </p>
+                      )}
 
                       <div>
                         <label>Description</label>
                         <textarea
                           value={si.description}
-                          disabled={si.isVerified}
-                          onChange={(e) =>
-                            updateSubItem(sub.id, i, "description", e.target.value)
-                          }
+                          disabled={si.hodScore != null || si.committeeScore != null}
+                          onChange={(e) => updateSubItem(sub.id, i, "description", e.target.value)}
                           className="w-full border rounded p-2"
                         />
                       </div>
@@ -267,15 +304,13 @@ export default function InstitutionalDevelopment() {
                         <input
                           type="text"
                           value={si.evidence}
-                          disabled={si.isVerified}
-                          onChange={(e) =>
-                            updateSubItem(sub.id, i, "evidence", e.target.value)
-                          }
+                          disabled={si.hodScore != null || si.committeeScore != null}
+                          onChange={(e) => updateSubItem(sub.id, i, "evidence", e.target.value)}
                           className="w-full border rounded p-2"
                         />
                       </div>
 
-                      {!si.isVerified && (
+                      {!si.isVerified && si.hodScore == null && si.committeeScore == null && (
                         <Button onClick={() => saveSingleCriterion(sub.id, si)}>
                           Save This Criterion
                         </Button>
@@ -284,9 +319,9 @@ export default function InstitutionalDevelopment() {
                   </Card>
                 ))}
 
-                <Button onClick={() => saveSubsection(sub)}>
-                  Save Entire Subsection
-                </Button>
+                {sub.subItems.every((si) => si.hodScore == null && si.committeeScore == null) && (
+                  <Button onClick={() => saveSubsection(sub)}>Save Entire Subsection</Button>
+                )}
               </AccordionContent>
             </AccordionItem>
           ))}
