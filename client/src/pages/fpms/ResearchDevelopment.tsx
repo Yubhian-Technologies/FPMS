@@ -1,107 +1,424 @@
+import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Save, Send, FileText, Upload, Info } from "lucide-react";
-import { Link } from "react-router-dom";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-
-const subCriteria = [
-  { id: "2.1", title: "Publications", maxPoints: 20, currentPoints: 0, description: "Quartiles, IF, indexed conference, book chapters", status: "not-started" },
-  { id: "2.2", title: "Citations & h-index Growth", maxPoints: 5, currentPoints: 0, description: "0.2 per citation excluding self/co-author", status: "not-started" },
-  { id: "2.3", title: "Patents/Creative Works", maxPoints: 10, currentPoints: 0, description: "Indian/USA utility only, published/granted", status: "not-started" },
-  { id: "2.4", title: "Sponsored Projects", maxPoints: 18, currentPoints: 0, description: "Funding slabs, PI/CoPI points", status: "not-started" },
-  { id: "2.5", title: "Seed Funding", maxPoints: 4, currentPoints: 0, description: "Internal seed funding projects", status: "not-started" },
-  { id: "2.6", title: "Consultancy Projects/Training", maxPoints: 10, currentPoints: 0, description: "External consultancy and training", status: "not-started" },
-  { id: "2.7", title: "PhD Supervision", maxPoints: 4, currentPoints: 0, description: "Tenure ≤5 years rule", status: "not-started" },
-  { id: "2.8", title: "Research Services", maxPoints: 4, currentPoints: 0, description: "Events, reviewer/editor roles", status: "not-started" },
-];
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { api } from "@/api/api";
 
 export default function ResearchConsultancy() {
-  const totalMax = subCriteria.reduce((sum, sc) => sum + sc.maxPoints, 0);
-  const totalCurrent = subCriteria.reduce((sum, sc) => sum + sc.currentPoints, 0);
-  const progress = totalMax > 0 ? (totalCurrent / totalMax) * 100 : 0;
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  const [subCriteria, setSubCriteria] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  /* ---------------- DEFAULT STRUCTURE ---------------- */
+  const defaultSubCriteria = [
+    {
+      id: "3.1",
+      title: "Publications",
+      maxPoints: 20,
+      description: "Quartiles, IF, indexed conferences, book chapters",
+      subItems: [
+        {
+          name: "Research Publications",
+          maxScore: 20,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+    {
+      id: "3.2",
+      title: "Citations & h-index Growth",
+      maxPoints: 5,
+      description: "0.2 per citation excluding self/co-author",
+      subItems: [
+        {
+          name: "Citations / h-index",
+          maxScore: 5,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+    {
+      id: "3.3",
+      title: "Patents / Creative Works",
+      maxPoints: 10,
+      description: "Indian / USA utility patents only",
+      subItems: [
+        {
+          name: "Patents / Creative Works",
+          maxScore: 10,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+    {
+      id: "3.4",
+      title: "Sponsored Projects",
+      maxPoints: 18,
+      description: "Funding slabs, PI / Co-PI points",
+      subItems: [
+        {
+          name: "Sponsored Research Projects",
+          maxScore: 18,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+    {
+      id: "3.5",
+      title: "Seed Funding",
+      maxPoints: 4,
+      description: "Internal seed funding projects",
+      subItems: [
+        {
+          name: "Seed Funding Projects",
+          maxScore: 4,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+    {
+      id: "3.6",
+      title: "Consultancy / Training",
+      maxPoints: 10,
+      description: "External consultancy and training",
+      subItems: [
+        {
+          name: "Consultancy / Training Programs",
+          maxScore: 10,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+    {
+      id: "3.7",
+      title: "PhD Supervision",
+      maxPoints: 4,
+      description: "Tenure ≤ 5 years",
+      subItems: [
+        {
+          name: "PhD Supervision",
+          maxScore: 4,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+    {
+      id: "3.8",
+      title: "Research Services",
+      maxPoints: 4,
+      description: "Reviewer / editor / events",
+      subItems: [
+        {
+          name: "Research Services",
+          maxScore: 4,
+          claimedScore: 0,
+          description: "",
+          evidence: "",
+          isVerified: false,
+        },
+      ],
+    },
+  ];
+
+  /* ---------------- FETCH DATA ---------------- */
+  const fetchSubmissions = async () => {
+    if (!user?.id) {
+      setSubCriteria(defaultSubCriteria);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await api.get(`/api/module3/faculty/${user.id}`);
+      const backendData = res.data?.data || [];
+
+      const merged = defaultSubCriteria.map((sc) => {
+        const existing = backendData.find((b: any) => b.id === sc.id);
+
+        return {
+          ...sc,
+          subItems: sc.subItems.map((si) => {
+            const item = existing?.criteria?.find(
+              (c: any) => c.name === si.name,
+            );
+
+            return item
+              ? {
+                  ...si,
+                  claimedScore: item.claimedScore ?? 0,
+                  description: item.facultyDescription ?? "",
+                  evidence: item.evidence ?? "",
+                  isVerified: item.isVerified ?? false,
+                  committeeScore: item.committeeScore,
+                }
+              : si;
+          }),
+        };
+      });
+
+      setSubCriteria(merged);
+    } catch (err) {
+      console.error('Research data fetch error:', err);
+      setSubCriteria(defaultSubCriteria);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSubmissions();
+  }, [user?.id]);
+
+  /* ---------------- HELPERS ---------------- */
+  const updateSubItem = (
+    subId: string,
+    index: number,
+    field: string,
+    value: any,
+  ) => {
+    setSubCriteria((prev) =>
+      prev.map((sc) =>
+        sc.id !== subId
+          ? sc
+          : {
+              ...sc,
+              subItems: sc.subItems.map((si, i) =>
+                i === index ? { ...si, [field]: value } : si,
+              ),
+            },
+      ),
+    );
+  };
+
+  const getSubStatus = (sub: any) => {
+    const hasScore = sub.subItems.some((si: any) => si.claimedScore > 0);
+    const allVerified = sub.subItems.every((si: any) => si.isVerified);
+    if (allVerified) return "completed";
+    if (hasScore) return "in-progress";
+    return "not-started";
+  };
+
+  const saveSingleCriterion = async (subId: string, criterion: any) => {
+    if (!user) return;
+
+    try {
+      await api.post(
+        `/api/module3/faculty/${user.id}/subsection/${encodeURIComponent(subId)}`,
+        {
+          criteria: [
+            {
+              name: criterion.name,
+              claimedScore: criterion.claimedScore,
+              maxScore: criterion.maxScore,
+              description: criterion.description,
+              evidence: criterion.evidence,
+            },
+          ],
+        },
+      );
+      toast({ title: "Saved", description: "Criterion saved successfully" });
+      fetchSubmissions();
+    } catch {
+      toast({
+        title: "Save failed",
+        description: "Check backend",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const saveSubsection = async (sub: any) => {
+    if (!user) return;
+
+    try {
+      await api.post(
+        `/api/module3/faculty/${user.id}/subsection/${encodeURIComponent(sub.id)}`,
+        {
+          criteria: sub.subItems.map((si: any) => ({
+            name: si.name,
+            claimedScore: si.claimedScore,
+            maxScore: si.maxScore,
+            description: si.description,
+            evidence: si.evidence,
+          })),
+        },
+      );
+      toast({ title: "Saved", description: "Subsection saved successfully" });
+      fetchSubmissions();
+    } catch {
+      toast({
+        title: "Save failed",
+        description: "Check backend",
+        variant: "destructive",
+      });
+    }
+  };
+
+  if (loading) return <p>Loading...</p>;
+
+  const totalMax = subCriteria.reduce((s, sc) => s + sc.maxPoints, 0);
+  const totalClaimed = subCriteria.reduce(
+    (s, sc) =>
+      s +
+      sc.subItems.reduce((x: number, si: any) => x + (si.claimedScore || 0), 0),
+    0,
+  );
 
   return (
-    <DashboardLayout title="Research & Developement" subtitle="Criterion 2 • Maximum 75 Points" currentPath="/fpms/research">
+    <DashboardLayout
+      title="Research & Consultancy"
+      subtitle="Criterion 2 • Maximum 75 Points"
+    >
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link to="/dashboard">
-              <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold">Research & Consultancy</h1>
-              <p className="text-muted-foreground">Criterion 2 • Maximum 75 Points</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline"><Save className="mr-2 h-4 w-4" />Save Draft</Button>
-            <Button><Send className="mr-2 h-4 w-4" />Submit for Review</Button>
-          </div>
-        </div>
-
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">Overall Progress</span>
-              <span className="text-sm text-muted-foreground">{totalCurrent} / {totalMax} points</span>
+          <CardContent>
+            <div className="flex justify-between mb-2">
+              <span>Overall Progress</span>
+              <span>
+                {totalClaimed} / {totalMax}
+              </span>
             </div>
-            <Progress value={progress} className="h-2" />
-            <div className="flex justify-between mt-4 text-sm text-muted-foreground">
-              <span>0 of 8 sub-criteria completed</span>
-              <span>0 evidence files uploaded</span>
-            </div>
+            <Progress value={(totalClaimed / totalMax) * 100} className="h-3" />
           </CardContent>
         </Card>
 
         <Accordion type="single" collapsible className="space-y-4">
-          {subCriteria.map((sc) => (
-            <AccordionItem key={sc.id} value={sc.id} className="border rounded-lg px-4">
-              <AccordionTrigger className="hover:no-underline">
-                <div className="flex items-center justify-between w-full pr-4">
-                  <div className="flex items-center gap-4">
-                    <Badge variant="outline" className="font-mono">{sc.id}</Badge>
-                    <div className="text-left">
-                      <p className="font-medium">{sc.title}</p>
-                      <p className="text-sm text-muted-foreground">{sc.description}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <Badge variant="secondary">{sc.currentPoints} / {sc.maxPoints} pts</Badge>
-                    <Badge variant="outline">Not Started</Badge>
-                  </div>
-                </div>
+          {subCriteria.map((sub) => (
+            <AccordionItem
+              key={sub.id}
+              value={sub.id}
+              className="border rounded-lg"
+            >
+              <AccordionTrigger className="flex justify-between items-center px-4">
+                <span>
+                  {sub.id} - {sub.title}
+                </span>
+                <Badge
+                  variant={
+                    getSubStatus(sub) === "completed"
+                      ? "default"
+                      : getSubStatus(sub) === "in-progress"
+                        ? "secondary"
+                        : "destructive"
+                  }
+                >
+                  {getSubStatus(sub) === "completed"
+                    ? "Verified"
+                    : getSubStatus(sub) === "in-progress"
+                      ? "In Progress"
+                      : "Not Started"}
+                </Badge>
               </AccordionTrigger>
-              <AccordionContent className="pt-4 pb-6">
-                <div className="space-y-4">
-                  <div className="bg-muted/50 rounded-lg p-4">
-                    <div className="flex items-start gap-2">
-                      <Info className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                      <div className="text-sm text-muted-foreground">
-                        <p className="font-medium text-foreground mb-1">Scoring Guidelines</p>
-                        <p>Complete the required activities and upload supporting evidence.</p>
+
+              <AccordionContent className="px-4 pb-4 space-y-4">
+                {sub.subItems.map((si: any, i: number) => (
+                  <Card key={i}>
+                    <CardHeader className="flex flex-row justify-between items-center">
+                      <CardTitle>{si.name}</CardTitle>
+                      {si.isVerified && (
+                        <Badge className="bg-blue-800 text-white">
+                          Verified
+                        </Badge>
+                      )}
+                    </CardHeader>
+
+                    <CardContent className="space-y-3">
+                      <div>
+                        <label>Claimed Score (Max {si.maxScore})</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={si.maxScore}
+                          value={si.claimedScore}
+                          disabled={si.isVerified}
+                          onChange={(e) =>
+                            updateSubItem(
+                              sub.id,
+                              i,
+                              "claimedScore",
+                              Number(e.target.value),
+                            )
+                          }
+                          className="w-full border rounded p-2"
+                        />
                       </div>
-                    </div>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Card>
-                      <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><FileText className="h-4 w-4" />Claim Entry</CardTitle></CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground mb-4">No claims added yet</p>
-                        <Button variant="outline" size="sm" className="w-full">Add Claim</Button>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Upload className="h-4 w-4" />Evidence Documents</CardTitle></CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground mb-4">No evidence uploaded</p>
-                        <Button variant="outline" size="sm" className="w-full">Upload Evidence</Button>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
+
+                      <div>
+                        <label>Description</label>
+                        <textarea
+                          value={si.description}
+                          disabled={si.isVerified}
+                          onChange={(e) =>
+                            updateSubItem(
+                              sub.id,
+                              i,
+                              "description",
+                              e.target.value,
+                            )
+                          }
+                          className="w-full border rounded p-2"
+                        />
+                      </div>
+
+                      <div>
+                        <label>Evidence URL</label>
+                        <input
+                          type="text"
+                          value={si.evidence}
+                          disabled={si.isVerified}
+                          onChange={(e) =>
+                            updateSubItem(sub.id, i, "evidence", e.target.value)
+                          }
+                          className="w-full border rounded p-2"
+                        />
+                      </div>
+
+                      {!si.isVerified && (
+                        <Button onClick={() => saveSingleCriterion(sub.id, si)}>
+                          Save This Criterion
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+
+                <Button onClick={() => saveSubsection(sub)}>
+                  Save Entire Subsection
+                </Button>
               </AccordionContent>
             </AccordionItem>
           ))}
