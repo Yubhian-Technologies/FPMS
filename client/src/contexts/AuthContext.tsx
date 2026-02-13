@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { api } from "@/api/api";
 
-type Role = "committee" | "admin" | "hod" | "faculty";
+type Role = "committee" | "admin" | "hod" | "dean" | "faculty";
 
 interface User {
   id?: string;
@@ -40,6 +40,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const endpoints = [
       { role: "faculty", url: "/api/faculty/login" },
       { role: "hod", url: "/api/hod/login" },
+      { role: "dean", url: "/api/dean/login" },
       { role: "admin", url: "/api/admin/login" },
       { role: "committee", url: "/api/committee/login" },
       

@@ -126,6 +126,56 @@ export const addHod = async (req, res) => {
     });
   }
 };
+export const addDean = async (req, res) => {
+  try {
+    const { name, email, password, department, college, hasPhd } = req.body;
+
+    if (!name || !email || !password || !department || !college) {
+      return res.status(400).json({
+        success: false,
+        message: 'All fields are required'
+      });
+    }
+
+    const existingHod = await db
+      .collection('deans')
+      .where('email', '==', email)
+      .limit(1)
+      .get();
+
+    if (!existingHod.empty) {
+      return res.status(409).json({
+        success: false,
+        message: 'DEAN already exists'
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await db.collection('deans').add({
+      name,
+      email,
+      password: hashedPassword,
+      department,
+      college,
+      hasPhd: Boolean(hasPhd),
+      role: 'dean',
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Dean added successfully'
+    });
+
+  } catch (error) {
+    console.error('Add Dean error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
 
 export const getAllHods = async (req, res) => {
   try {
@@ -149,6 +199,27 @@ export const getAllHods = async (req, res) => {
   }
 };
 
+export const getAllDeans = async (req, res) => {
+  try {
+    const snapshot = await db.collection('deans').get();
+
+    const deans = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: deans
+    });
+  } catch (error) {
+    console.error('Get DEANS error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
 
 export const updateHod = async (req, res) => {
   try {
@@ -192,6 +263,48 @@ export const updateHod = async (req, res) => {
     });
   }
 };
+export const updateDean = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, password, department, college, hasPhd } = req.body;
+
+    const deanRef = db.collection('deans').doc(id);
+    const deanDoc = await deanRef.get();
+
+    if (!deanDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: 'Dean not found'
+      });
+    }
+
+    const updateData = {};
+
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+    if (department) updateData.department = department;
+    if (college) updateData.college = college;
+    if (hasPhd !== undefined) updateData.hasPhd = Boolean(hasPhd);
+
+    if (password) {
+      updateData.password = await bcrypt.hash(password, 10);
+    }
+
+    await deanRef.update(updateData);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Dean updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Update Dean error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
 
 
 export const deleteHod = async (req, res) => {
@@ -217,6 +330,36 @@ export const deleteHod = async (req, res) => {
 
   } catch (error) {
     console.error('Delete HOD error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+export const deleteDean = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deanRef = db.collection('deans').doc(id);
+    const deanDoc = await deanRef.get();
+
+    if (!deanDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: 'dean not found'
+      });
+    }
+
+    await deanRef.delete();
+
+    return res.status(200).json({
+      success: true,
+      message: 'dean deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Delete dean error:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error'

@@ -16,6 +16,7 @@ import appealHodRouter from "./routes/appealHodRoutes.js";
 import module2Router from "./routes/module2Routes.js";
 import module3Router from "./routes/module3Routes.js";
 import module4Router from "./routes/module4Routes.js";
+import deanRouter from "./routes/deanRoutes.js";
 
 dotenv.config();
 
@@ -30,6 +31,7 @@ app.get("/api", (req, res) => {
 app.use('/api/committee',authRouter);
 app.use('/api/admin',adminRouter);
 app.use('/api/hod',hodRouter);
+app.use('/api/dean',deanRouter);
 app.use('/api/faculty',facultyRouter);
 app.use('/api/module1',module1Router);
 app.use('/api/module5',module5Router);

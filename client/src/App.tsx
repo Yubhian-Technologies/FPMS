@@ -29,7 +29,11 @@ import TeachingandLearning from './pages/hod-forms/TeachingandLearning'
 import AdminReview from "./pages/AdminReview";
 import AcademicLeadershipCurriculumGovernance from "./pages/hodb-forms/AcademicLeadershipCurriculumGovernance";
 import AppealHod from "./pages/AppealHod";
-import CommitteeReview from "./pages/committeeReview";
+import CommitteeReview from "./pages/CommitteeReview";
+import AddDean from "./pages/AddDean";
+import DeanTeachingLearning from "./pages/dean-forms/DeanTeachingLearning";
+import DeanBTeachingLearning from "./pages/deanb-forms/DeanBTeachingLearning";
+import DeanAppeals from "./pages/DeanAppeal";
 
 
 const queryClient = new QueryClient();
@@ -120,6 +124,9 @@ function AppRoutes() {
           <Route path="/fpms/professional" element={<ProfessionalDevelopment />} />
           <Route path="/fpms/student" element={<StudentDevelopment />} />
           <Route path="/fpms/institutional" element={<InstitutionalDevelopment />} />
+          <Route path="/fpms/dean-teaching" element={<DeanTeachingLearning></DeanTeachingLearning>}></Route>
+          <Route path="/fpms/deanb-teaching" element={<DeanBTeachingLearning></DeanBTeachingLearning>}></Route>\
+          <Route path="/dean-appeals" element={<DeanAppeals></DeanAppeals>}></Route>
       <Route path="*" element={<NotFound />} />
       <Route path="/submissions" element={<Submissions></Submissions>}></Route>
       <Route path='/appeals' element={<Appeals></Appeals>}></Route>
@@ -130,6 +137,7 @@ function AppRoutes() {
       <Route path="/fpms/hod-teaching" element={<TeachingandLearning></TeachingandLearning>}></Route>
       <Route path="/hod-appeals" element={<AppealHod></AppealHod>}></Route>
       <Route path="/committee-review" element={<CommitteeReview></CommitteeReview>}></Route>
+      <Route path="/add-dean" element={<AddDean></AddDean>}></Route>
       <Route path="/fpms/hodb-teaching" element={<AcademicLeadershipCurriculumGovernance></AcademicLeadershipCurriculumGovernance>}></Route>
     </Routes>
   );

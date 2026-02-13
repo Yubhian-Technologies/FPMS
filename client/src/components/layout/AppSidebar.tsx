@@ -21,7 +21,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 const getNavItems = (role: string) => {
   const items = [
-    { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard', roles: ['faculty', 'hod', 'committee', 'admin'] },
+    { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard', roles: ['faculty', 'hod', 'committee', 'admin','dean'] },
     {
       icon: FileText,
       label: 'FPMS Form',
@@ -56,9 +56,31 @@ const getNavItems = (role: string) => {
         { title: 'Academic Leadership & Curriculum Governance', href: '/fpms/hodb-teaching' },
       ],
     },
-    { icon: MessageSquare, label: 'My Submissions', href: '/submissions', roles: ['faculty', 'hod'] },
+    {
+      icon: FileText,
+      label: 'FPMS Form',
+      roles: ['dean'],
+      isDropdown: true,
+      dropdownId: 'Dean FPMS Form', 
+      children: [
+        { title: 'Teaching & Learning', href: '/fpms/dean-teaching' },
+      ],
+    },
+    {
+      icon: Building2,
+      label: 'FPMS-KPA Form',
+      roles: ['dean'],
+      isDropdown: true,
+      dropdownId: 'FPMS-KPA Form', 
+      children: [
+        { title: 'Academic Leadership & Curriculum Governance', href: '/fpms/deanb-teaching' },
+      ],
+    },
+    { icon: MessageSquare, label: 'My Submissions', href: '/submissions', roles: ['faculty', 'hod','dean'] },
     { icon: ClipboardCheck, label: 'Appeals', href: '/appeals', roles: ['faculty'] },
     { icon: ClipboardCheck, label: 'Appeals', href: '/hod-appeals', roles: ['hod'] },
+    { icon: ClipboardCheck, label: 'Appeals', href: '/dean-appeals', roles: ['dean'] },
+    { icon: ClipboardCheck, label: 'Add Dean', href: '/add-dean', roles: ['admin'] },
     { icon: ClipboardCheck, label: 'Review Hod Appeals', href: '/committee-review', roles: ['committee'] },
     { icon: ClipboardCheck, label: 'Review Hod Submissions', href: '/hod-review', roles: ['admin'] },
     { icon: ClipboardCheck, label: 'Review Submissions', href: '/review', roles: ['hod', 'committee'] },
