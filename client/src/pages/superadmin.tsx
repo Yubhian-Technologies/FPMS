@@ -271,20 +271,6 @@ export default function SuperAdminCriteriaManagement() {
                   {!roleExtra.role && <AlertTriangle className="h-5 w-5 text-amber-600" />}
                 </CardTitle>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1"
-                  onClick={() => {
-                    toast({
-                      title: "Add New Role",
-                      description: "Custom role creation is prepared — will be fully implemented soon.",
-                    });
-                  }}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Role
-                </Button>
               </div>
             </CardHeader>
 
