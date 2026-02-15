@@ -70,6 +70,14 @@ export default function Index() {
             <Link to="/login">
               <Button variant="ghost">Sign In</Button>
             </Link>
+            <Link to="/superadmin">
+              <Button 
+                variant="outline" 
+                className="border-purple-600 text-purple-700 hover:bg-purple-50 hover:text-purple-800 font-medium"
+              >
+                Super Admin
+              </Button>
+            </Link>
             <Link to="/login">
               <Button>Get Started</Button>
             </Link>
