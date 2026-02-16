@@ -1,8 +1,8 @@
 import { db } from "../config/firebase.js";
 
-export const hodSubmitSubsection = async (req, res) => {
+export const deanSubmitSubsection = async (req, res) => {
   try {
-    const { hodId, subId } = req.params;
+    const { deanId, subId } = req.params;
     const { criteria, subsectionName } = req.body;
 
     if (!criteria || !Array.isArray(criteria) || criteria.length === 0) {
@@ -12,14 +12,14 @@ export const hodSubmitSubsection = async (req, res) => {
       });
     }
 
-    if (req.hod.id !== hodId) {
+    if (req.dean.id !== deanId) {
       return res.status(403).json({
         success: false,
         message: "Unauthorized",
       });
     }
 
-    const ref = db.collection("module1_hod").doc(hodId);
+    const ref = db.collection("module1_dean").doc(deanId);
     const snap = await ref.get();
 
     let subsections = snap.exists ? snap.data().subsections || [] : [];
@@ -43,7 +43,7 @@ export const hodSubmitSubsection = async (req, res) => {
         claimedScore: Number(c.claimedScore) || 0,
         maxScore: Number(c.maxScore) || 0,
         evidence: c.evidence || "",
-        hodDescription: c.description || "",
+        deanDescription: c.description || "",
         adminScore: old?.adminScore ?? null,
         adminDescription: old?.adminDescription ?? "",
         isVerified: false,
@@ -69,10 +69,10 @@ export const hodSubmitSubsection = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "HOD subsection submitted successfully",
+      message: "Dean subsection submitted successfully",
     });
   } catch (error) {
-    console.error("HOD Submit Error:", error);
+    console.error("Dean Submit Error:", error);
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -81,25 +81,25 @@ export const hodSubmitSubsection = async (req, res) => {
 };
 
 
-export const getHodSubsections = async (req, res) => {
+export const getDeanSubsections = async (req, res) => {
   try {
-    const { hodId } = req.params;
+    const { deanId } = req.params;
 
-    if (req.hod.id !== hodId) {
+    if (req.dean.id !== deanId) {
       return res.status(403).json({
         success: false,
         message: "Unauthorized",
       });
     }
 
-    const doc = await db.collection("module1_hod").doc(hodId).get();
+    const doc = await db.collection("module1_dean").doc(deanId).get();
 
     res.status(200).json({
       success: true,
       data: doc.exists ? doc.data().subsections || [] : [],
     });
   } catch (error) {
-    console.error("Get HOD Subsections Error:", error);
+    console.error("Get Dean Subsections Error:", error);
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -108,8 +108,7 @@ export const getHodSubsections = async (req, res) => {
 };
 
 
-// ---------------- ADMIN VIEW ALL HOD SUBMISSIONS ----------------
-export const adminViewHodSubmissions = async (req, res) => {
+export const adminViewDeanSubmissions = async (req, res) => {
   try {
     const { moduleName } = req.params;
 
@@ -129,29 +128,27 @@ export const adminViewHodSubmissions = async (req, res) => {
       });
     }
 
-   
-    const hodSnap = await db
-      .collection("hods")
+    
+    const collectionName = `${moduleName}_dean`;
+
+    const deanSnap = await db
+      .collection("deans")
       .where("college", "==", adminCollege)
       .get();
 
     const results = [];
 
-   
-    const moduleCollection = `${moduleName}_hod`;
-
-    for (const hodDoc of hodSnap.docs) {
+    for (const deanDoc of deanSnap.docs) {
       const submissionSnap = await db
-        .collection(moduleCollection)
-        .doc(hodDoc.id)
+        .collection(collectionName)
+        .doc(deanDoc.id)
         .get();
 
       if (submissionSnap.exists) {
         results.push({
-          hodId: hodDoc.id,
-          hodName: hodDoc.data().name,
-          department: hodDoc.data().department,
-          college: hodDoc.data().college,
+          deanId: deanDoc.id,
+          deanName: deanDoc.data().name,
+          college: deanDoc.data().college,
           subsections: submissionSnap.data().subsections || [],
         });
       }
@@ -162,7 +159,7 @@ export const adminViewHodSubmissions = async (req, res) => {
       data: results,
     });
   } catch (error) {
-    console.error("Admin View HOD Error:", error);
+    console.error("Admin View Dean Error:", error);
     return res.status(500).json({
       success: false,
       message: "Server error",
@@ -170,12 +167,9 @@ export const adminViewHodSubmissions = async (req, res) => {
   }
 };
 
-
-
-// ---------------- ADMIN VERIFY HOD CRITERION ----------------
-export const adminVerifyCriterion = async (req, res) => {
+export const adminVerifyDeanCriterion = async (req, res) => {
   try {
-    const { moduleName, hodId, subId, criterionName } = req.params;
+    const { moduleName, deanId, subId, criterionName } = req.params;
     const { adminScore, adminDescription } = req.body;
 
     if (!req.admin || req.admin.role !== "admin") {
@@ -185,8 +179,8 @@ export const adminVerifyCriterion = async (req, res) => {
       });
     }
 
-    const moduleCollection = `${moduleName}_hod`;
-    const ref = db.collection(moduleCollection).doc(hodId);
+    const collectionName = `${moduleName}_dean`;
+    const ref = db.collection(collectionName).doc(deanId);
     const snap = await ref.get();
 
     if (!snap.exists) {
@@ -217,7 +211,6 @@ export const adminVerifyCriterion = async (req, res) => {
       });
     }
 
-    // Optional safety check
     if (Number(adminScore) > criterion.maxScore) {
       return res.status(400).json({
         success: false,
@@ -231,13 +224,13 @@ export const adminVerifyCriterion = async (req, res) => {
 
     await ref.update({ subsections });
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
-      message: "Criterion verified successfully",
+      message: "Dean criterion verified successfully",
     });
   } catch (error) {
-    console.error("Admin Verify HOD Error:", error);
-    return res.status(500).json({
+    console.error("Admin Verify Dean Error:", error);
+    res.status(500).json({
       success: false,
       message: "Server error",
     });

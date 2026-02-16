@@ -9,8 +9,8 @@ const module1HodRouter=express.Router();
 
 module1HodRouter.post('/:hodId/subsection/:subId', hodAuth,hodSubmitSubsection );
 module1HodRouter.get('/:hodId', hodAuth,getHodSubsections );
-module1HodRouter.get('/admin/all-submissions',adminAuth,adminViewHodSubmissions);
-module1HodRouter.put('/admin/verify/:hodId/:subId/:criterionName',adminAuth,adminVerifyCriterion);
+module1HodRouter.get('/admin/:moduleName/all-submissions',adminAuth,adminViewHodSubmissions);
+module1HodRouter.put('/admin/:moduleName/verify/:hodId/:subId/:criterionName',adminAuth,adminVerifyCriterion);
 
 
 export default module1HodRouter;

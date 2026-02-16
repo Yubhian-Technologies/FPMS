@@ -14,7 +14,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-
 type Criterion = {
   name: string;
   claimedScore: number;
@@ -35,13 +34,15 @@ type HodSubmission = {
   hodName: string;
   department: string;
   college: string;
+  moduleName: string;
   subsections: Subsection[];
 };
-
 
 export default function AdminReview() {
   const { user } = useAuth();
   const { toast } = useToast();
+
+  const modules = ["module1","module_B"];
 
   const [data, setData] = useState<HodSubmission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,16 +50,41 @@ export default function AdminReview() {
   const [expandedHod, setExpandedHod] = useState<string | null>(null);
   const [expandedSubs, setExpandedSubs] = useState<string[]>([]);
   const [verifying, setVerifying] = useState<Record<string, boolean>>({});
+  const [formState, setFormState] = useState<
+    Record<string, { score: number; desc: string }>
+  >({});
 
-
-
+  
   const loadData = async () => {
     try {
       setLoading(true);
-      const res = await api.get("/api/hod/parta/admin/all-submissions");
-      setData(res.data.data || []);
-    } catch {
-      toast({ title: "Failed to load submissions", variant: "destructive" });
+
+      const responses = await Promise.all(
+        modules.map((moduleName) =>
+          api.get(`/api/hod/parta/admin/${moduleName}/all-submissions`)
+        )
+      );
+
+      const combined: HodSubmission[] = [];
+
+      responses.forEach((res, index) => {
+        const moduleName = modules[index];
+        const submissions = res.data.data || [];
+
+        submissions.forEach((s: any) => {
+          combined.push({
+            ...s,
+            moduleName,
+          });
+        });
+      });
+
+      setData(combined);
+    } catch (err) {
+      toast({
+        title: "Failed to load submissions",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -68,24 +94,31 @@ export default function AdminReview() {
     if (user?.role === "admin") loadData();
   }, [user]);
 
-
-
+  // ✅ VERIFY FUNCTION FIXED
   const verifyCriterion = async (
+    moduleName: string,
     hodId: string,
     subId: string,
-    c: Criterion,
-    adminScore: number,
-    adminDesc: string
+    criterionName: string
   ) => {
-    const key = `${hodId}-${subId}-${c.name}`;
+    const key = `${moduleName}-${hodId}-${subId}-${criterionName}`;
+    const form = formState[key];
+
+    if (!form) return;
+
     try {
       setVerifying((v) => ({ ...v, [key]: true }));
+
       await api.put(
-        `/api/hod/parta/admin/verify/${hodId}/${subId}/${encodeURIComponent(
-          c.name
+        `/api/hod/parta/admin/${moduleName}/verify/${hodId}/${subId}/${encodeURIComponent(
+          criterionName
         )}`,
-        { adminScore, adminDescription: adminDesc }
+        {
+          adminScore: form.score,
+          adminDescription: form.desc,
+        }
       );
+
       toast({ title: "Criterion verified" });
       loadData();
     } catch {
@@ -99,14 +132,13 @@ export default function AdminReview() {
 
   if (loading) {
     return (
-      <DashboardLayout title="Admin Review – Module 1">
+      <DashboardLayout title="Admin Review">
         <div className="flex justify-center items-center min-h-[60vh]">
           <Loader2 className="h-10 w-10 animate-spin text-primary" />
         </div>
       </DashboardLayout>
     );
   }
-
 
   const filtered = data.filter(
     (h) =>
@@ -127,45 +159,37 @@ export default function AdminReview() {
 
     if (subs.length === 0) return null;
 
-    const hodKey = `${hod.hodId}-${type}`;
+    const hodKey = `${hod.moduleName}-${hod.hodId}-${type}`;
 
     return (
-      <Card
-        key={hodKey}
-        className="border shadow-sm hover:shadow-md transition-shadow duration-200"
-      >
-        <CardHeader className="flex flex-row items-center justify-between pb-4">
+      <Card key={hodKey} className="border shadow-sm">
+        <CardHeader className="flex flex-row justify-between">
           <div>
-            <CardTitle className="text-lg font-semibold">{hod.hodName}</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              {hod.department} • {hod.college}
+            <CardTitle>{hod.hodName}</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {hod.department} • {hod.college} • {hod.moduleName}
             </p>
           </div>
           <Button
             size="sm"
-            variant={expandedHod === hodKey ? "default" : "outline"}
             onClick={() =>
               setExpandedHod(expandedHod === hodKey ? null : hodKey)
             }
-            className="min-w-[80px]"
           >
             {expandedHod === hodKey ? "Hide" : "View"}
           </Button>
         </CardHeader>
 
         {expandedHod === hodKey && (
-          <CardContent className="space-y-6 pt-2">
+          <CardContent className="space-y-4">
             {subs.map((sub) => {
-              const subKey = `${hod.hodId}-${sub.id}-${type}`;
+              const subKey = `${hodKey}-${sub.id}`;
               const open = expandedSubs.includes(subKey);
 
               return (
-                <div
-                  key={sub.id}
-                  className="border rounded-lg overflow-hidden bg-card shadow-sm"
-                >
-                  <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
-                    <h3 className="font-medium text-primary">{sub.name}</h3>
+                <div key={sub.id} className="border rounded-lg">
+                  <div className="flex justify-between p-3 bg-muted/40">
+                    <h3 className="font-medium">{sub.name}</h3>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -177,106 +201,89 @@ export default function AdminReview() {
                         )
                       }
                     >
-                      {open ? "Hide criteria" : "Show criteria"}
+                      {open ? "Hide" : "Show"}
                     </Button>
                   </div>
 
                   {open && (
                     <div className="p-4 space-y-4">
                       {sub.criteria.map((c) => {
-                        const key = `${hod.hodId}-${sub.id}-${c.name}`;
+                        const key = `${hod.moduleName}-${hod.hodId}-${sub.id}-${c.name}`;
                         const isVerifying = verifying[key];
+
+                        if (!formState[key]) {
+                          formState[key] = {
+                            score: c.adminScore ?? c.claimedScore,
+                            desc: c.adminDescription ?? "",
+                          };
+                        }
 
                         return (
                           <div
                             key={c.name}
-                            className={`p-4 rounded-lg border transition-colors ${
+                            className={`p-4 border rounded-lg ${
                               c.isVerified
-                                ? "bg-green-50/70 border-green-200 dark:bg-green-950/30 dark:border-green-800"
-                                : "bg-muted/30 border-border hover:bg-muted/50"
+                                ? "bg-green-50 border-green-200"
+                                : "bg-muted/30"
                             }`}
                           >
-                            <div className="grid gap-5 md:grid-cols-3 items-start">
-                             
-                              <div className="space-y-2 text-sm">
-                                <div className="font-medium">{c.name}</div>
-                                <div className="text-muted-foreground">
-                                  Claimed: <span className="font-semibold text-foreground">
-                                    {c.claimedScore} / {c.maxScore}
-                                  </span>
-                                </div>
-                              </div>
+                            <div className="font-medium">{c.name}</div>
+                            <div className="text-sm mb-2">
+                              Claimed: {c.claimedScore} / {c.maxScore}
+                            </div>
 
-                              <div className="space-y-1.5">
-                                <label className="text-xs font-medium text-muted-foreground block">
-                                  Admin Score
-                                </label>
+                            {type === "pending" ? (
+                              <>
                                 <Input
                                   type="number"
-                                  disabled={c.isVerified || isVerifying}
-                                  defaultValue={c.adminScore ?? c.claimedScore}
-                                  onChange={(e) => {
-                                    c.adminScore = Number(e.target.value);
-                                  }}
-                                  className="h-9"
+                                  className="mb-2"
+                                  value={formState[key]?.score}
+                                  onChange={(e) =>
+                                    setFormState((prev) => ({
+                                      ...prev,
+                                      [key]: {
+                                        ...prev[key],
+                                        score: Number(e.target.value),
+                                      },
+                                    }))
+                                  }
                                 />
-                              </div>
-
-                         
-                              <div className="space-y-3">
-                                <div className="space-y-1.5">
-                                  <label className="text-xs font-medium text-muted-foreground block">
-                                    Admin Remarks
-                                  </label>
-                                  <Textarea
-                                    disabled={c.isVerified || isVerifying}
-                                    placeholder="Enter verification remarks or justification..."
-                                    defaultValue={c.adminDescription}
-                                    onChange={(e) => {
-                                      c.adminDescription = e.target.value;
-                                    }}
-                                    className="min-h-[70px] resize-none"
-                                  />
-                                </div>
-
-                                <div className="flex justify-end">
-                                  {c.isVerified ? (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      disabled
-                                      className="bg-green-600/10 text-green-700 border-green-200 hover:bg-green-600/20 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800"
-                                    >
-                                      Verified
-                                    </Button>
-                                  ) : (
-                                    <Button
-                                      size="sm"
-                                      disabled={isVerifying}
-                                      onClick={() =>
-                                        verifyCriterion(
-                                          hod.hodId,
-                                          sub.id,
-                                          c,
-                                          c.adminScore ?? 0,
-                                          c.adminDescription ?? ""
-                                        )
-                                      }
-                                      className="min-w-[90px]"
-                                    >
-                                      {isVerifying ? (
-                                        <>
-                                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                          Verifying...
-                                        </>
-                                      ) : (
-                                        "Verify"
-                                      )}
-                                    </Button>
-                                  )}
+                                <Textarea
+                                  className="mb-2"
+                                  placeholder="Admin remarks"
+                                  value={formState[key]?.desc}
+                                  onChange={(e) =>
+                                    setFormState((prev) => ({
+                                      ...prev,
+                                      [key]: {
+                                        ...prev[key],
+                                        desc: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                />
+                                <Button
+                                  disabled={isVerifying}
+                                  onClick={() =>
+                                    verifyCriterion(
+                                      hod.moduleName,
+                                      hod.hodId,
+                                      sub.id,
+                                      c.name
+                                    )
+                                  }
+                                >
+                                  {isVerifying ? "Verifying..." : "Verify"}
+                                </Button>
+                              </>
+                            ) : (
+                              <div className="text-green-600 font-medium">
+                                Verified | Score: {c.adminScore}
+                                <div className="text-sm text-muted-foreground">
+                                  {c.adminDescription}
                                 </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                         );
                       })}
@@ -291,40 +298,29 @@ export default function AdminReview() {
     );
   };
 
-
   return (
-    <DashboardLayout title="Admin Review – Module 1">
+    <DashboardLayout title="Admin Review">
       <div className="space-y-6">
         <Input
-          placeholder="Search by HOD name or department..."
+          placeholder="Search HOD..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-md"
         />
 
-        <div className="space-y-8">
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Pending Review</h2>
-            <div className="space-y-5">
-              {filtered.map((h) => renderHodCard(h, "pending"))}
-              {filtered.every((h) => !renderHodCard(h, "pending")) && (
-                <p className="text-center text-muted-foreground py-8">
-                  No pending submissions to review
-                </p>
-              )}
-            </div>
+        <div>
+          <h2 className="text-xl font-semibold mb-4">Pending Review</h2>
+          <div className="space-y-6">
+            {filtered.map((h) => renderHodCard(h, "pending"))}
           </div>
+        </div>
 
-          <div>
-            <h2 className="text-xl font-semibold mb-4">Verified Submissions</h2>
-            <div className="space-y-5">
-              {filtered.map((h) => renderHodCard(h, "verified"))}
-              {filtered.every((h) => !renderHodCard(h, "verified")) && (
-                <p className="text-center text-muted-foreground py-8">
-                  No verified submissions yet
-                </p>
-              )}
-            </div>
+        <div>
+          <h2 className="text-xl font-semibold mb-4">
+            Verified Submissions
+          </h2>
+          <div className="space-y-6">
+            {filtered.map((h) => renderHodCard(h, "verified"))}
           </div>
         </div>
       </div>

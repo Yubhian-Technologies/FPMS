@@ -17,6 +17,8 @@ import module2Router from "./routes/module2Routes.js";
 import module3Router from "./routes/module3Routes.js";
 import module4Router from "./routes/module4Routes.js";
 import deanRouter from "./routes/deanRoutes.js";
+import module1DeanRouter from "./routes/moduel1DeanRoutes.js";
+import module1DeanBRouter from "./routes/module1DeanBRoutes.js";
 
 dotenv.config();
 
@@ -42,6 +44,8 @@ app.use('/api/hod/appeals',appealHodRouter);
 app.use('/api/module2',module2Router);
 app.use('/api/module3',module3Router);
 app.use('/api/module4',module4Router);
+app.use('/api/dean/parta/module1',module1DeanRouter);
+app.use('/api/dean/partb/module1',module1DeanBRouter);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
