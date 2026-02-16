@@ -1,18 +1,27 @@
-import express from 'express';
+import express from "express";
 
-import { adminAuth } from '../middleware/adminAuth.js';
-import { deanLogin } from '../controllers/deanController.js';
-import { addDean, deleteDean, getAllDeans, updateDean } from '../controllers/adminController.js';
+import { adminAuth } from "../middleware/adminAuth.js";
+import { deanLogin } from "../controllers/deanController.js";
+import {
+  addDean,
+  deleteDean,
+  getAllDeans,
+  getDeanColleges,
+  getDeanEligibleRoles,
+  updateDean,
+} from "../controllers/adminController.js";
 
 const deanRouter = express.Router();
 
-deanRouter.post('/login', deanLogin);
+deanRouter.post("/login", deanLogin);
 
-deanRouter.post('/add-dean', adminAuth, addDean);
+deanRouter.post("/add-dean", adminAuth, addDean);
 
-deanRouter.get('/all-deans', adminAuth, getAllDeans);
+deanRouter.get("/all-deans", adminAuth, getAllDeans);
+deanRouter.get("/roles", adminAuth, getDeanEligibleRoles);
+deanRouter.get("/colleges", adminAuth, getDeanColleges);
 
-deanRouter.delete('/delete/:id', adminAuth, deleteDean);
-deanRouter.put('/update/:id',updateDean);
+deanRouter.delete("/delete/:id", adminAuth, deleteDean);
+deanRouter.put("/update/:id", adminAuth, updateDean);
 
 export default deanRouter;

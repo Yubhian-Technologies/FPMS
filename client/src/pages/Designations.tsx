@@ -12,61 +12,58 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Building2, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Briefcase, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { api } from "@/api/api";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 
-interface CollegeDetails {
-  id?: string;
-  name: string;
-  code?: string;
-  branches?: string[];
+interface DesignationPayload {
+  college: string;
+  designations: string[];
 }
 
-export default function Departments() {
-  const [collegeDetails, setCollegeDetails] = useState<CollegeDetails | null>(
-    null,
-  );
+export default function Designations() {
+  const [collegeName, setCollegeName] = useState("");
+  const [designations, setDesignations] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isAddingDepartment, setIsAddingDepartment] = useState(false);
+  const [isAddingDesignation, setIsAddingDesignation] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [editingDepartment, setEditingDepartment] = useState<string | null>(
+  const [editingDesignation, setEditingDesignation] = useState<string | null>(
     null,
   );
-  const [departmentToDelete, setDepartmentToDelete] = useState<string | null>(
+  const [designationToDelete, setDesignationToDelete] = useState<string | null>(
     null,
   );
-  const [formDepartmentName, setFormDepartmentName] = useState("");
+  const [formDesignationName, setFormDesignationName] = useState("");
 
-  const collegeName = String(collegeDetails?.name || "").trim();
-  const collegeCode = String(collegeDetails?.code || "").trim();
-  const departments = useMemo(
+  const filteredDesignations = useMemo(
     () =>
-      Array.isArray(collegeDetails?.branches)
-        ? collegeDetails!
-            .branches!.map((item) => String(item || "").trim())
-            .filter(Boolean)
-        : [],
-    [collegeDetails],
+      designations.filter((item) =>
+        item.toLowerCase().includes(searchQuery.toLowerCase()),
+      ),
+    [designations, searchQuery],
   );
 
-  const filteredDepartments = departments.filter((department) =>
-    department.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
-
-  const fetchCollegeDetails = async () => {
+  const fetchDesignations = async () => {
     try {
-      const res = await api.get("/api/admin/college-details");
-      const data = res.data?.data || null;
-      setCollegeDetails(data);
+      const res = await api.get("/api/hod/designations");
+      const data: DesignationPayload = res.data?.data || {
+        college: "",
+        designations: [],
+      };
+
+      setCollegeName(String(data.college || "").trim());
+      setDesignations(
+        Array.isArray(data.designations)
+          ? data.designations
+              .map((item) => String(item || "").trim())
+              .filter(Boolean)
+          : [],
+      );
     } catch {
-      toast({
-        title: "Failed to load college departments",
-        variant: "destructive",
-      });
+      toast({ title: "Failed to load designations", variant: "destructive" });
     }
   };
 
@@ -74,7 +71,7 @@ export default function Departments() {
     const load = async () => {
       try {
         setIsLoading(true);
-        await fetchCollegeDetails();
+        await fetchDesignations();
       } finally {
         setIsLoading(false);
       }
@@ -84,73 +81,73 @@ export default function Departments() {
   }, []);
 
   const resetForm = () => {
-    setFormDepartmentName("");
-    setEditingDepartment(null);
+    setFormDesignationName("");
+    setEditingDesignation(null);
   };
 
-  const startAddDepartment = () => {
+  const startAddDesignation = () => {
     resetForm();
-    setIsAddingDepartment(true);
+    setIsAddingDesignation(true);
   };
 
   const cancelForm = () => {
-    setIsAddingDepartment(false);
+    setIsAddingDesignation(false);
     resetForm();
   };
 
-  const openEdit = (department: string) => {
-    setFormDepartmentName(department);
-    setEditingDepartment(department);
-    setIsAddingDepartment(true);
+  const openEdit = (designation: string) => {
+    setFormDesignationName(designation);
+    setEditingDesignation(designation);
+    setIsAddingDesignation(true);
   };
 
-  const persistDepartments = async (nextDepartments: string[]) => {
-    await api.put("/api/admin/college-branches", {
-      branches: nextDepartments,
+  const persistDesignations = async (nextDesignations: string[]) => {
+    await api.put("/api/hod/designations", {
+      designations: nextDesignations,
     });
   };
 
   const handleSave = async () => {
-    const normalizedDepartmentName = String(formDepartmentName || "").trim();
+    const normalizedDesignationName = String(formDesignationName || "").trim();
 
-    if (!normalizedDepartmentName) {
-      toast({ title: "Department name is required", variant: "destructive" });
+    if (!normalizedDesignationName) {
+      toast({ title: "Designation name is required", variant: "destructive" });
       return;
     }
 
-    const normalizedDepartmentsMap = new Map(
-      departments.map((item) => [item.toLowerCase(), item]),
+    const existingMap = new Map(
+      designations.map((item) => [item.toLowerCase(), item]),
     );
-    const currentEditingKey = String(editingDepartment || "").toLowerCase();
+    const currentEditingKey = String(editingDesignation || "").toLowerCase();
 
     if (
-      normalizedDepartmentsMap.has(normalizedDepartmentName.toLowerCase()) &&
-      normalizedDepartmentName.toLowerCase() !== currentEditingKey
+      existingMap.has(normalizedDesignationName.toLowerCase()) &&
+      normalizedDesignationName.toLowerCase() !== currentEditingKey
     ) {
       toast({
-        title: "Department already exists",
+        title: "Designation already exists",
         variant: "destructive",
       });
       return;
     }
 
-    const nextDepartments = editingDepartment
-      ? departments.map((item) =>
+    const nextDesignations = editingDesignation
+      ? designations.map((item) =>
           item.toLowerCase() === currentEditingKey
-            ? normalizedDepartmentName
+            ? normalizedDesignationName
             : item,
         )
-      : [...departments, normalizedDepartmentName];
+      : [...designations, normalizedDesignationName];
 
     setIsSaving(true);
     try {
-      await persistDepartments(nextDepartments);
+      await persistDesignations(nextDesignations);
       toast({
-        title: editingDepartment
-          ? "Department updated successfully"
-          : "Department added successfully",
+        title: editingDesignation
+          ? "Designation updated successfully"
+          : "Designation added successfully",
       });
-      await fetchCollegeDetails();
+      await fetchDesignations();
       cancelForm();
     } catch (err: any) {
       toast({
@@ -163,15 +160,17 @@ export default function Departments() {
     }
   };
 
-  const handleDelete = async (department: string) => {
-    const nextDepartments = departments.filter((item) => item !== department);
+  const handleDelete = async (designation: string) => {
+    const nextDesignations = designations.filter(
+      (item) => item !== designation,
+    );
 
     try {
       setIsDeleting(true);
-      await persistDepartments(nextDepartments);
-      toast({ title: "Department deleted" });
-      await fetchCollegeDetails();
-      setDepartmentToDelete(null);
+      await persistDesignations(nextDesignations);
+      toast({ title: "Designation deleted" });
+      await fetchDesignations();
+      setDesignationToDelete(null);
     } catch (err: any) {
       toast({
         title: "Delete failed",
@@ -185,52 +184,45 @@ export default function Departments() {
 
   return (
     <DashboardLayout
-      title="Departments"
-      subtitle="Manage departments for your college"
+      title="Designations"
+      subtitle="Manage faculty designations for your college"
     >
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Department Management</h1>
+            <h1 className="text-2xl font-bold">Designation Management</h1>
             <p className="text-muted-foreground">
               {collegeName
-                ? `Manage departments for ${collegeName}${collegeCode ? ` (${collegeCode})` : ""}`
-                : "Manage departments for your college"}
+                ? `Manage faculty designations for ${collegeName}`
+                : "Manage faculty designations for your college"}
             </p>
           </div>
-          {!isAddingDepartment && (
-            <Button onClick={startAddDepartment}>
-              <Plus className="mr-2 h-4 w-4" /> Add Department
+          {!isAddingDesignation && (
+            <Button onClick={startAddDesignation}>
+              <Plus className="mr-2 h-4 w-4" /> Add Designation
             </Button>
           )}
         </div>
 
-        {isAddingDepartment && (
+        {isAddingDesignation && (
           <Card className="border-2 border-primary">
             <CardHeader>
               <CardTitle>
-                {editingDepartment ? "Edit Department" : "Add Department"}
+                {editingDesignation ? "Edit Designation" : "Add Designation"}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>College</Label>
-                  <Input
-                    value={
-                      collegeName
-                        ? `${collegeName}${collegeCode ? ` (${collegeCode})` : ""}`
-                        : ""
-                    }
-                    disabled
-                  />
+                  <Input value={collegeName} disabled />
                 </div>
                 <div className="space-y-2">
-                  <Label>Department Name *</Label>
+                  <Label>Designation Name *</Label>
                   <Input
-                    placeholder="Enter department / branch"
-                    value={formDepartmentName}
-                    onChange={(e) => setFormDepartmentName(e.target.value)}
+                    placeholder="Enter designation"
+                    value={formDesignationName}
+                    onChange={(e) => setFormDesignationName(e.target.value)}
                   />
                 </div>
               </div>
@@ -247,7 +239,7 @@ export default function Departments() {
                   {isSaving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : null}
-                  {isSaving ? "Saving..." : "Save Department"}
+                  {isSaving ? "Saving..." : "Save Designation"}
                 </Button>
               </div>
             </CardContent>
@@ -257,20 +249,20 @@ export default function Departments() {
         <div className="grid grid-cols-2 gap-4">
           <Card>
             <CardContent className="p-6 flex gap-4">
-              <Building2 className="h-5 w-5" />
+              <Briefcase className="h-5 w-5" />
               <div>
-                <p>Total Departments</p>
-                <p className="text-2xl font-bold">{departments.length}</p>
+                <p>Total Designations</p>
+                <p className="text-2xl font-bold">{designations.length}</p>
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-6 flex gap-4">
-              <Building2 className="h-5 w-5" />
+              <Briefcase className="h-5 w-5" />
               <div>
                 <p>Visible Results</p>
                 <p className="text-2xl font-bold">
-                  {filteredDepartments.length}
+                  {filteredDesignations.length}
                 </p>
               </div>
             </CardContent>
@@ -278,14 +270,14 @@ export default function Departments() {
         </div>
 
         <Input
-          placeholder="Search department..."
+          placeholder="Search designation..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
 
         <Card>
           <CardHeader>
-            <CardTitle>Departments</CardTitle>
+            <CardTitle>Designations</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -296,19 +288,19 @@ export default function Departments() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Department</TableHead>
+                    <TableHead>Designation</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredDepartments.map((department) => (
-                    <TableRow key={department}>
-                      <TableCell>{department}</TableCell>
+                  {filteredDesignations.map((designation) => (
+                    <TableRow key={designation}>
+                      <TableCell>{designation}</TableCell>
                       <TableCell className="text-right">
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => openEdit(department)}
+                          onClick={() => openEdit(designation)}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -316,20 +308,20 @@ export default function Departments() {
                           size="icon"
                           variant="ghost"
                           className="text-destructive"
-                          onClick={() => setDepartmentToDelete(department)}
+                          onClick={() => setDesignationToDelete(designation)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {filteredDepartments.length === 0 && (
+                  {filteredDesignations.length === 0 && (
                     <TableRow>
                       <TableCell
                         colSpan={2}
                         className="text-center text-muted-foreground py-8"
                       >
-                        No department data available.
+                        No designation data available.
                       </TableCell>
                     </TableRow>
                   )}
@@ -340,16 +332,16 @@ export default function Departments() {
         </Card>
 
         <DeleteConfirmationDialog
-          open={!!departmentToDelete}
+          open={!!designationToDelete}
           onOpenChange={(open) => {
-            if (!open && !isDeleting) setDepartmentToDelete(null);
+            if (!open && !isDeleting) setDesignationToDelete(null);
           }}
-          title="Delete department?"
-          description={`This will permanently delete ${departmentToDelete || "this department"}.`}
+          title="Delete designation?"
+          description={`This will permanently delete ${designationToDelete || "this designation"}.`}
           confirmText="Delete"
           isLoading={isDeleting}
           onConfirm={() => {
-            if (departmentToDelete) handleDelete(departmentToDelete);
+            if (designationToDelete) handleDelete(designationToDelete);
           }}
         />
       </div>

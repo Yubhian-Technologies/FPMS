@@ -1,7 +1,13 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { api } from "@/api/api";
 
-type Role = "committee" | "admin" | "hod" | "dean" | "faculty";
+type Role =
+  | "committee"
+  | "principle"
+  | "hod"
+  | "dean"
+  | "faculty"
+  | "superadmin";
 
 interface User {
   id?: string;
@@ -16,6 +22,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<User | null>;
   logout: () => void;
+  setDemoUser: (role: Role) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -36,15 +43,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsLoading(false);
   }, []);
 
-  const login = async (email: string, password: string): Promise<User | null> => {
+  const login = async (
+    email: string,
+    password: string,
+  ): Promise<User | null> => {
+    try {
+      const unified = await api.post("/api/committee/unified-login", {
+        email,
+        password,
+      });
+      if (unified.data?.success) {
+        localStorage.setItem("token", unified.data.token);
+        localStorage.setItem("user", JSON.stringify(unified.data.user));
+
+        api.defaults.headers.common["Authorization"] =
+          `Bearer ${unified.data.token}`;
+        setUser(unified.data.user);
+
+        return unified.data.user;
+      }
+    } catch (err) {}
+
     const endpoints = [
       { role: "faculty", url: "/api/faculty/login" },
       { role: "hod", url: "/api/hod/login" },
       { role: "dean", url: "/api/dean/login" },
       { role: "admin", url: "/api/admin/login" },
       { role: "committee", url: "/api/committee/login" },
-      
-      
     ];
 
     for (const ep of endpoints) {
@@ -54,23 +79,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           localStorage.setItem("token", res.data.token);
           localStorage.setItem("user", JSON.stringify(res.data.user));
 
-          api.defaults.headers.common["Authorization"] = `Bearer ${res.data.token}`;
+          api.defaults.headers.common["Authorization"] =
+            `Bearer ${res.data.token}`;
           setUser(res.data.user);
 
           return res.data.user;
         }
-      } catch (err) {
-       
-      }
+      } catch (err) {}
     }
 
-    return null; 
+    return null;
   };
 
   const logout = () => {
     localStorage.clear();
     delete api.defaults.headers.common["Authorization"];
     setUser(null);
+  };
+
+  const setDemoUser = (role: Role) => {
+    const demoUser: User = {
+      id: "demo-" + role,
+      name: role === "superadmin" ? "Super Admin" : "Demo User",
+      email: `${role}@demo.com`,
+      role: role,
+    };
+    localStorage.setItem("user", JSON.stringify(demoUser));
+    localStorage.setItem("token", "demo-token-" + role);
+    api.defaults.headers.common["Authorization"] = `Bearer demo-token-${role}`;
+    setUser(demoUser);
   };
 
   return (
@@ -81,6 +118,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         isLoading,
         login,
         logout,
+        setDemoUser,
       }}
     >
       {children}

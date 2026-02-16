@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { cn } from '@/lib/utils';
+import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { cn } from "@/lib/utils";
+import { api } from "@/api/api";
 import {
   LayoutDashboard,
   FileText,
@@ -9,90 +10,228 @@ import {
   LogOut,
   ClipboardCheck,
   BarChart3,
+  Briefcase,
   GraduationCap,
   MessageSquare,
   Building2,
   ChevronDown,
   ChevronRight,
-} from 'lucide-react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+  Loader2,
+} from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-const getNavItems = (role: string) => {
+interface DynamicFormItem {
+  id: string;
+  formTitle: string;
+  criteria: Array<{ id: string; criteriaName: string; order: number }>;
+}
+
+interface NavChild {
+  title: string;
+  href: string;
+  isLoading?: boolean;
+}
+
+const normalizeRoleForAccess = (role?: string) => {
+  const value = String(role || "")
+    .trim()
+    .toLowerCase();
+
+  if (value.startsWith("dean")) return "dean";
+  if (value === "principal" || value === "principle" || value === "admin") {
+    return "principle";
+  }
+  if (
+    value === "vice principal" ||
+    value === "vice principle" ||
+    value === "vice-principal" ||
+    value === "viceprincipal"
+  ) {
+    return "vice principle";
+  }
+
+  return value;
+};
+
+const getNavItems = (
+  role: string,
+  dynamicForms: DynamicFormItem[],
+  isFormsLoading: boolean,
+) => {
+  const resolvedRole = normalizeRoleForAccess(role);
+  const dynamicFpmsChildren = dynamicForms
+    .flatMap((form) =>
+      (Array.isArray(form.criteria) ? form.criteria : [])
+        .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+        .map((criteria) => ({
+          title: criteria.criteriaName || form.formTitle,
+          href: `/fpms/forms/${form.id}/criteria/${criteria.id}`,
+        })),
+    )
+    .filter(
+      (item, index, array) =>
+        item.title &&
+        array.findIndex(
+          (entry) => entry.title === item.title && entry.href === item.href,
+        ) === index,
+    );
+
+  const resolvedDynamicChildren: NavChild[] = isFormsLoading
+    ? [{ title: "Loading sections...", href: "#", isLoading: true }]
+    : dynamicFpmsChildren;
+
   const items = [
-    { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard', roles: ['faculty', 'hod', 'committee', 'admin','dean'] },
     {
-      icon: FileText,
-      label: 'FPMS Form',
-      roles: ['faculty'],
-      isDropdown: true,
-      dropdownId: 'FPMS Form',
-      children: [
-        { title: 'Teaching & Learning', href: '/fpms/teaching' },
-        { title: 'Research & Consultancy', href: '/fpms/research' },
-        { title: 'Professional Development', href: '/fpms/professional' },
-        { title: 'Student Development', href: '/fpms/student' },
-        { title: 'Institutional Development', href: '/fpms/institutional' },
+      icon: LayoutDashboard,
+      label: "Dashboard",
+      href: "/dashboard",
+      roles: [
+        "faculty",
+        "hod",
+        "committee",
+        "principle",
+        "dean",
+        "vice principle",
       ],
     },
     {
       icon: FileText,
-      label: 'FPMS Form',
-      roles: ['hod'],
-      isDropdown: true,
-      dropdownId: 'HOD FPMS Form', 
-      children: [
-        { title: 'Teaching & Learning', href: '/fpms/hod-teaching' },
-      ],
+      label: "Form Builder",
+      href: "/superadmin/form-builder",
+      roles: ["superadmin"],
+    },
+    {
+      icon: Users,
+      label: "Role Management",
+      href: "/superadmin/roles",
+      roles: ["superadmin"],
     },
     {
       icon: Building2,
-      label: 'FPMS-KPA Form',
-      roles: ['hod'],
-      isDropdown: true,
-      dropdownId: 'FPMS-KPA Form', 
-      children: [
-        { title: 'Academic Leadership & Curriculum Governance', href: '/fpms/hodb-teaching' },
-      ],
+      label: "Manage Colleges",
+      href: "/superadmin/colleges",
+      roles: ["superadmin"],
     },
     {
       icon: FileText,
-      label: 'FPMS Form',
-      roles: ['dean'],
+      label: "FPMS Form",
+      roles: ["faculty", "hod", "dean", "principle", "vice principle"],
       isDropdown: true,
-      dropdownId: 'Dean FPMS Form', 
-      children: [
-        { title: 'Teaching & Learning', href: '/fpms/dean-teaching' },
-      ],
+      dropdownId: "Dynamic FPMS Form",
+      children: resolvedDynamicChildren,
     },
     {
-      icon: Building2,
-      label: 'FPMS-KPA Form',
-      roles: ['dean'],
-      isDropdown: true,
-      dropdownId: 'FPMS-KPA Form', 
-      children: [
-        { title: 'Academic Leadership & Curriculum Governance', href: '/fpms/deanb-teaching' },
-      ],
+      icon: MessageSquare,
+      label: "My Submissions",
+      href: "/submissions",
+      roles: ["faculty", "hod", "dean"],
     },
-    { icon: MessageSquare, label: 'My Submissions', href: '/submissions', roles: ['faculty', 'hod','dean'] },
-    { icon: ClipboardCheck, label: 'Appeals', href: '/appeals', roles: ['faculty'] },
-    { icon: ClipboardCheck, label: 'Appeals', href: '/hod-appeals', roles: ['hod'] },
-    { icon: ClipboardCheck, label: 'Appeals', href: '/dean-appeals', roles: ['dean'] },
-    { icon: ClipboardCheck, label: 'Add Dean', href: '/add-dean', roles: ['admin'] },
-    { icon: ClipboardCheck, label: 'Review Hod Appeals', href: '/committee-review', roles: ['committee'] },
-    { icon: ClipboardCheck, label: 'Review Hod Submissions', href: '/hod-review', roles: ['admin'] },
-    { icon: ClipboardCheck, label: 'Review Submissions', href: '/review', roles: ['hod', 'committee'] },
-    { icon: BarChart3, label: 'Reports', href: '/reports', roles: ['committee'] },
-    { icon: Users, label: 'Faculty List', href: '/faculty', roles: ['hod'] },
-    { icon: Building2, label: 'Departments', href: '/departments', roles: ['admin'] },
-    { icon: MessageSquare, label: 'College', href: '/college', roles: ['committee'] },
-    { icon: ClipboardCheck, label: 'Add Administrator', href: '/add', roles: ['committee'] },
-    { icon: Settings, label: 'Settings', href: '/settings', roles: ['committee'] },
+    {
+      icon: ClipboardCheck,
+      label: "Appeals",
+      href: "/appeals",
+      roles: ["faculty"],
+    },
+    {
+      icon: ClipboardCheck,
+      label: "Appeals",
+      href: "/hod-appeals",
+      roles: ["hod"],
+    },
+    {
+      icon: ClipboardCheck,
+      label: "Appeals",
+      href: "/dean-appeals",
+      roles: ["dean"],
+    },
+    {
+      icon: ClipboardCheck,
+      label: "Add Dean",
+      href: "/add-dean",
+      roles: ["principle", "vice principle"],
+    },
+    {
+      icon: ClipboardCheck,
+      label: "Add HOD",
+      href: "/add-hod",
+      roles: ["principle", "vice principle"],
+    },
+    {
+      icon: ClipboardCheck,
+      label: "Review Hod Appeals",
+      href: "/committee-review",
+      roles: ["committee"],
+    },
+    {
+      icon: ClipboardCheck,
+      label: "Review Submissions",
+      href: "/hod-review",
+      roles: ["principle"],
+    },
+    {
+      icon: ClipboardCheck,
+      label: "Review Submissions",
+      href: "/review",
+      roles: ["hod", "committee"],
+    },
+    {
+      icon: BarChart3,
+      label: "Reports",
+      href: "/reports",
+      roles: ["committee"],
+    },
+    {
+      icon: Briefcase,
+      label: "Designations",
+      href: "/designations",
+      roles: ["hod"],
+    },
+    { icon: Users, label: "Faculty List", href: "/faculty", roles: ["hod"] },
+    {
+      icon: Building2,
+      label: "Departments",
+      href: "/departments",
+      roles: ["principle"],
+    },
+    {
+      icon: MessageSquare,
+      label: "College",
+      href: "/college",
+      roles: ["committee"],
+    },
+    {
+      icon: ClipboardCheck,
+      label: "Add Principal",
+      href: "/add",
+      roles: ["committee"],
+    },
+    {
+      icon: ClipboardCheck,
+      label: "Add Vice Principal",
+      href: "/add-vice-principal",
+      roles: ["committee"],
+    },
+    // {
+    //   icon: Settings,
+    //   label: "Settings",
+    //   href: "/settings",
+    //   roles: ["committee"],
+    // },
+    {
+      icon: ClipboardCheck,
+      label: "Workflow Rules",
+      href: "/workflow-rules",
+      roles: ["committee"],
+    },
   ];
 
-  return items.filter((item) => item.roles.includes(role));
+  return items.filter(
+    (item) =>
+      item.roles.includes(resolvedRole) &&
+      (!item.isDropdown || (item.children && item.children.length > 0)),
+  );
 };
 
 export function AppSidebar() {
@@ -101,153 +240,204 @@ export function AppSidebar() {
   const navigate = useNavigate();
 
   const [expandedDropdown, setExpandedDropdown] = useState<string | null>(null);
+  const [dynamicForms, setDynamicForms] = useState<DynamicFormItem[]>([]);
+  const [isFormsLoading, setIsFormsLoading] = useState(false);
 
   useEffect(() => {
-    const isInFpmsSection = location.pathname.startsWith('/fpms/');
-    if (isInFpmsSection) {
-     
-      if (user?.role === 'faculty' && expandedDropdown !== 'FPMS Form') {
-        setExpandedDropdown('FPMS Form');
-      } else if (user?.role === 'hod') {
-        if (location.pathname.startsWith('/fpms/hod-')) {
-          setExpandedDropdown('HOD FPMS Form');
-        } else if (location.pathname.startsWith('/fpms/hodb-')) {
-          setExpandedDropdown('FPMS-KPA Form');
-        }
+    const fetchForms = async () => {
+      if (!user?.role) {
+        setDynamicForms([]);
+        setIsFormsLoading(false);
+        return;
       }
-    } else {
-      setExpandedDropdown(null);
-    }
-  }, [location.pathname, user?.role]);
+
+      try {
+        setIsFormsLoading(true);
+        const response = await api.get("/api/committee/forms");
+        setDynamicForms(
+          Array.isArray(response.data?.data) ? response.data.data : [],
+        );
+      } catch (error) {
+        setDynamicForms([]);
+      } finally {
+        setIsFormsLoading(false);
+      }
+    };
+
+    fetchForms();
+  }, [user?.role]);
 
   if (!user) return null;
 
-  const navItems = getNavItems(user.role);
+  const navItems = getNavItems(user.role, dynamicForms, isFormsLoading);
+  const shouldShowFullScreenLoader =
+    isFormsLoading &&
+    ["faculty", "hod", "dean", "principle"].includes(
+      normalizeRoleForAccess(user.role),
+    );
 
   const toggleDropdown = (dropdownId: string) => {
-    setExpandedDropdown((current) => (current === dropdownId ? null : dropdownId));
+    setExpandedDropdown((current) =>
+      current === dropdownId ? null : dropdownId,
+    );
   };
 
   const handleLogout = () => {
     logout();
-    navigate('/');
+    navigate("/");
   };
 
   const displayName = user.name || user.email;
   const avatarInitials = displayName
-    .split(' ')
+    .split(" ")
     .map((n) => n[0])
-    .join('')
+    .join("")
     .toUpperCase();
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border">
-      <div className="flex h-full flex-col">
-        <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary">
-            <GraduationCap className="h-5 w-5 text-sidebar-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="font-display text-lg font-bold text-sidebar-foreground">FPMS</h1>
-            <p className="text-xs text-sidebar-foreground/60">Performance System</p>
+    <>
+      {shouldShowFullScreenLoader && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-card-foreground shadow-sm">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <span className="text-sm">Loading form sections...</span>
           </div>
         </div>
+      )}
 
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 px-3 py-4">
-          {navItems.map((item) => {
-            
-            const dropdownId = item.dropdownId || item.label;
-
-            if (item.isDropdown) {
-              const isOpen = expandedDropdown === dropdownId;
-
-              const isAnyChildActive =
-                item.children?.some((child) => location.pathname.startsWith(child.href)) ?? false;
-
-              return (
-                <div key={dropdownId} className="space-y-1">
-                  <button
-                    onClick={() => toggleDropdown(dropdownId)}
-                    className={cn(
-                      'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                      isAnyChildActive
-                        ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                        : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-                    )}
-                  >
-                    <item.icon className="h-5 w-5" />
-                    <span className="flex-1 text-left">{item.label}</span>
-                    {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  </button>
-
-                  {isOpen && item.children && (
-                    <div className="ml-8 space-y-1">
-                      {item.children.map((child) => {
-                        const isActive = location.pathname === child.href;
-                        return (
-                          <Link
-                            key={child.href}
-                            to={child.href}
-                            className={cn(
-                              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                              isActive
-                                ? 'bg-sidebar-primary/50 text-sidebar-primary-foreground'
-                                : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground'
-                            )}
-                          >
-                            <span>{child.title}</span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            }
-
-            const isActive = location.pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                to={item.href}
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                    : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-                )}
-              >
-                <item.icon className="h-5 w-5" />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* User Info & Logout */}
-        <div className="border-t border-sidebar-border p-4">
-          <div className="flex items-center gap-3 rounded-lg bg-sidebar-accent/50 p-3">
-            <Avatar className="h-10 w-10">
-              <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground font-medium">
-                {avatarInitials}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-sidebar-foreground truncate">{displayName}</p>
-              <p className="text-xs text-sidebar-foreground/60 capitalize">{user.role}</p>
+      <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border">
+        <div className="flex h-full flex-col">
+          <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary">
+              <GraduationCap className="h-5 w-5 text-sidebar-primary-foreground" />
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleLogout}
-              className="text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
+            <div>
+              <h1 className="font-display text-lg font-bold text-sidebar-foreground">
+                FPMS
+              </h1>
+              <p className="text-xs text-sidebar-foreground/60">
+                Performance System
+              </p>
+            </div>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 space-y-1 px-3 py-4">
+            {navItems.map((item) => {
+              const dropdownId = item.dropdownId || item.label;
+
+              if (item.isDropdown) {
+                const isOpen = expandedDropdown === dropdownId;
+
+                const isAnyChildActive =
+                  item.children?.some((child) =>
+                    location.pathname.startsWith(child.href),
+                  ) ?? false;
+
+                return (
+                  <div key={dropdownId} className="space-y-1">
+                    <button
+                      onClick={() => toggleDropdown(dropdownId)}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                        isAnyChildActive
+                          ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      )}
+                    >
+                      <item.icon className="h-5 w-5" />
+                      <span className="flex-1 text-left">{item.label}</span>
+                      {isOpen ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                    </button>
+
+                    {isOpen && item.children && (
+                      <div className="ml-8 space-y-1">
+                        {item.children.map((child) => {
+                          const isActive = location.pathname === child.href;
+                          return (
+                            <Link
+                              key={child.href}
+                              to={child.href}
+                              onClick={(event) => {
+                                if (child.isLoading) {
+                                  event.preventDefault();
+                                  return;
+                                }
+                                setExpandedDropdown(null);
+                              }}
+                              className={cn(
+                                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                                isActive
+                                  ? "bg-sidebar-primary/50 text-sidebar-primary-foreground"
+                                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+                                child.isLoading &&
+                                  "opacity-70 cursor-default pointer-events-auto",
+                              )}
+                            >
+                              {child.isLoading ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : null}
+                              <span>{child.title}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              const isActive = location.pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  to={item.href}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  )}
+                >
+                  <item.icon className="h-5 w-5" />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* User Info & Logout */}
+          <div className="border-t border-sidebar-border p-4">
+            <div className="flex items-center gap-3 rounded-lg bg-sidebar-accent/50 p-3">
+              <Avatar className="h-10 w-10">
+                <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground font-medium">
+                  {avatarInitials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-sidebar-foreground truncate">
+                  {displayName}
+                </p>
+                <p className="text-xs text-sidebar-foreground/60 capitalize">
+                  {user.role}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }

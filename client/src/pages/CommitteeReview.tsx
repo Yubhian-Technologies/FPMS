@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 
 interface HodAppeal {
   id: string;
@@ -105,9 +105,7 @@ const AppealCard = memo(
                   }
                 />
 
-                <Button onClick={() => onSubmit(appeal)}>
-                  Verify Appeal
-                </Button>
+                <Button onClick={() => onSubmit(appeal)}>Verify Appeal</Button>
               </div>
             )}
 
@@ -128,7 +126,7 @@ const AppealCard = memo(
         )}
       </Card>
     );
-  }
+  },
 );
 
 export default function CommitteeReview() {
@@ -136,6 +134,7 @@ export default function CommitteeReview() {
   const [appeals, setAppeals] = useState<HodAppeal[]>([]);
   const [expanded, setExpanded] = useState<string[]>([]);
   const [inputs, setInputs] = useState<any>({});
+  const [isPageLoading, setIsPageLoading] = useState(true);
 
   useEffect(() => {
     if (!isLoading && user) {
@@ -145,6 +144,7 @@ export default function CommitteeReview() {
 
   const fetchHodAppeals = async () => {
     try {
+      setIsPageLoading(true);
       const token = localStorage.getItem("token");
 
       const res = await api.get("/api/committee/hod-appeals", {
@@ -153,10 +153,11 @@ export default function CommitteeReview() {
         },
       });
 
-      setAppeals(res.data.data);
+      const appealData = Array.isArray(res.data?.data) ? res.data.data : [];
+      setAppeals(appealData);
 
       const temp: any = {};
-      res.data.data.forEach((a: HodAppeal) => {
+      appealData.forEach((a: HodAppeal) => {
         temp[a.id] = {
           score: a.committeeScore ?? "",
           remarks: a.committeeRemarks ?? "",
@@ -167,12 +168,14 @@ export default function CommitteeReview() {
     } catch (err: any) {
       console.error(err);
       toast.error(err.response?.data?.message || "Failed to load appeals");
+    } finally {
+      setIsPageLoading(false);
     }
   };
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
   };
 
@@ -204,7 +207,7 @@ export default function CommitteeReview() {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
       toast.success("Appeal verified successfully");
@@ -220,41 +223,57 @@ export default function CommitteeReview() {
 
   return (
     <DashboardLayout title="HOD Appeals">
-      <div className="space-y-8">
-        <div>
-          <h2 className="text-xl font-bold mb-4">Pending Appeals</h2>
-          <div className="grid gap-4">
-            {pending.map((a) => (
-              <AppealCard
-                key={a.id}
-                appeal={a}
-                expanded={expanded.includes(a.id)}
-                input={inputs[a.id]}
-                onExpand={toggleExpand}
-                onChange={handleChange}
-                onSubmit={verifyAppeal}
-              />
-            ))}
-          </div>
+      {isPageLoading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
+      ) : (
+        <div className="space-y-8">
+          <div>
+            <h2 className="text-xl font-bold mb-4">Pending Appeals</h2>
+            <div className="grid gap-4">
+              {pending.map((a) => (
+                <AppealCard
+                  key={a.id}
+                  appeal={a}
+                  expanded={expanded.includes(a.id)}
+                  input={inputs[a.id]}
+                  onExpand={toggleExpand}
+                  onChange={handleChange}
+                  onSubmit={verifyAppeal}
+                />
+              ))}
+              {pending.length === 0 && (
+                <p className="text-center text-muted-foreground py-6 border rounded-lg bg-muted/20">
+                  No pending appeals available.
+                </p>
+              )}
+            </div>
+          </div>
 
-        <div>
-          <h2 className="text-xl font-bold mb-4">Verified Appeals</h2>
-          <div className="grid gap-4">
-            {verified.map((a) => (
-              <AppealCard
-                key={a.id}
-                appeal={a}
-                expanded={expanded.includes(a.id)}
-                input={inputs[a.id]}
-                onExpand={toggleExpand}
-                onChange={handleChange}
-                onSubmit={verifyAppeal}
-              />
-            ))}
+          <div>
+            <h2 className="text-xl font-bold mb-4">Verified Appeals</h2>
+            <div className="grid gap-4">
+              {verified.map((a) => (
+                <AppealCard
+                  key={a.id}
+                  appeal={a}
+                  expanded={expanded.includes(a.id)}
+                  input={inputs[a.id]}
+                  onExpand={toggleExpand}
+                  onChange={handleChange}
+                  onSubmit={verifyAppeal}
+                />
+              ))}
+              {verified.length === 0 && (
+                <p className="text-center text-muted-foreground py-6 border rounded-lg bg-muted/20">
+                  No verified appeals available.
+                </p>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </DashboardLayout>
   );
 }

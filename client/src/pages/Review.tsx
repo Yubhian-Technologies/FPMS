@@ -4,44 +4,158 @@ import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, TrendingUp } from "lucide-react";
 
-export default function Reports() {
+interface WorkflowAssignment {
+  role?: string;
+  roleKey?: string;
+  status?: string;
+  verifiedScore?: number | null;
+  remarks?: string;
+}
+
+interface WorkflowQueueItem {
+  id: string;
+  facultyName?: string;
+  facultyEmail?: string;
+  facultyId?: string;
+  formId?: string;
+  criteriaId?: string;
+  moduleName?: string;
+  taskTitle?: string;
+  claimedScore?: number;
+  maxMarks?: number;
+  evidenceUrl?: string;
+  description?: string;
+  status?: "submitted" | "appealed" | "approved";
+  currentFlow?: "submission" | "appeal";
+  assignments?: WorkflowAssignment[];
+}
+
+export default function Review() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [queue, setQueue] = useState<WorkflowQueueItem[]>([]);
+  const [reviewedItems, setReviewedItems] = useState<WorkflowQueueItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
-  const [verifying, setVerifying] = useState<Record<string, boolean>>({});
-  const [expandedFaculty, setExpandedFaculty] = useState<string | null>(null);
-  const [expandedSubsections, setExpandedSubsections] = useState<string[]>([]);
+  const [reviewing, setReviewing] = useState<Record<string, boolean>>({});
+  const [reviewInputs, setReviewInputs] = useState<
+    Record<string, { verifiedScore: string; remarks: string }>
+  >({});
+  const [formLookup, setFormLookup] = useState<
+    Record<
+      string,
+      { formTitle: string; criteriaLookup: Record<string, string> }
+    >
+  >({});
+
+  const canReview = user?.role === "hod" || user?.role === "committee";
+
+  const fetchQueue = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(
+        "/api/committee/workflow/submissions/review-queue",
+      );
+      const rows: WorkflowQueueItem[] = Array.isArray(res.data?.data)
+        ? res.data.data
+        : [];
+
+      setQueue(rows);
+      setReviewInputs((prev) => {
+        const next = { ...prev };
+        rows.forEach((item) => {
+          const id = String(item.id || "").trim();
+          if (!id || next[id]) return;
+          next[id] = {
+            verifiedScore:
+              item.claimedScore !== undefined &&
+              Number.isFinite(Number(item.claimedScore))
+                ? String(item.claimedScore)
+                : "",
+            remarks: "",
+          };
+        });
+        return next;
+      });
+    } catch {
+      toast({
+        title: "Error",
+        description: "Failed to fetch workflow review queue",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchFormLookup = async () => {
+    try {
+      const res = await api.get("/api/committee/forms");
+      const forms = Array.isArray(res.data?.data) ? res.data.data : [];
+
+      const nextLookup: Record<
+        string,
+        { formTitle: string; criteriaLookup: Record<string, string> }
+      > = {};
+
+      forms.forEach((formItem: any) => {
+        const currentFormId = String(formItem?.id || "").trim();
+        if (!currentFormId) return;
+
+        const criteriaList = Array.isArray(formItem?.criteria)
+          ? formItem.criteria
+          : [];
+
+        const criteriaLookup: Record<string, string> = {};
+        criteriaList.forEach((criteriaItem: any) => {
+          const currentCriteriaId = String(criteriaItem?.id || "").trim();
+          if (!currentCriteriaId) return;
+          criteriaLookup[currentCriteriaId] = String(
+            criteriaItem?.criteriaName || currentCriteriaId,
+          ).trim();
+        });
+
+        nextLookup[currentFormId] = {
+          formTitle: String(formItem?.formTitle || currentFormId).trim(),
+          criteriaLookup,
+        };
+      });
+
+      setFormLookup(nextLookup);
+    } catch {
+      // keep id fallback in UI
+    }
+  };
 
   useEffect(() => {
-    if (!user || user.role !== "hod") return;
+    if (!user || !canReview) {
+      setLoading(false);
+      return;
+    }
 
-    const fetchSubmissions = async () => {
-      setLoading(true);
-      try {
-        const res = await api.get("/api/module1/all-submissions"); // your correct API
-        setSubmissions(res.data.data || []);
-      } catch {
-        toast({
-          title: "Error",
-          description: "Failed to fetch submissions",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSubmissions();
-  }, [user, toast]);
+    fetchQueue();
+    fetchFormLookup();
+  }, [user?.id, user?.role]);
 
   if (!user) return null;
+
+  if (!canReview) {
+    return (
+      <DashboardLayout title="Review Submissions">
+        <div className="text-center text-muted-foreground py-16">
+          Access restricted to HOD and Committee roles.
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   if (loading) {
     return (
@@ -53,270 +167,286 @@ export default function Reports() {
     );
   }
 
-  // Filter by faculty name or ID
-  const filteredSubmissions = submissions.filter(
-    (f) =>
-      f.facultyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      f.facultyId?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredQueue = queue.filter((item) => {
+    const query = searchTerm.toLowerCase();
+    return (
+      String(item.facultyName || "")
+        .toLowerCase()
+        .includes(query) ||
+      String(item.facultyEmail || "")
+        .toLowerCase()
+        .includes(query) ||
+      String(item.taskTitle || "")
+        .toLowerCase()
+        .includes(query) ||
+      String(item.moduleName || "")
+        .toLowerCase()
+        .includes(query)
+    );
+  });
 
-  const updateCriterionField = (
-    facultyId: string,
-    module: string,
-    subId: string,
-    criterionName: string,
-    field: "hodScore" | "hodDescription",
-    value: number | string
-  ) => {
-    setSubmissions((prev) =>
-      prev.map((faculty) =>
-        faculty.facultyId !== facultyId
-          ? faculty
-          : {
-              ...faculty,
-              subsections: faculty.subsections.map((sub: any) =>
-                sub.module !== module || sub.id !== subId
-                  ? sub
-                  : {
-                      ...sub,
-                      criteria: sub.criteria.map((c: any) =>
-                        c.name !== criterionName ? c : { ...c, [field]: value }
-                      ),
-                    }
-              ),
-            }
-      )
+  const filteredReviewed = reviewedItems.filter((item) => {
+    const query = searchTerm.toLowerCase();
+    return (
+      String(item.facultyName || "")
+        .toLowerCase()
+        .includes(query) ||
+      String(item.facultyEmail || "")
+        .toLowerCase()
+        .includes(query) ||
+      String(item.taskTitle || "")
+        .toLowerCase()
+        .includes(query) ||
+      String(item.moduleName || "")
+        .toLowerCase()
+        .includes(query)
+    );
+  });
+
+  const pendingAppeals = queue.filter(
+    (item) => String(item.status || "") === "appealed",
+  ).length;
+
+  const resolveFormTitle = (formId?: string) => {
+    const resolvedFormId = String(formId || "").trim();
+    if (!resolvedFormId) return "-";
+    return formLookup[resolvedFormId]?.formTitle || resolvedFormId;
+  };
+
+  const resolveCriteriaName = (formId?: string, criteriaId?: string) => {
+    const resolvedFormId = String(formId || "").trim();
+    const resolvedCriteriaId = String(criteriaId || "").trim();
+    if (!resolvedCriteriaId) return "-";
+
+    return (
+      formLookup[resolvedFormId]?.criteriaLookup?.[resolvedCriteriaId] ||
+      resolvedCriteriaId
     );
   };
 
-  const renderFacultyCard = (faculty: any, type: "pending" | "verified") => {
-    if (!faculty.subsections) return null;
+  const updateReviewInput = (
+    submissionId: string,
+    field: "verifiedScore" | "remarks",
+    value: string,
+    maxMarks?: number,
+  ) => {
+    const clampScoreInput = () => {
+      if (field !== "verifiedScore") return value;
 
-    const filteredSubsections = faculty.subsections
-      .map((sub: any) => ({
-        ...sub,
-        criteria:
-          type === "pending"
-            ? sub.criteria.filter((c: any) => !c.isVerified)
-            : sub.criteria.filter((c: any) => c.isVerified),
-      }))
-      .filter((sub: any) => sub.criteria.length > 0);
+      const trimmedValue = String(value || "").trim();
+      if (trimmedValue === "") return "";
 
-    if (filteredSubsections.length === 0) return null;
+      const parsed = Number(trimmedValue);
+      const max = Number(maxMarks || 0);
+      if (!Number.isFinite(parsed)) return "";
 
-    // Unique key including all module IDs to avoid duplicates
-    const facultyKey = `${faculty.facultyId}-${type}-${filteredSubsections.map((s: any) => s.id).join(",")}`;
+      const bounded = Math.max(0, Math.min(parsed, max));
+      return String(bounded);
+    };
+
+    setReviewInputs((prev) => ({
+      ...prev,
+      [submissionId]: {
+        verifiedScore: prev[submissionId]?.verifiedScore || "",
+        remarks: prev[submissionId]?.remarks || "",
+        [field]: clampScoreInput(),
+      },
+    }));
+  };
+
+  const handleReview = async (item: WorkflowQueueItem) => {
+    const submissionId = String(item.id || "").trim();
+    if (!submissionId) return;
+
+    const input = reviewInputs[submissionId] || {
+      verifiedScore: "",
+      remarks: "",
+    };
+
+    const numericScore = Number(input.verifiedScore);
+    const maxMarks = Number(item.maxMarks || 0);
+
+    if (
+      !Number.isFinite(numericScore) ||
+      numericScore < 0 ||
+      numericScore > maxMarks
+    ) {
+      toast({
+        title: "Invalid score",
+        description: `Score must be between 0 and ${maxMarks}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setReviewing((prev) => ({ ...prev, [submissionId]: true }));
+    try {
+      await api.post(
+        `/api/committee/workflow/submissions/${submissionId}/review`,
+        {
+          verifiedScore: numericScore,
+          remarks: input.remarks,
+        },
+      );
+
+      setQueue((prev) => prev.filter((row) => row.id !== submissionId));
+      setReviewedItems((prev) => [item, ...prev]);
+
+      toast({
+        title: "Reviewed successfully",
+        description: "Submission moved to next workflow stage.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Review failed",
+        description:
+          error?.response?.data?.message || "Unable to review submission.",
+        variant: "destructive",
+      });
+    } finally {
+      setReviewing((prev) => ({ ...prev, [submissionId]: false }));
+    }
+  };
+
+  const renderQueueCard = (
+    item: WorkflowQueueItem,
+    type: "pending" | "reviewed",
+  ) => {
+    const submissionId = String(item.id || "").trim();
+    const input = reviewInputs[submissionId] || {
+      verifiedScore: "",
+      remarks: "",
+    };
+    const isReviewing = Boolean(reviewing[submissionId]);
+    const maxMarks = Number(item.maxMarks || 0);
+    const status = String(item.status || "submitted").toLowerCase();
+    const flow = String(item.currentFlow || "submission").toLowerCase();
 
     return (
-      <Card key={facultyKey} className="border shadow-sm">
-        <CardHeader className="flex flex-row justify-between items-center">
-          <div>
-            <CardTitle className="text-base font-semibold">{faculty.facultyName || "-"}</CardTitle>
-            <p className="text-xs text-muted-foreground">Faculty ID: {faculty.facultyId || "-"}</p>
+      <Card key={submissionId} className="border shadow-sm">
+        <CardHeader className="space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle className="text-base font-semibold">
+                {item.taskTitle || "Task"}
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {item.moduleName || "Module"} •{" "}
+                {item.facultyName || item.facultyEmail || "Faculty"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Form: {resolveFormTitle(item.formId)} • Criteria:{" "}
+                {resolveCriteriaName(item.formId, item.criteriaId)}
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <Badge
+                variant={status === "appealed" ? "destructive" : "secondary"}
+              >
+                {status || "submitted"}
+              </Badge>
+              <Badge variant="outline">Flow: {flow}</Badge>
+            </div>
           </div>
-
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-xs"
-            onClick={() =>
-              setExpandedFaculty(expandedFaculty === facultyKey ? null : facultyKey)
-            }
-          >
-            {expandedFaculty === facultyKey ? "Hide" : "View"}
-          </Button>
         </CardHeader>
 
-        {expandedFaculty === facultyKey && (
-          <CardContent className="space-y-4">
-            {filteredSubsections.map((sub: any) => {
-              const subKey = `${faculty.facultyId}-${sub.module || "unknown"}-${sub.id}-${type}`;
-              const isExpanded = expandedSubsections.includes(subKey);
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-md border p-3 text-sm">
+              <p>
+                <strong>Claimed:</strong> {Number(item.claimedScore || 0)} /{" "}
+                {maxMarks}
+              </p>
+              <p className="mt-1 break-all">
+                <strong>Evidence:</strong> {item.evidenceUrl || "-"}
+              </p>
+            </div>
+            <div className="rounded-md border p-3 text-sm">
+              <p className="font-medium">Faculty Description</p>
+              <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                {item.description || "-"}
+              </p>
+            </div>
+          </div>
 
-              return (
-                <div key={subKey} className="border rounded-md p-3">
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-sm font-semibold text-primary">
-                      [{(sub.module || "UNKNOWN").toUpperCase()}] {sub.name || "-"}
-                    </h3>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs"
-                      onClick={() =>
-                        setExpandedSubsections((prev) =>
-                          prev.includes(subKey)
-                            ? prev.filter((k) => k !== subKey)
-                            : [...prev, subKey]
-                        )
-                      }
-                    >
-                      {isExpanded ? "Hide Details" : "Show Details"}
-                    </Button>
-                  </div>
+          {type === "pending" ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Verified Score
+                </label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={maxMarks}
+                  value={input.verifiedScore}
+                  onChange={(e) =>
+                    updateReviewInput(
+                      submissionId,
+                      "verifiedScore",
+                      e.target.value,
+                      maxMarks,
+                    )
+                  }
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Remarks
+                </label>
+                <Textarea
+                  value={input.remarks}
+                  onChange={(e) =>
+                    updateReviewInput(submissionId, "remarks", e.target.value)
+                  }
+                  placeholder="Enter review remarks"
+                  rows={3}
+                />
+              </div>
+            </div>
+          ) : null}
 
-                  {isExpanded && (
-                    <div className="space-y-4">
-                      {sub.criteria.map((c: any) => {
-                        const key = `${faculty.facultyId}-${sub.module || "unknown"}-${sub.id}-${c.name}`;
+          {Array.isArray(item.assignments) && item.assignments.length > 0 ? (
+            <div className="rounded-md border p-3">
+              <p className="text-sm font-medium mb-2">Assignments</p>
+              <div className="flex flex-wrap gap-2">
+                {item.assignments.map((assignment, index) => (
+                  <Badge
+                    key={`${submissionId}-assignment-${index}`}
+                    variant="outline"
+                  >
+                    {String(assignment.role || assignment.roleKey || "Role")} •{" "}
+                    {String(assignment.status || "pending")}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
-                        return (
-                          <div
-                            key={key}
-                            className={`grid md:grid-cols-3 gap-4 p-3 rounded-md border ${
-                              c.isVerified ? "bg-green-50 border-green-200" : "bg-muted/40"
-                            }`}
-                          >
-                            <div className="text-xs space-y-1">
-                              <p>
-                                <strong>Criterion:</strong> {c.name}
-                              </p>
-                              <p>
-                                <strong>Max:</strong> {c.maxScore}
-                              </p>
-                              <p>
-                                <strong>Claimed:</strong> {c.claimedScore}
-                              </p>
-                            </div>
-
-                            <div className="text-xs">
-                              <p className="font-semibold mb-1">Faculty Description</p>
-                              <p className="whitespace-pre-wrap">
-                                {c.description || c.facultyDescription || "-"}
-                              </p>
-                            </div>
-
-                            <div className="text-xs space-y-3">
-                              <div>
-                                <label className="block mb-1 font-medium">HOD Score</label>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={c.maxScore}
-                                  disabled={c.isVerified}
-                                  value={c.hodScore ?? ""}
-                                  onChange={(e) =>
-                                    updateCriterionField(
-                                      faculty.facultyId,
-                                      sub.module || "",
-                                      sub.id,
-                                      c.name,
-                                      "hodScore",
-                                      Number(e.target.value)
-                                    )
-                                  }
-                                  className="border rounded px-2 py-1 w-20 text-xs"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block mb-1 font-medium">HOD Remarks</label>
-                                <textarea
-                                  disabled={c.isVerified}
-                                  value={c.hodDescription ?? ""}
-                                  placeholder="Enter remarks / justification..."
-                                  onChange={(e) =>
-                                    updateCriterionField(
-                                      faculty.facultyId,
-                                      sub.module || "",
-                                      sub.id,
-                                      c.name,
-                                      "hodDescription",
-                                      e.target.value
-                                    )
-                                  }
-                                  className="border rounded p-2 w-full min-h-[70px] text-xs"
-                                />
-                              </div>
-
-                              {c.isVerified ? (
-                                <Button
-                                  size="sm"
-                                  disabled
-                                  className="text-xs bg-green-600 hover:bg-green-600 text-white"
-                                >
-                                  Verified
-                                </Button>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  className="text-xs"
-                                  disabled={
-                                    !c.hodDescription?.trim() ||
-                                    c.hodScore == null ||
-                                    c.hodScore < 0 ||
-                                    verifying[key]
-                                  }
-                                  onClick={async () => {
-                                    setVerifying((v) => ({ ...v, [key]: true }));
-                                    try {
-                                      await api.put(
-                                        `/api/${sub.module || "unknown"}/verify/${faculty.facultyId}/${sub.id}/${encodeURIComponent(
-                                          c.name
-                                        )}`,
-                                        {
-                                          hodScore: c.hodScore,
-                                          hodDescription: c.hodDescription,
-                                        }
-                                      );
-
-                                      setSubmissions((prev) =>
-                                        prev.map((f) =>
-                                          f.facultyId !== faculty.facultyId
-                                            ? f
-                                            : {
-                                                ...f,
-                                                subsections: f.subsections.map((s: any) =>
-                                                  s.id !== sub.id || s.module !== sub.module
-                                                    ? s
-                                                    : {
-                                                        ...s,
-                                                        criteria: s.criteria.map((cr: any) =>
-                                                          cr.name === c.name
-                                                            ? { ...cr, isVerified: true }
-                                                            : cr
-                                                        ),
-                                                      }
-                                                ),
-                                              }
-                                        )
-                                      );
-
-                                      toast({
-                                        title: "Success",
-                                        description: "Criterion verified successfully",
-                                      });
-                                    } catch (err) {
-                                      toast({
-                                        title: "Error",
-                                        description: "Verification failed",
-                                        variant: "destructive",
-                                      });
-                                    } finally {
-                                      setVerifying((v) => ({ ...v, [key]: false }));
-                                    }
-                                  }}
-                                >
-                                  {verifying[key] ? "Verifying..." : "Verify"}
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </CardContent>
-        )}
+          {type === "pending" ? (
+            <div className="flex justify-end">
+              <Button onClick={() => handleReview(item)} disabled={isReviewing}>
+                {isReviewing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                {isReviewing ? "Reviewing..." : "Submit Review"}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex justify-end">
+              <Badge className="bg-emerald-600 text-white">Reviewed</Badge>
+            </div>
+          )}
+        </CardContent>
       </Card>
     );
   };
 
   return (
-    <DashboardLayout title="Review Submissions" subtitle="Faculty Submissions Review">
+    <DashboardLayout
+      title="Review Submissions"
+      subtitle="Faculty Submissions Review"
+    >
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3 mb-6">
         <Card>
@@ -327,74 +457,74 @@ export default function Reports() {
             <FileText className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold font-display">{submissions.length}</p>
-            <p className="text-xs text-muted-foreground">faculty members</p>
+            <p className="text-3xl font-bold font-display">
+              {queue.length + reviewedItems.length}
+            </p>
+            <p className="text-xs text-muted-foreground">workflow items</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex justify-between items-center pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Pending
+            </CardTitle>
             <TrendingUp className="h-5 w-5 text-destructive rotate-180" />
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold font-display text-destructive">
-              {submissions.filter((f) =>
-                f.subsections?.some((s: any) => s.criteria?.some((c: any) => !c.isVerified))
-              ).length}
+              {queue.length}
             </p>
-            <p className="text-xs text-muted-foreground">submissions</p>
+            <p className="text-xs text-muted-foreground">
+              pending review items
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex justify-between items-center pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Verified</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Verified
+            </CardTitle>
             <TrendingUp className="h-5 w-5 text-success" />
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold font-display text-success">
-              {submissions.filter((f) =>
-                f.subsections?.some((s: any) => s.criteria?.some((c: any) => c.isVerified))
-              ).length}
+              {pendingAppeals}
             </p>
-            <p className="text-xs text-muted-foreground">submissions</p>
+            <p className="text-xs text-muted-foreground">appeal flow items</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Search Box */}
       <div className="mb-6 w-full md:w-full">
-        <input
-          type="text"
-          placeholder="Search by Faculty Name or ID..."
+        <Input
+          placeholder="Search by faculty, module, task or email..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="border rounded px-3 py-2 w-full text-sm"
         />
       </div>
 
       {/* Pending Review */}
       <h2 className="text-lg font-semibold mb-4">Pending Review</h2>
       <div className="space-y-6 mb-12">
-        {filteredSubmissions.map((f) => renderFacultyCard(f, "pending"))}
-        {filteredSubmissions.every(
-          (f) => !f.submissions?.some((s: any) => s.criteria?.some((c: any) => !c.isVerified))
-        ) && (
-          <p className="text-center text-muted-foreground py-8">
-            No pending submissions to review.
+        {filteredQueue.length === 0 && (
+          <p className="text-center text-muted-foreground py-8 border rounded-lg bg-muted/20">
+            No workflow submissions available for review.
           </p>
         )}
+        {filteredQueue.map((item) => renderQueueCard(item, "pending"))}
       </div>
 
       {/* Verified Submissions */}
       <h2 className="text-lg font-semibold mb-4">Verified Submissions</h2>
       <div className="space-y-6">
-        {filteredSubmissions.map((f) => renderFacultyCard(f, "verified"))}
-        {filteredSubmissions.every(
-          (f) => !f.submissions?.some((s: any) => s.criteria?.some((c: any) => c.isVerified))
-        ) && (
-          <p className="text-center text-muted-foreground py-8">No verified submissions yet.</p>
+        {filteredReviewed.map((item) => renderQueueCard(item, "reviewed"))}
+        {filteredReviewed.length === 0 && (
+          <p className="text-center text-muted-foreground py-8">
+            No reviewed submissions in this session.
+          </p>
         )}
       </div>
     </DashboardLayout>

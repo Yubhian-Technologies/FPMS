@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,41 +32,39 @@ import { toast } from "@/hooks/use-toast";
 import { api } from "@/api/api";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 
-interface Dean {
+interface Hod {
   id: string;
   name: string;
   email: string;
+  department: string;
   college: string;
-  role: string;
+  role?: string;
   level?: number;
   hasPhd?: boolean;
 }
 
-interface CollegeOption {
-  id: string;
+interface CollegeDetails {
+  id?: string;
   name: string;
   code?: string;
+  branches?: string[];
 }
 
-interface RoleOption {
-  id: string;
-  name: string;
-  level: number;
-}
-
-export default function AddDean() {
-  const [deans, setDeans] = useState<Dean[]>([]);
-  const [collegeOptions, setCollegeOptions] = useState<CollegeOption[]>([]);
-  const [roleOptions, setRoleOptions] = useState<RoleOption[]>([]);
+export default function AddHod() {
+  const [hods, setHods] = useState<Hod[]>([]);
+  const [collegeDetails, setCollegeDetails] = useState<CollegeDetails | null>(
+    null,
+  );
   const [searchQuery, setSearchQuery] = useState("");
-  const [isAddingDean, setIsAddingDean] = useState(false);
+  const [isAddingHod, setIsAddingHod] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [deanToDelete, setDeanToDelete] = useState<Dean | null>(null);
+  const [hodToDelete, setHodToDelete] = useState<Hod | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [hodRoleLevel, setHodRoleLevel] = useState(0);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -74,97 +72,104 @@ export default function AddDean() {
     pass: "",
     confirm_pass: "",
     college: "",
-    role: "",
+    department: "",
+    role: "hod",
     level: 0,
     hasPhd: false,
   });
 
-  const lockedCollegeName = collegeOptions[0]?.name || "";
-
+  const lockedCollegeName = collegeDetails?.name || "";
   const normalizedLockedCollege = String(lockedCollegeName || "")
     .trim()
     .toLowerCase();
+  const branchOptions = useMemo(
+    () =>
+      Array.isArray(collegeDetails?.branches)
+        ? collegeDetails!
+            .branches!.map((item) => String(item || "").trim())
+            .filter(Boolean)
+        : [],
+    [collegeDetails],
+  );
 
-  const occupiedRoleNamesForCollege = new Set(
-    deans
-      .filter((dean) => {
-        const deanCollege = String(dean.college || "")
+  const occupiedDepartmentsForCollege = new Set(
+    hods
+      .filter((hod) => {
+        const hodCollege = String(hod.college || "")
           .trim()
           .toLowerCase();
         return normalizedLockedCollege
-          ? deanCollege === normalizedLockedCollege
+          ? hodCollege === normalizedLockedCollege
           : true;
       })
-      .map((dean) =>
-        String(dean.role || "")
+      .map((hod) =>
+        String(hod.department || "")
           .trim()
           .toLowerCase(),
       )
       .filter(Boolean),
   );
 
-  const availableRoleOptions = roleOptions.filter((role) => {
-    const normalizedRoleName = String(role.name || "")
+  const availableBranchOptions = branchOptions.filter((branch) => {
+    const normalizedBranch = String(branch || "")
       .trim()
       .toLowerCase();
-
-    if (!normalizedRoleName) return false;
+    if (!normalizedBranch) return false;
 
     if (editingId) {
-      const currentRole = String(formData.role || "")
+      const currentDepartment = String(formData.department || "")
         .trim()
         .toLowerCase();
       return (
-        !occupiedRoleNamesForCollege.has(normalizedRoleName) ||
-        normalizedRoleName === currentRole
+        !occupiedDepartmentsForCollege.has(normalizedBranch) ||
+        normalizedBranch === currentDepartment
       );
     }
 
-    return !occupiedRoleNamesForCollege.has(normalizedRoleName);
+    return !occupiedDepartmentsForCollege.has(normalizedBranch);
   });
 
-  const fetchDeans = async () => {
+  const fetchHods = async () => {
     try {
-      const res = await api.get("/api/dean/all-deans");
+      const res = await api.get("/api/admin/all-hods");
       const data = Array.isArray(res.data?.data) ? res.data.data : [];
-      const normalized = data
-        .map((item: any) => ({
-          ...item,
-          level:
-            item.level !== undefined && Number.isFinite(Number(item.level))
-              ? Number(item.level)
-              : undefined,
-          hasPhd: item.hasPhd ?? item.hasPhD ?? false,
-        }))
-        .filter((item: any) =>
-          String(item.role || "")
-            .trim()
-            .toLowerCase()
-            .startsWith("dean"),
-        );
-      setDeans(normalized);
+      const normalized = data.map((item: any) => ({
+        ...item,
+        level:
+          item.level !== undefined && Number.isFinite(Number(item.level))
+            ? Number(item.level)
+            : undefined,
+        hasPhd: item.hasPhd ?? item.hasPhD ?? false,
+      }));
+      setHods(normalized);
     } catch {
-      toast({ title: "Failed to load deans", variant: "destructive" });
+      toast({ title: "Failed to load HODs", variant: "destructive" });
     }
   };
 
-  const fetchColleges = async () => {
+  const fetchCollegeDetails = async () => {
     try {
-      const res = await api.get("/api/dean/colleges");
-      const data = Array.isArray(res.data?.data) ? res.data.data : [];
-      setCollegeOptions(data);
+      const res = await api.get("/api/admin/college-details");
+      const data = res.data?.data || null;
+      setCollegeDetails(data);
     } catch {
-      toast({ title: "Failed to load colleges", variant: "destructive" });
+      toast({
+        title: "Failed to load college details",
+        variant: "destructive",
+      });
     }
   };
 
-  const fetchRoles = async () => {
+  const fetchHodRoleOption = async () => {
     try {
-      const res = await api.get("/api/dean/roles");
-      const data = Array.isArray(res.data?.data) ? res.data.data : [];
-      setRoleOptions(data);
+      const res = await api.get("/api/admin/hod-role");
+      const data = res.data?.data || {};
+      const resolvedLevel = Number(data.level);
+      const nextLevel = Number.isFinite(resolvedLevel) ? resolvedLevel : 0;
+      setHodRoleLevel(nextLevel);
     } catch {
-      toast({ title: "Failed to load roles", variant: "destructive" });
+      setHodRoleLevel(0);
+      toast({ title: "Failed to load HOD role", variant: "destructive" });
     }
   };
 
@@ -172,7 +177,11 @@ export default function AddDean() {
     const load = async () => {
       try {
         setIsLoading(true);
-        await Promise.all([fetchDeans(), fetchColleges(), fetchRoles()]);
+        await Promise.all([
+          fetchHods(),
+          fetchCollegeDetails(),
+          fetchHodRoleOption(),
+        ]);
       } finally {
         setIsLoading(false);
       }
@@ -182,15 +191,15 @@ export default function AddDean() {
   }, []);
 
   const resetForm = () => {
-    const defaultRole = availableRoleOptions[0];
     setFormData({
       name: "",
       email: "",
       pass: "",
       confirm_pass: "",
       college: lockedCollegeName,
-      role: defaultRole?.name || "",
-      level: Number(defaultRole?.level ?? 0),
+      department: availableBranchOptions[0] || "",
+      role: "hod",
+      level: hodRoleLevel,
       hasPhd: false,
     });
     setShowPassword(false);
@@ -198,30 +207,33 @@ export default function AddDean() {
     setEditingId(null);
   };
 
-  const startNewDean = () => {
+  const startNewHod = () => {
     resetForm();
-    setIsAddingDean(true);
+    setIsAddingHod(true);
   };
 
   const cancelForm = () => {
-    setIsAddingDean(false);
+    setIsAddingHod(false);
     resetForm();
   };
 
-  const openEdit = (dean: Dean) => {
-    const matchingRole = roleOptions.find((item) => item.name === dean.role);
+  const openEdit = (hod: Hod) => {
     setFormData({
-      name: dean.name,
-      email: dean.email,
+      name: hod.name,
+      email: hod.email,
       pass: "",
       confirm_pass: "",
-      college: lockedCollegeName || dean.college,
-      role: dean.role || availableRoleOptions[0]?.name || "",
-      level: Number(dean.level ?? matchingRole?.level ?? 0),
-      hasPhd: !!dean.hasPhd,
+      college: lockedCollegeName || hod.college,
+      department: hod.department || "",
+      role: "hod",
+      level:
+        hod.level !== undefined && Number.isFinite(Number(hod.level))
+          ? Number(hod.level)
+          : hodRoleLevel,
+      hasPhd: !!hod.hasPhd,
     });
-    setEditingId(dean.id);
-    setIsAddingDean(true);
+    setEditingId(hod.id);
+    setIsAddingHod(true);
   };
 
   const handleSave = async () => {
@@ -231,27 +243,27 @@ export default function AddDean() {
       !formData.name ||
       !formData.email ||
       !resolvedCollege ||
-      !formData.role ||
+      !formData.department ||
       !Number.isFinite(formData.level)
     ) {
       toast({ title: "Fill all required fields", variant: "destructive" });
       return;
     }
 
-    const selectedRoleName = String(formData.role || "")
+    const selectedDepartment = String(formData.department || "")
       .trim()
       .toLowerCase();
-    const isSelectedRoleAvailable = availableRoleOptions.some(
-      (role) =>
-        String(role.name || "")
+    const isSelectedDepartmentAvailable = availableBranchOptions.some(
+      (branch) =>
+        String(branch || "")
           .trim()
-          .toLowerCase() === selectedRoleName,
+          .toLowerCase() === selectedDepartment,
     );
 
-    if (!isSelectedRoleAvailable) {
+    if (!isSelectedDepartmentAvailable) {
       toast({
-        title: "Role not available",
-        description: "Selected role is already assigned in this college.",
+        title: "Branch not available",
+        description: "Selected branch already has an HOD.",
         variant: "destructive",
       });
       return;
@@ -290,20 +302,21 @@ export default function AddDean() {
         pass: formData.pass || undefined,
         confirm_pass: formData.confirm_pass || undefined,
         college: resolvedCollege,
-        role: formData.role,
+        department: formData.department,
+        role: "hod",
         level: Number(formData.level),
         hasPhd: formData.hasPhd,
       };
 
       if (editingId) {
-        await api.put(`/api/dean/update/${editingId}`, payload);
-        toast({ title: "Dean updated successfully" });
+        await api.put(`/api/admin/update/${editingId}`, payload);
+        toast({ title: "HOD updated successfully" });
       } else {
-        await api.post("/api/dean/add-dean", payload);
-        toast({ title: "Dean added successfully" });
+        await api.post("/api/admin/add-hod", payload);
+        toast({ title: "HOD added successfully" });
       }
 
-      await fetchDeans();
+      await fetchHods();
       cancelForm();
     } catch (err: any) {
       toast({
@@ -319,10 +332,10 @@ export default function AddDean() {
   const handleDelete = async (id: string) => {
     try {
       setIsDeleting(true);
-      await api.delete(`/api/dean/delete/${id}`);
-      toast({ title: "Dean deleted" });
-      await fetchDeans();
-      setDeanToDelete(null);
+      await api.delete(`/api/admin/delete/${id}`);
+      toast({ title: "HOD deleted" });
+      await fetchHods();
+      setHodToDelete(null);
     } catch {
       toast({ title: "Delete failed", variant: "destructive" });
     } finally {
@@ -330,12 +343,12 @@ export default function AddDean() {
     }
   };
 
-  const filteredDeans = deans.filter(
-    (dean) =>
-      dean.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dean.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dean.college.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dean.role.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filteredHods = hods.filter(
+    (hod) =>
+      hod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      hod.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      hod.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      hod.college.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   useEffect(() => {
@@ -351,57 +364,62 @@ export default function AddDean() {
   }, [lockedCollegeName]);
 
   useEffect(() => {
-    if (!isAddingDean) return;
+    setFormData((prev) => {
+      if (Number(prev.level) === Number(hodRoleLevel)) return prev;
+      return {
+        ...prev,
+        level: Number(hodRoleLevel),
+      };
+    });
+  }, [hodRoleLevel]);
 
-    const selectedRoleName = String(formData.role || "")
+  useEffect(() => {
+    if (!isAddingHod) return;
+
+    const selectedDepartment = String(formData.department || "")
       .trim()
       .toLowerCase();
-    const hasSelectedRole = availableRoleOptions.some(
-      (role) =>
-        String(role.name || "")
+    const hasSelectedDepartment = availableBranchOptions.some(
+      (branch) =>
+        String(branch || "")
           .trim()
-          .toLowerCase() === selectedRoleName,
+          .toLowerCase() === selectedDepartment,
     );
 
-    if (hasSelectedRole) return;
+    if (hasSelectedDepartment) return;
 
-    const fallbackRole = availableRoleOptions[0];
     setFormData((prev) => ({
       ...prev,
-      role: fallbackRole?.name || "",
-      level: Number(fallbackRole?.level ?? 0),
+      department: availableBranchOptions[0] || "",
     }));
-  }, [availableRoleOptions, formData.role, isAddingDean]);
+  }, [availableBranchOptions, formData.department, isAddingHod]);
 
   return (
-    <DashboardLayout
-      title="Add Dean"
-      subtitle="Manage deans by college and role"
-    >
+    <DashboardLayout title="Add HOD" subtitle="Manage HODs by department">
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Dean Management</h1>
-            <p className="text-muted-foreground">Add and manage deans</p>
+            <h1 className="text-2xl font-bold">HOD Management</h1>
+            <p className="text-muted-foreground">Add and manage HODs</p>
           </div>
-          {!isAddingDean && (
-            <Button onClick={startNewDean}>
-              <Plus className="mr-2 h-4 w-4" /> Add Dean
+          {!isAddingHod && (
+            <Button onClick={startNewHod}>
+              <Plus className="mr-2 h-4 w-4" /> Add HOD
             </Button>
           )}
         </div>
 
-        {isAddingDean && (
+        {isAddingHod && (
           <Card className="border-2 border-primary">
             <CardHeader>
-              <CardTitle>{editingId ? "Edit Dean" : "Add Dean"}</CardTitle>
+              <CardTitle>{editingId ? "Edit HOD" : "Add HOD"}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Full Name *</Label>
                   <Input
-                    placeholder="Enter dean name"
+                    placeholder="Enter HOD name"
                     value={formData.name}
                     onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
@@ -412,7 +430,7 @@ export default function AddDean() {
                   <Label>Email Address *</Label>
                   <Input
                     type="email"
-                    placeholder="dean@example.com"
+                    placeholder="hod@example.com"
                     value={formData.email}
                     onChange={(e) =>
                       setFormData({ ...formData, email: e.target.value })
@@ -421,27 +439,37 @@ export default function AddDean() {
                 </div>
                 <div className="space-y-2">
                   <Label>College *</Label>
-                  <Select
-                    value={lockedCollegeName || formData.college}
-                    disabled
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, college: value })
+                  <Input
+                    value={
+                      lockedCollegeName
+                        ? `${lockedCollegeName}${collegeDetails?.code ? ` (${collegeDetails.code})` : ""}`
+                        : ""
                     }
+                    disabled
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Dept / Branch *</Label>
+                  <Select
+                    value={formData.department}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, department: value })
+                    }
+                    disabled={!availableBranchOptions.length}
                   >
                     <SelectTrigger>
                       <SelectValue
                         placeholder={
-                          collegeOptions.length
-                            ? "Select college"
-                            : "No colleges available"
+                          availableBranchOptions.length
+                            ? "Select branch"
+                            : "No branches available for this college"
                         }
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      {collegeOptions.map((college) => (
-                        <SelectItem key={college.id} value={college.name}>
-                          {college.name}
-                          {college.code ? ` (${college.code})` : ""}
+                      {availableBranchOptions.map((branch) => (
+                        <SelectItem key={branch} value={branch}>
+                          {branch}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -449,37 +477,7 @@ export default function AddDean() {
                 </div>
                 <div className="space-y-2">
                   <Label>Role *</Label>
-                  <Select
-                    value={formData.role}
-                    disabled={!availableRoleOptions.length}
-                    onValueChange={(value) => {
-                      const selectedRole = availableRoleOptions.find(
-                        (item) => item.name === value,
-                      );
-                      setFormData({
-                        ...formData,
-                        role: value,
-                        level: Number(selectedRole?.level ?? 0),
-                      });
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={
-                          availableRoleOptions.length
-                            ? "Select role"
-                            : "No dean roles available for this college"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableRoleOptions.map((role) => (
-                        <SelectItem key={role.id} value={role.name}>
-                          {role.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input value="hod" disabled />
                 </div>
                 <div className="space-y-2">
                   <Label>Level *</Label>
@@ -564,7 +562,7 @@ export default function AddDean() {
                       }
                       className="h-4 w-4"
                     />
-                    <span className="text-sm">Dean has completed PhD</span>
+                    <span className="text-sm">HOD has completed PhD</span>
                   </label>
                 </div>
               </div>
@@ -581,7 +579,7 @@ export default function AddDean() {
                   {isSaving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : null}
-                  {isSaving ? "Saving..." : "Save Dean"}
+                  {isSaving ? "Saving..." : "Save HOD"}
                 </Button>
               </div>
             </CardContent>
@@ -593,8 +591,8 @@ export default function AddDean() {
             <CardContent className="p-6 flex gap-4">
               <Users className="h-5 w-5" />
               <div>
-                <p>Total Deans</p>
-                <p className="text-2xl font-bold">{deans.length}</p>
+                <p>Total HODs</p>
+                <p className="text-2xl font-bold">{hods.length}</p>
               </div>
             </CardContent>
           </Card>
@@ -603,21 +601,21 @@ export default function AddDean() {
               <Users className="h-5 w-5" />
               <div>
                 <p>Visible Results</p>
-                <p className="text-2xl font-bold">{filteredDeans.length}</p>
+                <p className="text-2xl font-bold">{filteredHods.length}</p>
               </div>
             </CardContent>
           </Card>
         </div>
 
         <Input
-          placeholder="Search by name, email, college or role..."
+          placeholder="Search by name, email, department or college..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
 
         <Card>
           <CardHeader>
-            <CardTitle>Deans</CardTitle>
+            <CardTitle>HODs</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -630,6 +628,7 @@ export default function AddDean() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
+                    <TableHead>Dept / Branch</TableHead>
                     <TableHead>College</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Level</TableHead>
@@ -638,19 +637,20 @@ export default function AddDean() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredDeans.map((dean) => (
-                    <TableRow key={dean.id}>
-                      <TableCell>{dean.name}</TableCell>
-                      <TableCell>{dean.email}</TableCell>
-                      <TableCell>{dean.college}</TableCell>
-                      <TableCell>{dean.role}</TableCell>
-                      <TableCell>{dean.level ?? "-"}</TableCell>
-                      <TableCell>{dean.hasPhd ? "Yes" : "No"}</TableCell>
+                  {filteredHods.map((hod) => (
+                    <TableRow key={hod.id}>
+                      <TableCell>{hod.name}</TableCell>
+                      <TableCell>{hod.email}</TableCell>
+                      <TableCell>{hod.department || "-"}</TableCell>
+                      <TableCell>{hod.college}</TableCell>
+                      <TableCell>{hod.role || "hod"}</TableCell>
+                      <TableCell>{hod.level ?? "-"}</TableCell>
+                      <TableCell>{hod.hasPhd ? "Yes" : "No"}</TableCell>
                       <TableCell className="text-right">
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => openEdit(dean)}
+                          onClick={() => openEdit(hod)}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -658,20 +658,20 @@ export default function AddDean() {
                           size="icon"
                           variant="ghost"
                           className="text-destructive"
-                          onClick={() => setDeanToDelete(dean)}
+                          onClick={() => setHodToDelete(hod)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {filteredDeans.length === 0 && (
+                  {filteredHods.length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={7}
+                        colSpan={8}
                         className="text-center text-muted-foreground py-8"
                       >
-                        No dean data available.
+                        No HOD data available.
                       </TableCell>
                     </TableRow>
                   )}
@@ -682,16 +682,16 @@ export default function AddDean() {
         </Card>
 
         <DeleteConfirmationDialog
-          open={!!deanToDelete}
+          open={!!hodToDelete}
           onOpenChange={(open) => {
-            if (!open && !isDeleting) setDeanToDelete(null);
+            if (!open && !isDeleting) setHodToDelete(null);
           }}
-          title="Delete dean?"
-          description={`This will permanently delete ${deanToDelete?.name || "this dean"}.`}
+          title="Delete HOD?"
+          description={`This will permanently delete ${hodToDelete?.name || "this HOD"}.`}
           confirmText="Delete"
           isLoading={isDeleting}
           onConfirm={() => {
-            if (deanToDelete) handleDelete(deanToDelete.id);
+            if (hodToDelete) handleDelete(hodToDelete.id);
           }}
         />
       </div>

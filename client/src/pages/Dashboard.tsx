@@ -1,4 +1,4 @@
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatusCards } from "@/components/dashboard/StatusCards";
 import { ScoreOverview } from "@/components/dashboard/ScoreOverview";
@@ -11,13 +11,12 @@ export default function Dashboard() {
   const { user } = useAuth();
 
   // Safe display name
-  const displayName = user?.name || user?.email || 'User';
+  const displayName = user?.name || user?.email || "User";
 
   return (
-    <DashboardLayout 
-      title={`${displayName}'s Dashboard`} 
-      subtitle={`Welcome back, ${displayName.split(' ')[0]}!`}
-      
+    <DashboardLayout
+      title={`${displayName}'s Dashboard`}
+      subtitle={`Welcome back, ${displayName.split(" ")[0]}!`}
     >
       <div className="space-y-6">
         {/* Deadline Alert */}
@@ -43,7 +42,9 @@ export default function Dashboard() {
         {/* FPMS Form Overview */}
         <div className="space-y-4">
           <div>
-            <h2 className="text-xl font-semibold text-foreground">FPMS Categories</h2>
+            <h2 className="text-xl font-semibold text-foreground">
+              FPMS Categories
+            </h2>
             <p className="text-sm text-muted-foreground">
               Complete all sections to submit your annual performance report
             </p>

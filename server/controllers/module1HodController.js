@@ -55,10 +55,7 @@ export const hodSubmitSubsection = async (req, res) => {
     const subsectionData = {
       id: subId,
       name: subsectionName || `Subsection ${subId}`,
-      maxScore: updatedCriteria.reduce(
-        (sum, c) => sum + (c.maxScore || 0),
-        0
-      ),
+      maxScore: updatedCriteria.reduce((sum, c) => sum + (c.maxScore || 0), 0),
       criteria: updatedCriteria,
     };
 
@@ -79,7 +76,6 @@ export const hodSubmitSubsection = async (req, res) => {
     });
   }
 };
-
 
 export const getHodSubsections = async (req, res) => {
   try {
@@ -107,14 +103,18 @@ export const getHodSubsections = async (req, res) => {
   }
 };
 
-
 export const adminViewHodSubmissions = async (req, res) => {
   try {
- 
-    if (!req.admin || req.admin.role !== "admin") {
+    const adminRole = String(req.admin?.role || "").toLowerCase();
+    const hasAccess =
+      adminRole === "admin" ||
+      adminRole === "principle" ||
+      adminRole === "principal";
+
+    if (!req.admin || !hasAccess) {
       return res.status(403).json({
         success: false,
-        message: "Admin access only",
+        message: "Principal access only",
       });
     }
 
@@ -169,7 +169,13 @@ export const adminVerifyCriterion = async (req, res) => {
     const { hodId, subId, criterionName } = req.params;
     const { adminScore, adminDescription } = req.body;
 
-    if (req.admin.role !== "admin") {
+    const adminRole = String(req.admin?.role || "").toLowerCase();
+    const hasAccess =
+      adminRole === "admin" ||
+      adminRole === "principle" ||
+      adminRole === "principal";
+
+    if (!hasAccess) {
       return res.status(403).json({
         success: false,
         message: "Access denied",
@@ -196,9 +202,7 @@ export const adminVerifyCriterion = async (req, res) => {
       });
     }
 
-    const criterion = subsection.criteria.find(
-      (c) => c.name === criterionName
-    );
+    const criterion = subsection.criteria.find((c) => c.name === criterionName);
 
     if (!criterion) {
       return res.status(404).json({

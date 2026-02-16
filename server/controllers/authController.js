@@ -1,7 +1,1205 @@
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
-import { db} from '../config/firebase.js';
-import admin from 'firebase-admin';
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import { db, auth } from "../config/firebase.js";
+import admin from "firebase-admin";
+
+const DEMO_USERS = [
+  {
+    role: "faculty",
+    email: "faculty@demo.edu",
+    password: "demo123",
+    name: "Demo Faculty",
+  },
+  { role: "hod", email: "hod@demo.edu", password: "demo123", name: "Demo HoD" },
+  {
+    role: "dean",
+    email: "dean@demo.edu",
+    password: "demo123",
+    name: "Demo Dean",
+  },
+  {
+    role: "principle",
+    email: "principle@demo.edu",
+    password: "demo123",
+    name: "Demo Principle",
+  },
+  {
+    role: "committee",
+    email: "committee@demo.edu",
+    password: "demo123",
+    name: "Demo Committee",
+  },
+  {
+    role: "superadmin",
+    email: "superadmin@demo.edu",
+    password: "demo123",
+    name: "Super Admin",
+  },
+];
+
+const SUPERADMIN_DOC_ID = process.env.SUPERADMIN_DOC_ID || "root";
+const formsCollectionRef = () => db.collection("fpmsForms");
+
+const normalizeRoleValue = (value) => {
+  const role = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (role === "principal" || role === "principle" || role === "admin")
+    return "principle";
+  return role;
+};
+
+const normalizeAdminManagementRole = (value) => {
+  const role = String(value || "")
+    .trim()
+    .toLowerCase();
+
+  if (role === "principal" || role === "principle" || role === "admin") {
+    return "principle";
+  }
+
+  if (
+    role === "vice principal" ||
+    role === "vice principle" ||
+    role === "vice-principal" ||
+    role === "viceprincipal"
+  ) {
+    return "vice principle";
+  }
+
+  return role;
+};
+
+const isPrincipalRole = (value) => {
+  const normalized = normalizeAdminManagementRole(value);
+  return normalized === "principle";
+};
+
+const isVicePrincipalRole = (value) => {
+  const normalized = normalizeAdminManagementRole(value);
+  return normalized === "vice principle";
+};
+
+const inferRoleFromTokenContext = async (decodedToken) => {
+  if (decodedToken?.committeeMember) return "committee";
+
+  if (decodedToken?.role) {
+    return normalizeRoleValue(decodedToken.role);
+  }
+
+  if (decodedToken?.uid) {
+    const userDoc = await db.collection("users").doc(decodedToken.uid).get();
+    if (userDoc.exists) {
+      const userData = userDoc.data() || {};
+      return normalizeRoleValue(userData.role || "");
+    }
+  }
+
+  return normalizeRoleValue(inferRoleFromEmail(decodedToken?.email || ""));
+};
+
+const resolveRoleFromAuthorizationHeader = async (authorizationHeader) => {
+  if (!authorizationHeader || !authorizationHeader.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authorizationHeader.split(" ")[1];
+  if (!token) return null;
+
+  if (token.startsWith("demo-token-")) {
+    return normalizeRoleValue(token.replace("demo-token-", ""));
+  }
+
+  try {
+    const decodedJwt = jwt.verify(token, process.env.JWT_SECRET);
+    return normalizeRoleValue(decodedJwt?.role);
+  } catch (jwtError) {
+    try {
+      const decodedFirebase = await auth.verifyIdToken(token);
+      return inferRoleFromTokenContext(decodedFirebase);
+    } catch (firebaseError) {
+      return null;
+    }
+  }
+};
+
+const normalizeRoleKey = (value) => {
+  const cleaned = String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+  if (
+    cleaned === "principal" ||
+    cleaned === "principle" ||
+    cleaned === "admin"
+  ) {
+    return "principle";
+  }
+
+  if (cleaned === "committee" || cleaned === "commitee") {
+    return "committee";
+  }
+
+  if (cleaned === "viceprincipal" || cleaned === "viceprinciple") {
+    return "viceprinciple";
+  }
+
+  return cleaned;
+};
+
+const WORKFLOW_SUBMISSIONS_COLLECTION = "workflowSubmissions";
+
+const resolveSpecificRoleByEmail = async ({ role, email }) => {
+  const normalizedRole = String(role || "").trim();
+  const normalizedEmail = String(email || "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalizedRole || !normalizedEmail) {
+    return normalizedRole;
+  }
+
+  try {
+    if (normalizeRoleKey(normalizedRole) === "dean") {
+      const deanSnapshot = await db
+        .collection("users")
+        .where("email", "==", normalizedEmail)
+        .limit(1)
+        .get();
+
+      if (!deanSnapshot.empty) {
+        const deanData = deanSnapshot.docs[0].data() || {};
+        const specificRole = String(deanData.role || "").trim();
+        if (specificRole && normalizeRoleKey(specificRole).startsWith("dean")) {
+          return specificRole;
+        }
+      }
+    }
+
+    if (
+      normalizeRoleKey(normalizedRole) === "principle" ||
+      normalizeRoleKey(normalizedRole) === "viceprinciple"
+    ) {
+      const userSnapshot = await db
+        .collection("users")
+        .where("email", "==", normalizedEmail)
+        .limit(1)
+        .get();
+
+      if (!userSnapshot.empty) {
+        const userData = userSnapshot.docs[0].data() || {};
+        const specificRole = String(userData.role || "").trim();
+        if (specificRole) return specificRole;
+      }
+    }
+  } catch (error) {}
+
+  return normalizedRole;
+};
+
+const resolveActorContextFromAuthorizationHeader = async (
+  authorizationHeader,
+) => {
+  if (!authorizationHeader || !authorizationHeader.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authorizationHeader.split(" ")[1];
+  if (!token) return null;
+
+  if (token.startsWith("demo-token-")) {
+    const role = token.replace("demo-token-", "");
+    return {
+      id: `demo-${role}`,
+      uid: `demo-${role}`,
+      role,
+      roleKey: normalizeRoleKey(role),
+      email: `${role}@demo.edu`,
+      college: "",
+      department: "",
+      name: role,
+    };
+  }
+
+  try {
+    const decodedJwt = jwt.verify(token, process.env.JWT_SECRET);
+    const role = String(decodedJwt?.role || "");
+    const specificRole = await resolveSpecificRoleByEmail({
+      role,
+      email: decodedJwt?.email,
+    });
+
+    return {
+      id: decodedJwt?.id || decodedJwt?.uid || decodedJwt?.email,
+      uid: decodedJwt?.uid,
+      role: specificRole,
+      roleKey: normalizeRoleKey(specificRole),
+      email: decodedJwt?.email,
+      college: decodedJwt?.college,
+      department: decodedJwt?.department,
+      name: decodedJwt?.name,
+    };
+  } catch (jwtError) {
+    try {
+      const decodedFirebase = await auth.verifyIdToken(token);
+      const email = String(decodedFirebase?.email || "")
+        .trim()
+        .toLowerCase();
+
+      const roleFromClaim =
+        decodedFirebase?.role ||
+        decodedFirebase?.claims?.role ||
+        (decodedFirebase?.committeeMember ? "committee" : "");
+
+      let userDocData = null;
+      try {
+        const userDoc = await db
+          .collection("users")
+          .doc(decodedFirebase.uid)
+          .get();
+        if (userDoc.exists) userDocData = userDoc.data() || null;
+      } catch (docError) {}
+
+      const resolvedRole = String(
+        roleFromClaim || userDocData?.role || inferRoleFromEmail(email),
+      );
+      const specificRole = await resolveSpecificRoleByEmail({
+        role: resolvedRole,
+        email,
+      });
+
+      return {
+        id: decodedFirebase.uid,
+        uid: decodedFirebase.uid,
+        role: specificRole,
+        roleKey: normalizeRoleKey(specificRole),
+        email,
+        college:
+          decodedFirebase?.college ||
+          decodedFirebase?.claims?.college ||
+          userDocData?.college ||
+          "",
+        department:
+          decodedFirebase?.department ||
+          decodedFirebase?.claims?.department ||
+          userDocData?.department ||
+          "",
+        name:
+          decodedFirebase?.name ||
+          userDocData?.name ||
+          (email ? email.split("@")[0] : "User"),
+      };
+    } catch (firebaseError) {
+      return null;
+    }
+  }
+};
+
+const getWorkflowConfig = async () => {
+  const superadminDoc = await db
+    .collection("superadmin")
+    .doc(SUPERADMIN_DOC_ID)
+    .get();
+
+  if (!superadminDoc.exists) {
+    return {
+      roles: [],
+      workflowRules: [],
+      roleLabelByKey: new Map(),
+      roleExistsByKey: new Set(),
+    };
+  }
+
+  const data = superadminDoc.data() || {};
+  const roles = Array.isArray(data.roles) ? data.roles : [];
+  const workflowRules = Array.isArray(data.workflowRules)
+    ? data.workflowRules
+    : [];
+
+  const roleLabelByKey = new Map();
+  const roleExistsByKey = new Set();
+
+  roles.forEach((roleItem) => {
+    const roleLabel = String(roleItem?.name || "").trim();
+    const roleKey = normalizeRoleKey(roleLabel);
+    if (!roleKey) return;
+    roleLabelByKey.set(roleKey, roleLabel);
+    roleExistsByKey.add(roleKey);
+  });
+
+  return {
+    roles,
+    workflowRules,
+    roleLabelByKey,
+    roleExistsByKey,
+  };
+};
+
+const normalizeRoleArray = (value) => {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(value.map((item) => String(item || "").trim()).filter(Boolean)),
+  );
+};
+
+const findWorkflowRuleByRoleKey = (workflowRules, roleKey) => {
+  const rules = Array.isArray(workflowRules) ? workflowRules : [];
+  return rules.find(
+    (item) => normalizeRoleKey(String(item?.role || "")) === roleKey,
+  );
+};
+
+const buildSubmissionDocId = ({ facultyId, formId, criteriaId, taskId }) => {
+  const raw = [facultyId, formId, criteriaId, taskId]
+    .map((item) => String(item || "").trim())
+    .join("__");
+  return raw.replace(/[^a-zA-Z0-9_-]/g, "_");
+};
+
+const buildActorIdentifierSet = (actor) => {
+  const actorId = String(actor?.id || "")
+    .trim()
+    .toLowerCase();
+  const actorUid = String(actor?.uid || "")
+    .trim()
+    .toLowerCase();
+  const actorEmail = String(actor?.email || "")
+    .trim()
+    .toLowerCase();
+
+  return new Set([actorId, actorUid, actorEmail].filter(Boolean));
+};
+
+const isOwnedByActor = (item, actorIdentifierSet) => {
+  const facultyId = String(item?.facultyId || "")
+    .trim()
+    .toLowerCase();
+  const facultyUid = String(item?.facultyUid || "")
+    .trim()
+    .toLowerCase();
+  const facultyEmail = String(item?.facultyEmail || "")
+    .trim()
+    .toLowerCase();
+
+  return (
+    (facultyId && actorIdentifierSet.has(facultyId)) ||
+    (facultyUid && actorIdentifierSet.has(facultyUid)) ||
+    (facultyEmail && actorIdentifierSet.has(facultyEmail))
+  );
+};
+
+const buildSubmittedAssignments = (roles, createdAtIso) =>
+  normalizeRoleArray(roles).map((roleLabel) => ({
+    role: roleLabel,
+    roleKey: normalizeRoleKey(roleLabel),
+    status: "submitted",
+    assignedAt: createdAtIso,
+    reviewedAt: null,
+    reviewerUserId: null,
+    verifiedScore: null,
+    remarks: "",
+  }));
+
+export const submitWorkflowTask = async (req, res) => {
+  try {
+    const actor = await resolveActorContextFromAuthorizationHeader(
+      req.headers.authorization,
+    );
+
+    if (!actor) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const {
+      formId,
+      criteriaId,
+      moduleId,
+      moduleName,
+      taskId,
+      taskTitle,
+      claimedScore,
+      maxMarks,
+      evidenceUrl,
+      description,
+    } = req.body || {};
+
+    const normalizedFormId = String(formId || "").trim();
+    const normalizedCriteriaId = String(criteriaId || "").trim();
+    const normalizedModuleId = String(moduleId || "").trim();
+    const normalizedTaskId = String(taskId || "").trim();
+
+    if (!normalizedFormId || !normalizedCriteriaId || !normalizedTaskId) {
+      return res.status(400).json({
+        success: false,
+        message: "formId, criteriaId and taskId are required",
+      });
+    }
+
+    const workflowConfig = await getWorkflowConfig();
+    const currentRule = findWorkflowRuleByRoleKey(
+      workflowConfig.workflowRules,
+      actor.roleKey,
+    );
+
+    const submitToRoles = normalizeRoleArray(currentRule?.submitToRoles);
+    const appealToRoles = normalizeRoleArray(currentRule?.appealToRoles);
+
+    if (submitToRoles.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No submitToRoles configured for current role",
+      });
+    }
+
+    const actorId = String(actor.id || actor.uid || actor.email || "").trim();
+    const actorUid = String(actor.uid || actorId || "").trim();
+    const actorName = String(actor.name || "").trim();
+    const actorEmail = String(actor.email || "").trim();
+    const actorCollege = String(actor.college || "").trim();
+    const actorDepartment = String(actor.department || "").trim();
+
+    const submissionId = buildSubmissionDocId({
+      facultyId: actorId,
+      formId: normalizedFormId,
+      criteriaId: normalizedCriteriaId,
+      taskId: normalizedTaskId,
+    });
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const createdAtIso = new Date().toISOString();
+
+    const submissionRef = db
+      .collection(WORKFLOW_SUBMISSIONS_COLLECTION)
+      .doc(submissionId);
+    const submissionDoc = await submissionRef.get();
+    const existing = submissionDoc.exists ? submissionDoc.data() || {} : {};
+
+    const assignments = buildSubmittedAssignments(submitToRoles, createdAtIso);
+
+    const claimed = Number(claimedScore || 0);
+    const boundedClaimed = Number.isFinite(claimed)
+      ? Math.max(0, Math.min(claimed, Number(maxMarks || 0)))
+      : 0;
+
+    await submissionRef.set(
+      {
+        id: submissionId,
+        formId: normalizedFormId,
+        criteriaId: normalizedCriteriaId,
+        moduleId: normalizedModuleId,
+        moduleName: String(moduleName || "").trim(),
+        taskId: normalizedTaskId,
+        taskTitle: String(taskTitle || "").trim(),
+        facultyId: actorId,
+        facultyUid: actorUid,
+        facultyName: actorName,
+        facultyEmail: actorEmail,
+        college: actorCollege,
+        department: actorDepartment,
+        submittedByRole: actor.role,
+        submittedByRoleKey: actor.roleKey,
+        submitToRoles,
+        appealToRoles,
+        completionPolicy: "ANY_ONE_REVIEWED",
+        claimedScore: boundedClaimed,
+        maxMarks: Number(maxMarks || 0),
+        evidenceUrl: String(evidenceUrl || ""),
+        description: String(description || ""),
+        workflowType: "submission",
+        currentFlow: "submission",
+        currentFlowRoles: submitToRoles,
+        verifiedScore:
+          existing.verifiedScore !== undefined &&
+          Number.isFinite(Number(existing.verifiedScore))
+            ? Number(existing.verifiedScore)
+            : null,
+        status: "submitted",
+        activeRoleKeys: submitToRoles.map((role) => normalizeRoleKey(role)),
+        assignments,
+        lastAppeal: existing.lastAppeal || null,
+        version:
+          Number.isFinite(Number(existing.version)) &&
+          Number(existing.version) >= 0
+            ? Number(existing.version) + 1
+            : 1,
+        updatedAt: now,
+        updatedBy: actorId,
+        createdAt: existing.createdAt || now,
+      },
+      { merge: true },
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Task submitted to workflow roles",
+      data: {
+        id: submissionId,
+        submitToRoles,
+        appealToRoles,
+        completionPolicy: "ANY_ONE_REVIEWED",
+      },
+    });
+  } catch (error) {
+    console.error("Submit workflow task error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const getMyWorkflowTaskStatuses = async (req, res) => {
+  try {
+    const actor = await resolveActorContextFromAuthorizationHeader(
+      req.headers.authorization,
+    );
+
+    if (!actor) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const formId = String(req.query?.formId || "").trim();
+    const criteriaId = String(req.query?.criteriaId || "").trim();
+
+    if (!formId || !criteriaId) {
+      return res.status(400).json({
+        success: false,
+        message: "formId and criteriaId are required",
+      });
+    }
+
+    const actorId = String(actor.id || "").trim();
+    const actorUid = String(actor.uid || "").trim();
+    const actorEmail = String(actor.email || "")
+      .trim()
+      .toLowerCase();
+
+    const actorIdentifierSet = new Set(
+      [actorId, actorUid, actorEmail]
+        .map((item) =>
+          String(item || "")
+            .trim()
+            .toLowerCase(),
+        )
+        .filter(Boolean),
+    );
+
+    const snapshot = await db
+      .collection(WORKFLOW_SUBMISSIONS_COLLECTION)
+      .where("formId", "==", formId)
+      .where("criteriaId", "==", criteriaId)
+      .get();
+
+    const data = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...(doc.data() || {}) }))
+      .filter((item) => isOwnedByActor(item, actorIdentifierSet))
+      .map((item) => {
+        const docId = item.id;
+        const itemData = item;
+        const assignments = Array.isArray(itemData.assignments)
+          ? itemData.assignments
+          : [];
+        const reviewedAssignment = assignments.find(
+          (assignment) => String(assignment?.status || "") === "reviewed",
+        );
+
+        const status = String(itemData.status || "pending");
+        const mappedStatus =
+          status === "approved"
+            ? "approved"
+            : status === "appealed"
+              ? "appealed"
+              : status === "submitted"
+                ? "submitted"
+                : reviewedAssignment
+                  ? "approved"
+                  : "pending";
+
+        return {
+          id: docId,
+          taskId: String(itemData.taskId || ""),
+          moduleId: String(itemData.moduleId || ""),
+          currentFlow: String(itemData.currentFlow || "submission"),
+          status: mappedStatus,
+          canAppeal:
+            mappedStatus === "approved" &&
+            Array.isArray(itemData.appealToRoles) &&
+            itemData.appealToRoles.length > 0,
+          claimedScore:
+            itemData.claimedScore !== undefined &&
+            Number.isFinite(Number(itemData.claimedScore))
+              ? Number(itemData.claimedScore)
+              : 0,
+          evidenceUrl: String(itemData.evidenceUrl || ""),
+          description: String(itemData.description || ""),
+          activeRoleKeys: Array.isArray(itemData.activeRoleKeys)
+            ? itemData.activeRoleKeys
+            : [],
+          submitToRoles: Array.isArray(itemData.submitToRoles)
+            ? itemData.submitToRoles
+            : [],
+          appealToRoles: Array.isArray(itemData.appealToRoles)
+            ? itemData.appealToRoles
+            : [],
+          verifiedScore:
+            itemData.verifiedScore !== undefined &&
+            Number.isFinite(Number(itemData.verifiedScore))
+              ? Number(itemData.verifiedScore)
+              : null,
+          assignments,
+        };
+      });
+
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error("Get workflow task statuses error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const getWorkflowReviewQueue = async (req, res) => {
+  try {
+    const actor = await resolveActorContextFromAuthorizationHeader(
+      req.headers.authorization,
+    );
+
+    if (!actor) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const snapshot = await db
+      .collection(WORKFLOW_SUBMISSIONS_COLLECTION)
+      .where("activeRoleKeys", "array-contains", actor.roleKey)
+      .get();
+
+    const queue = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((item) => {
+        const status = String(item.status || "").toLowerCase();
+        if (status !== "submitted" && status !== "appealed") return false;
+
+        const assignments = Array.isArray(item.assignments)
+          ? item.assignments
+          : [];
+        const myAssignment = assignments.find(
+          (assignment) =>
+            normalizeRoleKey(
+              String(assignment?.roleKey || assignment?.role || ""),
+            ) === actor.roleKey,
+        );
+
+        return String(myAssignment?.status || "") === "submitted";
+      });
+
+    return res.status(200).json({ success: true, data: queue });
+  } catch (error) {
+    console.error("Get workflow review queue error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const reviewWorkflowSubmission = async (req, res) => {
+  try {
+    const actor = await resolveActorContextFromAuthorizationHeader(
+      req.headers.authorization,
+    );
+
+    if (!actor) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const { submissionId } = req.params;
+    const { verifiedScore, remarks } = req.body || {};
+
+    const actorId = String(actor.id || actor.uid || actor.email || "").trim();
+    const normalizedSubmissionId = String(submissionId || "").trim();
+    if (!normalizedSubmissionId) {
+      return res.status(400).json({
+        success: false,
+        message: "submissionId is required",
+      });
+    }
+
+    const submissionRef = db
+      .collection(WORKFLOW_SUBMISSIONS_COLLECTION)
+      .doc(normalizedSubmissionId);
+    const submissionDoc = await submissionRef.get();
+
+    if (!submissionDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Submission not found",
+      });
+    }
+
+    const submission = submissionDoc.data() || {};
+    const assignments = Array.isArray(submission.assignments)
+      ? submission.assignments
+      : [];
+
+    const currentRoleAssignmentIndex = assignments.findIndex(
+      (item) =>
+        normalizeRoleKey(String(item?.roleKey || item?.role || "")) ===
+        actor.roleKey,
+    );
+
+    if (currentRoleAssignmentIndex === -1) {
+      return res.status(403).json({
+        success: false,
+        message: "Current role is not assigned to this submission",
+      });
+    }
+
+    const currentRoleAssignment = assignments[currentRoleAssignmentIndex];
+    if (String(currentRoleAssignment?.status || "") !== "submitted") {
+      return res.status(400).json({
+        success: false,
+        message: "This assignment is already reviewed",
+      });
+    }
+
+    const workflowConfig = await getWorkflowConfig();
+    const nextRule = findWorkflowRuleByRoleKey(
+      workflowConfig.workflowRules,
+      actor.roleKey,
+    );
+
+    const currentFlow =
+      String(submission.currentFlow || "")
+        .trim()
+        .toLowerCase() === "appeal" ||
+      String(submission.status || "")
+        .trim()
+        .toLowerCase() === "appealed"
+        ? "appeal"
+        : "submission";
+
+    const nextSubmitToRoles =
+      currentFlow === "appeal"
+        ? normalizeRoleArray(nextRule?.appealToRoles)
+        : normalizeRoleArray(nextRule?.submitToRoles);
+    const nowIso = new Date().toISOString();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    const nextAssignments = assignments.map((assignment) => {
+      const assignmentRoleKey = normalizeRoleKey(
+        String(assignment?.roleKey || assignment?.role || ""),
+      );
+
+      if (assignmentRoleKey === actor.roleKey) {
+        return {
+          ...assignment,
+          roleKey: assignmentRoleKey,
+          status: "reviewed",
+          reviewedAt: nowIso,
+          reviewerUserId: actorId,
+          verifiedScore:
+            verifiedScore !== undefined &&
+            Number.isFinite(Number(verifiedScore))
+              ? Number(verifiedScore)
+              : Number(submission.claimedScore || 0),
+          remarks: String(remarks || ""),
+        };
+      }
+
+      if (String(assignment?.status || "") === "submitted") {
+        return {
+          ...assignment,
+          roleKey: assignmentRoleKey,
+          status: "skipped",
+          reviewedAt: assignment.reviewedAt || nowIso,
+          remarks:
+            assignment.remarks ||
+            "Skipped due to parallel ANY_ONE_REVIEWED completion",
+        };
+      }
+
+      return {
+        ...assignment,
+        roleKey: assignmentRoleKey,
+      };
+    });
+
+    const assignmentByRoleKey = new Map(
+      nextAssignments.map((item) => [
+        normalizeRoleKey(String(item?.roleKey || item?.role || "")),
+        item,
+      ]),
+    );
+
+    nextSubmitToRoles.forEach((roleLabel) => {
+      const roleKey = normalizeRoleKey(roleLabel);
+      if (!roleKey) return;
+
+      if (!assignmentByRoleKey.has(roleKey)) {
+        assignmentByRoleKey.set(roleKey, {
+          role: roleLabel,
+          roleKey,
+          status: "submitted",
+          assignedAt: nowIso,
+          reviewedAt: null,
+          reviewerUserId: null,
+          verifiedScore: null,
+          remarks: "",
+        });
+      }
+    });
+
+    const mergedAssignments = Array.from(assignmentByRoleKey.values());
+    const hasNextStep = nextSubmitToRoles.length > 0;
+    const boundedVerifiedScore =
+      verifiedScore !== undefined && Number.isFinite(Number(verifiedScore))
+        ? Number(verifiedScore)
+        : Number(submission.claimedScore || 0);
+
+    await submissionRef.set(
+      {
+        assignments: mergedAssignments,
+        submitToRoles:
+          currentFlow === "submission"
+            ? hasNextStep
+              ? nextSubmitToRoles
+              : []
+            : submission.submitToRoles || [],
+        currentFlow,
+        currentFlowRoles: hasNextStep ? nextSubmitToRoles : [],
+        activeRoleKeys: hasNextStep
+          ? nextSubmitToRoles.map((role) => normalizeRoleKey(role))
+          : [],
+        status: hasNextStep
+          ? currentFlow === "appeal"
+            ? "appealed"
+            : "submitted"
+          : "approved",
+        verifiedScore: boundedVerifiedScore,
+        reviewedByRole: actor.role,
+        reviewedByRoleKey: actor.roleKey,
+        reviewedByUserId: actorId,
+        reviewedAt: now,
+        updatedAt: now,
+        updatedBy: actorId,
+      },
+      { merge: true },
+    );
+
+    await db.collection("workflowSubmissionReviews").add({
+      submissionId: normalizedSubmissionId,
+      flowType: currentFlow,
+      reviewerRole: actor.role,
+      reviewerRoleKey: actor.roleKey,
+      reviewerUserId: actorId,
+      claimedScore: Number(submission.claimedScore || 0),
+      verifiedScore: boundedVerifiedScore,
+      remarks: String(remarks || ""),
+      nextSubmitToRoles,
+      createdAt: now,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: hasNextStep
+        ? "Reviewed and moved to next workflow roles"
+        : "Reviewed and finalized",
+      data: {
+        submissionId: normalizedSubmissionId,
+        flowType: currentFlow,
+        nextSubmitToRoles,
+        status: hasNextStep
+          ? currentFlow === "appeal"
+            ? "appealed"
+            : "submitted"
+          : "approved",
+      },
+    });
+  } catch (error) {
+    console.error("Review workflow submission error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const submitWorkflowAppeal = async (req, res) => {
+  try {
+    const actor = await resolveActorContextFromAuthorizationHeader(
+      req.headers.authorization,
+    );
+
+    if (!actor) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const { formId, criteriaId, taskId, reason, requestedScore } =
+      req.body || {};
+
+    const normalizedFormId = String(formId || "").trim();
+    const normalizedCriteriaId = String(criteriaId || "").trim();
+    const normalizedTaskId = String(taskId || "").trim();
+
+    if (!normalizedFormId || !normalizedCriteriaId || !normalizedTaskId) {
+      return res.status(400).json({
+        success: false,
+        message: "formId, criteriaId and taskId are required",
+      });
+    }
+
+    const actorId = String(actor.id || actor.uid || actor.email || "").trim();
+    const submissionId = buildSubmissionDocId({
+      facultyId: actorId,
+      formId: normalizedFormId,
+      criteriaId: normalizedCriteriaId,
+      taskId: normalizedTaskId,
+    });
+
+    const submissionRef = db
+      .collection(WORKFLOW_SUBMISSIONS_COLLECTION)
+      .doc(submissionId);
+    const submissionDoc = await submissionRef.get();
+
+    if (!submissionDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Submission not found for this task",
+      });
+    }
+
+    const submission = submissionDoc.data() || {};
+    const actorIdentifierSet = buildActorIdentifierSet(actor);
+    if (!isOwnedByActor(submission, actorIdentifierSet)) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only appeal your own submission",
+      });
+    }
+
+    const workflowConfig = await getWorkflowConfig();
+    const currentRule = findWorkflowRuleByRoleKey(
+      workflowConfig.workflowRules,
+      actor.roleKey,
+    );
+
+    const appealToRoles = normalizeRoleArray(
+      currentRule?.appealToRoles || submission.appealToRoles,
+    );
+
+    if (appealToRoles.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No appealToRoles configured for current role",
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const requested = Number(requestedScore);
+
+    await submissionRef.set(
+      {
+        status: "appealed",
+        currentFlow: "appeal",
+        currentFlowRoles: appealToRoles,
+        activeRoleKeys: appealToRoles.map((role) => normalizeRoleKey(role)),
+        assignments: buildSubmittedAssignments(appealToRoles, nowIso),
+        lastAppeal: {
+          requestedByUserId: actorId,
+          requestedByRole: actor.role,
+          requestedByRoleKey: actor.roleKey,
+          reason: String(reason || "").trim(),
+          requestedScore: Number.isFinite(requested) ? requested : null,
+          createdAtIso: nowIso,
+        },
+        updatedAt: now,
+        updatedBy: actorId,
+      },
+      { merge: true },
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Appeal submitted to workflow roles",
+      data: {
+        id: submissionId,
+        appealToRoles,
+        status: "appealed",
+      },
+    });
+  } catch (error) {
+    console.error("Submit workflow appeal error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+const inferRoleFromEmail = (email) => {
+  const value = String(email || "").toLowerCase();
+  if (value.includes("superadmin")) return "superadmin";
+  if (value.includes("committee")) return "committee";
+  if (
+    value.includes("principle") ||
+    value.includes("principal") ||
+    value.includes("admin")
+  )
+    return "principle";
+  if (value.includes("dean")) return "dean";
+  if (value.includes("hod")) return "hod";
+  return "faculty";
+};
+
+const resolveRoleFromFirebase = async (decodedToken, email) => {
+  if (decodedToken?.committeeMember) {
+    return {
+      role: "committee",
+      level:
+        decodedToken?.level !== undefined
+          ? Number(decodedToken.level)
+          : undefined,
+    };
+  }
+
+  if (decodedToken?.role) {
+    return {
+      role: String(decodedToken.role),
+      level:
+        decodedToken?.level !== undefined
+          ? Number(decodedToken.level)
+          : undefined,
+    };
+  }
+
+  const userDoc = await db.collection("users").doc(decodedToken.uid).get();
+  if (userDoc.exists) {
+    const userData = userDoc.data() || {};
+    if (
+      userData.committeeMember ||
+      String(userData.role || "").toLowerCase() === "committee"
+    ) {
+      return {
+        role: "committee",
+        level:
+          userData.level !== undefined ? Number(userData.level) : undefined,
+      };
+    }
+
+    return {
+      role: String(userData.role || inferRoleFromEmail(email)),
+      level: userData.level !== undefined ? Number(userData.level) : undefined,
+    };
+  }
+
+  const normalizedEmail = String(email || "")
+    .trim()
+    .toLowerCase();
+  if (normalizedEmail) {
+    const committeeUserSnapshot = await db
+      .collection("users")
+      .where("email", "==", normalizedEmail)
+      .limit(1)
+      .get();
+
+    if (!committeeUserSnapshot.empty) {
+      const committeeData = committeeUserSnapshot.docs[0].data() || {};
+      if (
+        committeeData.committeeMember ||
+        String(committeeData.role || "").toLowerCase() === "committee"
+      ) {
+        return {
+          role: "committee",
+          level:
+            committeeData.level !== undefined
+              ? Number(committeeData.level)
+              : undefined,
+        };
+      }
+    }
+  }
+
+  return {
+    role: inferRoleFromEmail(email),
+    level: undefined,
+  };
+};
+
+export const unifiedLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    const demoUser = DEMO_USERS.find(
+      (item) =>
+        item.email.toLowerCase() === normalizedEmail &&
+        item.password === password,
+    );
+
+    if (demoUser) {
+      const token = `demo-token-${demoUser.role}`;
+      return res.status(200).json({
+        success: true,
+        token,
+        user: {
+          id: `demo-${demoUser.role}`,
+          name: demoUser.name,
+          email: demoUser.email,
+          role: demoUser.role,
+        },
+      });
+    }
+
+    const apiKey = process.env.FIREBASE_WEB_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({
+        success: false,
+        message: "Firebase web API key is not configured",
+      });
+    }
+
+    const firebaseResponse = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: normalizedEmail,
+          password: String(password),
+          returnSecureToken: true,
+        }),
+      },
+    );
+
+    const firebaseData = await firebaseResponse.json();
+    if (!firebaseResponse.ok || !firebaseData?.idToken) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    const decodedToken = await auth.verifyIdToken(firebaseData.idToken);
+    const resolved = await resolveRoleFromFirebase(
+      decodedToken,
+      normalizedEmail,
+    );
+
+    return res.status(200).json({
+      success: true,
+      token: firebaseData.idToken,
+      user: {
+        id: decodedToken.uid,
+        name: decodedToken.name || normalizedEmail.split("@")[0] || "User",
+        email: decodedToken.email || normalizedEmail,
+        role: resolved.role,
+        level: resolved.level,
+      },
+    });
+  } catch (error) {
+    console.error("Unified login error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to login at this time",
+    });
+  }
+};
 
 export const committeeLogin = async (req, res) => {
   const { email, password } = req.body;
@@ -9,121 +1207,204 @@ export const committeeLogin = async (req, res) => {
   if (!email || !password) {
     return res.status(400).json({
       success: false,
-      message: 'Email and password are required'
+      message: "Email and password are required",
     });
   }
 
   if (email !== process.env.COMMITTEE_EMAIL) {
     return res.status(401).json({
       success: false,
-      message: 'Invalid email or password'
+      message: "Invalid email or password",
     });
   }
 
-  const isMatch = await bcrypt.compare(password, process.env.COMMITTEE_PASSWORD);
+  const isMatch = await bcrypt.compare(
+    password,
+    process.env.COMMITTEE_PASSWORD,
+  );
 
   if (!isMatch) {
     return res.status(401).json({
       success: false,
-      message: 'Invalid email or password'
+      message: "Invalid email or password",
     });
   }
 
   const payload = {
-    role: 'committee',
+    role: "committee",
     email,
-    type: 'committee'
+    type: "committee",
   };
 
   const token = jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: '24h'
+    expiresIn: "24h",
   });
 
   return res.json({
     success: true,
-    message: 'Committee login successful',
+    message: "Committee login successful",
     token,
     user: {
       email,
-      role: 'committee',
-      name: 'Committee Member'
-    }
+      role: "committee",
+      name: "Committee Member",
+    },
   });
 };
 
-
-
 export const addAdmin = async (req, res) => {
   try {
-    const { name, email, password, college, experience, hasPhd } = req.body;
-
-    if (!name || !email || !password || !college || experience === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: 'All fields are required'
-      });
-    }
-
-    const existingAdmin = await db
-      .collection('admins')
-      .where('email', '==', email)
-      .limit(1)
-      .get();
-
-    if (!existingAdmin.empty) {
-      return res.status(409).json({
-        success: false,
-        message: 'Admin already exists'
-      });
-    }
-
-   
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-   
-    await db.collection('admins').add({
+    const {
       name,
       email,
-      password: hashedPassword,
+      password,
       college,
-      experience: Number(experience),
-      hasPhd: Boolean(hasPhd),
-      role: 'admin',
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
+      phone,
+      level,
+      experience,
+      hasPhd,
+      role,
+    } = req.body;
+    const normalizedEmail = String(email || "")
+      .trim()
+      .toLowerCase();
+    const normalizedName = String(name || "").trim();
+    const normalizedPhone = String(phone || "").trim();
+    const normalizedCollege = String(college || "").trim();
+    const normalizedLevel = Number(level);
+    const normalizedExperience = Number(experience);
+    const normalizedRole = normalizeAdminManagementRole(role || "principle");
+
+    if (
+      !isPrincipalRole(normalizedRole) &&
+      !isVicePrincipalRole(normalizedRole)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role",
+      });
+    }
+
+    if (
+      !normalizedName ||
+      !normalizedEmail ||
+      !password ||
+      !normalizedCollege ||
+      !normalizedPhone ||
+      level === undefined ||
+      experience === undefined
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
+    }
+
+    if (
+      !Number.isFinite(normalizedLevel) ||
+      !Number.isFinite(normalizedExperience) ||
+      normalizedExperience < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid level or experience",
+      });
+    }
+
+    if (String(password).length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters long",
+      });
+    }
+
+    let userRecord;
+
+    try {
+      userRecord = await auth.getUserByEmail(normalizedEmail);
+      return res.status(409).json({
+        success: false,
+        message: "Principal already exists",
+      });
+    } catch (error) {
+      userRecord = await auth.createUser({
+        email: normalizedEmail,
+        password: String(password),
+        displayName: normalizedName,
+      });
+    }
+
+    await auth.setCustomUserClaims(userRecord.uid, {
+      role: normalizedRole,
+      level: normalizedLevel,
+      principal: isPrincipalRole(normalizedRole),
+      vicePrincipal: isVicePrincipalRole(normalizedRole),
     });
+
+    const hashedPassword = await bcrypt.hash(String(password), 10);
+
+    await db
+      .collection("users")
+      .doc(userRecord.uid)
+      .set(
+        {
+          uid: userRecord.uid,
+          name: normalizedName,
+          email: normalizedEmail,
+          phone: normalizedPhone,
+          role: normalizedRole,
+          level: normalizedLevel,
+          password: hashedPassword,
+          college: normalizedCollege,
+          experience: normalizedExperience,
+          hasPhd: Boolean(hasPhd),
+          principal: isPrincipalRole(normalizedRole),
+          vicePrincipal: isVicePrincipalRole(normalizedRole),
+          isActive: true,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
 
     return res.status(201).json({
       success: true,
-      message: 'Admin added successfully'
+      message: "Principal added successfully",
     });
   } catch (error) {
     console.error(error);
     return res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: "Server error",
     });
   }
 };
 
-
 export const getAllAdmins = async (req, res) => {
   try {
-    const adminsSnapshot = await db.collection('admins').get();
+    const usersSnapshot = await db.collection("users").get();
 
-    const admins = adminsSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    const admins = usersSnapshot.docs
+      .map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+      .filter((item) => {
+        const normalizedRole = normalizeAdminManagementRole(item.role || "");
+        return (
+          isPrincipalRole(normalizedRole) || isVicePrincipalRole(normalizedRole)
+        );
+      });
 
     return res.json({
       success: true,
-      data: admins
+      data: admins,
     });
   } catch (error) {
     console.error(error);
     return res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: "Server error",
     });
   }
 };
@@ -132,27 +1413,35 @@ export const deleteAdmin = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const adminRef = db.collection('admins').doc(id);
+    const adminRef = db.collection("users").doc(id);
     const adminDoc = await adminRef.get();
 
     if (!adminDoc.exists) {
       return res.status(404).json({
         success: false,
-        message: 'Admin not found'
+        message: "Admin not found",
       });
+    }
+
+    try {
+      await auth.deleteUser(id);
+    } catch (authError) {
+      if (authError?.code !== "auth/user-not-found") {
+        throw authError;
+      }
     }
 
     await adminRef.delete();
 
     return res.json({
       success: true,
-      message: 'Admin deleted successfully'
+      message: "Principal deleted successfully",
     });
   } catch (error) {
     console.error(error);
     return res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: "Server error",
     });
   }
 };
@@ -160,41 +1449,101 @@ export const deleteAdmin = async (req, res) => {
 export const updateAdmin = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, password, college, experience, hasPhd } = req.body;
+    const {
+      name,
+      email,
+      password,
+      college,
+      phone,
+      level,
+      experience,
+      hasPhd,
+      role,
+    } = req.body;
 
-    const adminRef = db.collection('admins').doc(id);
+    const adminRef = db.collection("users").doc(id);
     const adminDoc = await adminRef.get();
 
     if (!adminDoc.exists) {
       return res.status(404).json({
         success: false,
-        message: 'Admin not found'
+        message: "Admin not found",
       });
     }
 
     const updateData = {};
+    const authUpdate = {};
 
-    if (name) updateData.name = name;
-    if (email) updateData.email = email;
-    if (college) updateData.college = college;
+    if (name) {
+      updateData.name = String(name).trim();
+      authUpdate.displayName = String(name).trim();
+    }
+    if (email) {
+      updateData.email = String(email).trim().toLowerCase();
+      authUpdate.email = String(email).trim().toLowerCase();
+    }
+    if (phone) updateData.phone = String(phone).trim();
+    if (college) updateData.college = String(college).trim();
+
+    const currentData = adminDoc.data() || {};
+    const resolvedRole = normalizeAdminManagementRole(
+      role !== undefined ? role : currentData.role || "principle",
+    );
+
+    if (!isPrincipalRole(resolvedRole) && !isVicePrincipalRole(resolvedRole)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role",
+      });
+    }
+
+    updateData.role = resolvedRole;
+    updateData.principal = isPrincipalRole(resolvedRole);
+    updateData.vicePrincipal = isVicePrincipalRole(resolvedRole);
+    if (level !== undefined) updateData.level = Number(level);
     if (experience !== undefined) updateData.experience = Number(experience);
     if (hasPhd !== undefined) updateData.hasPhd = Boolean(hasPhd);
 
     if (password) {
-      updateData.password = await bcrypt.hash(password, 10);
+      if (String(password).length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must be at least 6 characters long",
+        });
+      }
+      updateData.password = await bcrypt.hash(String(password), 10);
+      authUpdate.password = String(password);
+    }
+
+    updateData.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+
+    const nextLevel =
+      level !== undefined
+        ? Number(level)
+        : Number((adminDoc.data() || {}).level || 1);
+
+    await auth.setCustomUserClaims(id, {
+      role: resolvedRole,
+      level: nextLevel,
+      principal: isPrincipalRole(resolvedRole),
+      vicePrincipal: isVicePrincipalRole(resolvedRole),
+    });
+
+    if (Object.keys(authUpdate).length > 0) {
+      await auth.updateUser(id, authUpdate);
     }
 
     await adminRef.update(updateData);
 
     return res.json({
       success: true,
-      message: 'Admin updated successfully'
+      message: "Principal updated successfully",
     });
   } catch (error) {
     console.error(error);
     return res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: "Server error",
     });
   }
 };
@@ -235,7 +1584,7 @@ export const fetchAppealsForCommittee = async (req, res) => {
         appeals.push({
           id: doc.id,
           faculty,
-          ...data
+          ...data,
         });
       }
     }
@@ -247,8 +1596,6 @@ export const fetchAppealsForCommittee = async (req, res) => {
   }
 };
 
-
-
 export const verifyAppealByCommittee = async (req, res) => {
   try {
     const { appealId } = req.params;
@@ -257,7 +1604,7 @@ export const verifyAppealByCommittee = async (req, res) => {
     if (committeeScore === undefined) {
       return res.status(400).json({
         success: false,
-        message: "Committee score is required"
+        message: "Committee score is required",
       });
     }
 
@@ -267,16 +1614,19 @@ export const verifyAppealByCommittee = async (req, res) => {
     if (!doc.exists) {
       return res.status(404).json({
         success: false,
-        message: "Appeal not found"
+        message: "Appeal not found",
       });
     }
 
     const appealData = doc.data();
 
-    if (appealData.claimedScore === undefined || appealData.hodScore === undefined) {
+    if (
+      appealData.claimedScore === undefined ||
+      appealData.hodScore === undefined
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Appeal cannot be verified: missing faculty or HOD score"
+        message: "Appeal cannot be verified: missing faculty or HOD score",
       });
     }
 
@@ -285,15 +1635,404 @@ export const verifyAppealByCommittee = async (req, res) => {
       committeeRemarks: committeeRemarks || "",
       verifiedByCommittee: true,
       status: "committee_verified",
-      committeeVerifiedAt: new Date()
+      committeeVerifiedAt: new Date(),
     });
 
     return res.status(200).json({
       success: true,
-      message: "Appeal successfully verified by committee"
+      message: "Appeal successfully verified by committee",
     });
   } catch (error) {
     console.error("Verify Appeal Error:", error);
     return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const getCommitteeColleges = async (req, res) => {
+  try {
+    const superadminDocId = process.env.SUPERADMIN_DOC_ID || "root";
+    const superadminDoc = await db
+      .collection("superadmin")
+      .doc(superadminDocId)
+      .get();
+
+    if (!superadminDoc.exists) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const data = superadminDoc.data() || {};
+    const colleges = Array.isArray(data.colleges) ? data.colleges : [];
+
+    const result = colleges
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        code: item.code,
+      }))
+      .filter((item) => item.name)
+      .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+    return res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    console.error("Get committee colleges error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const getCommitteeRoles = async (req, res) => {
+  try {
+    const superadminDocId = process.env.SUPERADMIN_DOC_ID || "root";
+    const superadminDoc = await db
+      .collection("superadmin")
+      .doc(superadminDocId)
+      .get();
+
+    if (!superadminDoc.exists) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const data = superadminDoc.data() || {};
+    const roles = Array.isArray(data.roles) ? data.roles : [];
+
+    const result = roles
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        level: Number(item.level),
+      }))
+      .filter((item) => item.name && Number.isFinite(item.level))
+      .sort(
+        (a, b) =>
+          a.level - b.level || String(a.name).localeCompare(String(b.name)),
+      );
+
+    return res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    console.error("Get committee roles error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const getSubmissionAppealWorkflowRules = async (req, res) => {
+  try {
+    const superadminDoc = await db
+      .collection("superadmin")
+      .doc(SUPERADMIN_DOC_ID)
+      .get();
+
+    if (!superadminDoc.exists) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const data = superadminDoc.data() || {};
+    const roles = Array.isArray(data.roles) ? data.roles : [];
+    const workflowRules = Array.isArray(data.workflowRules)
+      ? data.workflowRules
+      : [];
+
+    const roleNames = new Set(
+      roles.map((item) => String(item?.name || "").trim()).filter(Boolean),
+    );
+
+    const normalizeRoleList = (value, fallbackValue) => {
+      const fromValue = Array.isArray(value)
+        ? value.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+
+      if (fromValue.length > 0) {
+        return Array.from(new Set(fromValue));
+      }
+
+      const fallback = String(fallbackValue || "").trim();
+      return fallback ? [fallback] : [];
+    };
+
+    const result = workflowRules
+      .map((item) => ({
+        role: String(item?.role || "").trim(),
+        submitToRoles: normalizeRoleList(
+          item?.submitToRoles,
+          item?.submitToRole,
+        ).filter((role) => roleNames.has(role)),
+        appealToRoles: normalizeRoleList(
+          item?.appealToRoles,
+          item?.appealToRole,
+        ).filter((role) => roleNames.has(role)),
+      }))
+      .filter((item) => item.role && roleNames.has(item.role));
+
+    return res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    console.error("Get workflow rules error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const updateSubmissionAppealWorkflowRules = async (req, res) => {
+  try {
+    const rules = Array.isArray(req.body?.rules) ? req.body.rules : null;
+
+    if (!rules) {
+      return res.status(400).json({
+        success: false,
+        message: "Rules must be provided",
+      });
+    }
+
+    const superadminRef = db.collection("superadmin").doc(SUPERADMIN_DOC_ID);
+    const superadminDoc = await superadminRef.get();
+    const data = superadminDoc.exists ? superadminDoc.data() || {} : {};
+
+    const roles = Array.isArray(data.roles) ? data.roles : [];
+    const roleNames = new Set(
+      roles.map((item) => String(item?.name || "").trim()).filter(Boolean),
+    );
+
+    const normalizeRoleList = (value, fallbackValue) => {
+      const fromValue = Array.isArray(value)
+        ? value.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+
+      if (fromValue.length > 0) {
+        return Array.from(new Set(fromValue));
+      }
+
+      const fallback = String(fallbackValue || "").trim();
+      return fallback ? [fallback] : [];
+    };
+
+    const normalizedRules = rules
+      .map((item) => ({
+        role: String(item?.role || "").trim(),
+        submitToRoles: normalizeRoleList(
+          item?.submitToRoles,
+          item?.submitToRole,
+        ),
+        appealToRoles: normalizeRoleList(
+          item?.appealToRoles,
+          item?.appealToRole,
+        ),
+      }))
+      .filter((item) => item.role);
+
+    const hasInvalidRole = normalizedRules.some(
+      (item) =>
+        !roleNames.has(item.role) ||
+        item.submitToRoles.some((role) => !roleNames.has(role)) ||
+        item.appealToRoles.some((role) => !roleNames.has(role)),
+    );
+
+    if (hasInvalidRole) {
+      return res.status(400).json({
+        success: false,
+        message: "Workflow rules contain invalid roles",
+      });
+    }
+
+    const uniqueByRole = new Map();
+    normalizedRules.forEach((item) => {
+      uniqueByRole.set(item.role, item);
+    });
+
+    await superadminRef.set(
+      {
+        workflowRules: Array.from(uniqueByRole.values()),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Workflow rules updated successfully",
+      data: Array.from(uniqueByRole.values()),
+    });
+  } catch (error) {
+    console.error("Update workflow rules error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const getApplicableForms = async (req, res) => {
+  try {
+    const role = await resolveRoleFromAuthorizationHeader(
+      req.headers.authorization,
+    );
+
+    if (!role) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const formsSnapshot = await formsCollectionRef()
+      .orderBy("updatedAt", "desc")
+      .get();
+
+    const forms = await Promise.all(
+      formsSnapshot.docs.map(async (doc) => {
+        const data = doc.data() || {};
+        const applicableRoles = Array.isArray(data.applicableRoles)
+          ? data.applicableRoles.map((item) => normalizeRoleValue(item))
+          : [];
+
+        if (!applicableRoles.includes(role)) {
+          return null;
+        }
+
+        const criteriaSnapshot = await formsCollectionRef()
+          .doc(doc.id)
+          .collection("criteria")
+          .orderBy("order", "asc")
+          .get();
+
+        const criteria = criteriaSnapshot.docs.map((criteriaDoc) => {
+          const criteriaData = criteriaDoc.data() || {};
+          return {
+            id: criteriaDoc.id,
+            criteriaName: String(criteriaData.criteriaName || "").trim(),
+            order: Number(criteriaData.order || 0),
+          };
+        });
+
+        return {
+          id: doc.id,
+          formTitle: String(data.formTitle || "").trim(),
+          applicableRoles,
+          criteria,
+        };
+      }),
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: forms.filter(Boolean),
+    });
+  } catch (error) {
+    console.error("Get applicable forms error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+export const getCriteriaModulesTasks = async (req, res) => {
+  try {
+    const { formId, criteriaId } = req.params;
+    const role = await resolveRoleFromAuthorizationHeader(
+      req.headers.authorization,
+    );
+
+    if (!role) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const formDoc = await formsCollectionRef().doc(formId).get();
+    if (!formDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Form not found",
+      });
+    }
+
+    const formData = formDoc.data() || {};
+    const applicableRoles = Array.isArray(formData.applicableRoles)
+      ? formData.applicableRoles.map((item) => normalizeRoleValue(item))
+      : [];
+
+    if (!applicableRoles.includes(role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied for this role",
+      });
+    }
+
+    const criteriaDoc = await formsCollectionRef()
+      .doc(formId)
+      .collection("criteria")
+      .doc(criteriaId)
+      .get();
+    if (!criteriaDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Criteria not found",
+      });
+    }
+
+    const [modulesSnapshot, tasksSnapshot] = await Promise.all([
+      formsCollectionRef()
+        .doc(formId)
+        .collection("modules")
+        .where("criteriaId", "==", criteriaId)
+        .get(),
+      formsCollectionRef()
+        .doc(formId)
+        .collection("tasks")
+        .where("criteriaId", "==", criteriaId)
+        .get(),
+    ]);
+
+    const tasksByModuleId = tasksSnapshot.docs.reduce((acc, doc) => {
+      const data = doc.data() || {};
+      const moduleId = String(data.moduleId || "");
+      if (!acc[moduleId]) acc[moduleId] = [];
+      acc[moduleId].push({
+        id: doc.id,
+        title: String(data.title || "").trim(),
+        subtitle: String(data.subtitle || "").trim(),
+        description: String(data.description || "").trim(),
+        assessmentCriteria: String(data.assessmentCriteria || "").trim(),
+        evidence: String(data.evidence || "").trim(),
+        reference: String(data.reference || "").trim(),
+        marks: Number(data.marks || 0),
+        order: Number(data.order || 0),
+      });
+      return acc;
+    }, {});
+
+    Object.values(tasksByModuleId).forEach((items) => {
+      items.sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+    });
+
+    const modules = modulesSnapshot.docs
+      .map((doc) => {
+        const data = doc.data() || {};
+        return {
+          id: doc.id,
+          moduleNumber: Number(data.moduleNumber || 0),
+          moduleName: String(data.moduleName || "").trim(),
+          totalMarks: Number(data.totalMarks || 0),
+          order: Number(data.order || 0),
+          tasks: tasksByModuleId[doc.id] || [],
+        };
+      })
+      .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+
+    const criteriaData = criteriaDoc.data() || {};
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        formId,
+        formTitle: String(formData.formTitle || "").trim(),
+        criteria: {
+          id: criteriaDoc.id,
+          criteriaName: String(criteriaData.criteriaName || "").trim(),
+          totalMarks: Number(criteriaData.totalMarks || 0),
+          modules,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Get criteria modules/tasks error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 };

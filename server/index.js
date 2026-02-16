@@ -17,6 +17,7 @@ import module2Router from "./routes/module2Routes.js";
 import module3Router from "./routes/module3Routes.js";
 import module4Router from "./routes/module4Routes.js";
 import deanRouter from "./routes/deanRoutes.js";
+import superadminRouter from "./routes/superadminRoutes.js";
 
 dotenv.config();
 
@@ -28,20 +29,21 @@ app.get("/api", (req, res) => {
   res.send("API working");
 });
 
-app.use('/api/committee',authRouter);
-app.use('/api/admin',adminRouter);
-app.use('/api/hod',hodRouter);
-app.use('/api/dean',deanRouter);
-app.use('/api/faculty',facultyRouter);
-app.use('/api/module1',module1Router);
-app.use('/api/module5',module5Router);
-app.use('/api/appeal',appealRouter);
-app.use('/api/hod/parta',module1HodRouter);
-app.use('/api/hod/partb',module1HodPartbRouter);
-app.use('/api/hod/appeals',appealHodRouter);
-app.use('/api/module2',module2Router);
-app.use('/api/module3',module3Router);
-app.use('/api/module4',module4Router);
+app.use("/api/committee", authRouter);
+app.use("/api/admin", adminRouter);
+app.use("/api/hod", hodRouter);
+app.use("/api/dean", deanRouter);
+app.use("/api/faculty", facultyRouter);
+app.use("/api/module1", module1Router);
+app.use("/api/module5", module5Router);
+app.use("/api/appeal", appealRouter);
+app.use("/api/hod/parta", module1HodRouter);
+app.use("/api/hod/partb", module1HodPartbRouter);
+app.use("/api/hod/appeals", appealHodRouter);
+app.use("/api/module2", module2Router);
+app.use("/api/module3", module3Router);
+app.use("/api/module4", module4Router);
+app.use("/api/superadmin", superadminRouter);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

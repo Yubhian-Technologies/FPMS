@@ -1,7 +1,7 @@
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
-import { db } from '../config/firebase.js';
-import admin from 'firebase-admin';
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import { db } from "../config/firebase.js";
+import admin from "firebase-admin";
 
 export const deanLogin = async (req, res) => {
   try {
@@ -10,68 +10,78 @@ export const deanLogin = async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Email and password are required'
+        message: "Email and password are required",
       });
     }
 
+    const normalizedEmail = String(email || "")
+      .trim()
+      .toLowerCase();
+
     const snapshot = await db
-      .collection('deans')
-      .where('email', '==', email)
+      .collection("users")
+      .where("email", "==", normalizedEmail)
       .limit(1)
       .get();
 
     if (snapshot.empty) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password'
+        message: "Invalid email or password",
       });
     }
 
     const deanDoc = snapshot.docs[0];
     const deanData = deanDoc.data();
 
-    const isMatch = await bcrypt.compare(
-      password,
-      deanData.password
-    );
+    const normalizedRole = String(deanData.role || "")
+      .trim()
+      .toLowerCase();
+    if (!normalizedRole.startsWith("dean")) {
+      return res.status(403).json({
+        success: false,
+        message: "Dean access only",
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, deanData.password);
 
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password'
+        message: "Invalid email or password",
       });
     }
 
     const token = jwt.sign(
       {
         id: deanDoc.id,
-        role: 'dean',
+        role: "dean",
         email: deanData.email,
         college: deanData.college,
-        department: deanData.department
+        department: deanData.department,
       },
       process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: "24h" },
     );
 
     return res.status(200).json({
       success: true,
-      message: 'Dean login successful',
+      message: "Dean login successful",
       token,
       user: {
         id: deanDoc.id,
         name: deanData.name,
         email: deanData.email,
-        role: 'dean',
-        department: deanData.department
-      }
+        role: deanData.role || "dean",
+        department: deanData.department,
+      },
     });
-
   } catch (error) {
-    console.error('Dean login error:', error);
+    console.error("Dean login error:", error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: "Internal server error",
     });
   }
 };

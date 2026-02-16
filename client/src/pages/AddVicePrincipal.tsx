@@ -32,7 +32,7 @@ import { toast } from "@/hooks/use-toast";
 import { api } from "@/api/api";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 
-interface Principal {
+interface VicePrincipal {
   id: string;
   name: string;
   email: string;
@@ -56,19 +56,18 @@ interface RoleOption {
   level: number;
 }
 
-export default function AddPrincipal() {
-  const [principals, setPrincipals] = useState<Principal[]>([]);
+export default function AddVicePrincipal() {
+  const [vicePrincipals, setVicePrincipals] = useState<VicePrincipal[]>([]);
   const [collegeOptions, setCollegeOptions] = useState<CollegeOption[]>([]);
   const [roleOptions, setRoleOptions] = useState<RoleOption[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isAddingPrincipal, setIsAddingPrincipal] = useState(false);
+  const [isAddingVicePrincipal, setIsAddingVicePrincipal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [principalToDelete, setPrincipalToDelete] = useState<Principal | null>(
-    null,
-  );
+  const [vicePrincipalToDelete, setVicePrincipalToDelete] =
+    useState<VicePrincipal | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -90,15 +89,6 @@ export default function AddPrincipal() {
       .trim()
       .toLowerCase();
 
-  const isPrincipalRole = (value: string) => {
-    const normalized = normalizeRole(value);
-    return (
-      normalized === "principal" ||
-      normalized === "principle" ||
-      normalized === "admin"
-    );
-  };
-
   const isVicePrincipalRole = (value: string) => {
     const normalized = normalizeRole(value);
     return (
@@ -109,15 +99,15 @@ export default function AddPrincipal() {
     );
   };
 
-  const principalRoleOption =
-    roleOptions.find((item) => isPrincipalRole(item.name)) ?? null;
-  const lockedRoleName = principalRoleOption?.name || "principle";
-  const lockedRoleLevel = Number(principalRoleOption?.level ?? 1);
+  const vicePrincipalRoleOption =
+    roleOptions.find((item) => isVicePrincipalRole(item.name)) ?? null;
+  const lockedRoleName = vicePrincipalRoleOption?.name || "vice principle";
+  const lockedRoleLevel = Number(vicePrincipalRoleOption?.level ?? 1);
 
   const occupiedCollegeNames = new Set(
-    principals
-      .map((principal) =>
-        String(principal.college || "")
+    vicePrincipals
+      .map((vicePrincipal) =>
+        String(vicePrincipal.college || "")
           .trim()
           .toLowerCase(),
       )
@@ -144,17 +134,7 @@ export default function AddPrincipal() {
     return !occupiedCollegeNames.has(normalizedCollegeName);
   });
 
-  const roleNames = Array.from(new Set(roleOptions.map((item) => item.name)));
-  const availableLevels = Array.from(
-    new Set(
-      (formData.role
-        ? roleOptions.filter((item) => item.name === formData.role)
-        : roleOptions
-      ).map((item) => Number(item.level)),
-    ),
-  ).sort((a, b) => a - b);
-
-  const fetchPrincipals = async () => {
+  const fetchVicePrincipals = async () => {
     try {
       const res = await api.get("/api/committee/admins");
       const data = Array.isArray(res.data?.data) ? res.data.data : [];
@@ -163,14 +143,13 @@ export default function AddPrincipal() {
           ...item,
           hasPhD: item.hasPhD ?? item.hasPhd ?? false,
         }))
-        .filter(
-          (item: any) =>
-            isPrincipalRole(item.role || "") &&
-            !isVicePrincipalRole(item.role || ""),
-        );
-      setPrincipals(normalized);
+        .filter((item: any) => isVicePrincipalRole(item.role || ""));
+      setVicePrincipals(normalized);
     } catch {
-      toast({ title: "Failed to load principals", variant: "destructive" });
+      toast({
+        title: "Failed to load vice principals",
+        variant: "destructive",
+      });
     }
   };
 
@@ -198,7 +177,11 @@ export default function AddPrincipal() {
     const load = async () => {
       try {
         setIsLoading(true);
-        await Promise.all([fetchPrincipals(), fetchColleges(), fetchRoles()]);
+        await Promise.all([
+          fetchVicePrincipals(),
+          fetchColleges(),
+          fetchRoles(),
+        ]);
       } finally {
         setIsLoading(false);
       }
@@ -225,32 +208,34 @@ export default function AddPrincipal() {
     setEditingId(null);
   };
 
-  const startNewPrincipal = () => {
+  const startNewVicePrincipal = () => {
     resetForm();
-    setIsAddingPrincipal(true);
+    setIsAddingVicePrincipal(true);
   };
 
   const cancelForm = () => {
-    setIsAddingPrincipal(false);
+    setIsAddingVicePrincipal(false);
     resetForm();
   };
 
-  const openEdit = (principal: Principal) => {
+  const openEdit = (vicePrincipal: VicePrincipal) => {
     setFormData({
-      name: principal.name,
-      email: principal.email,
-      phone: principal.phone || "",
+      name: vicePrincipal.name,
+      email: vicePrincipal.email,
+      phone: vicePrincipal.phone || "",
       password: "",
-      college: principal.college,
+      college: vicePrincipal.college,
       role: lockedRoleName,
       level: lockedRoleLevel,
       experience:
-        principal.experience !== undefined ? String(principal.experience) : "",
-      hasPhD: !!principal.hasPhD,
+        vicePrincipal.experience !== undefined
+          ? String(vicePrincipal.experience)
+          : "",
+      hasPhD: !!vicePrincipal.hasPhD,
     });
     setConfirmPassword("");
-    setEditingId(principal.id);
-    setIsAddingPrincipal(true);
+    setEditingId(vicePrincipal.id);
+    setIsAddingVicePrincipal(true);
   };
 
   const handleSave = async () => {
@@ -283,8 +268,8 @@ export default function AddPrincipal() {
         .toLowerCase();
       if (selectedCollege && occupiedCollegeNames.has(selectedCollege)) {
         toast({
-          title: "Principal already exists",
-          description: "Selected college already has a principal.",
+          title: "Vice principal already exists",
+          description: "Selected college already has a vice principal.",
           variant: "destructive",
         });
         return;
@@ -327,13 +312,13 @@ export default function AddPrincipal() {
 
       if (editingId) {
         await api.put(`/api/committee/update/${editingId}`, payload);
-        toast({ title: "Principal updated successfully" });
+        toast({ title: "Vice principal updated successfully" });
       } else {
         await api.post("/api/committee/admin-add", payload);
-        toast({ title: "Principal added successfully" });
+        toast({ title: "Vice principal added successfully" });
       }
 
-      await fetchPrincipals();
+      await fetchVicePrincipals();
       cancelForm();
     } catch (err: any) {
       toast({
@@ -350,9 +335,9 @@ export default function AddPrincipal() {
     try {
       setIsDeleting(true);
       await api.delete(`/api/committee/delete/${id}`);
-      toast({ title: "Principal deleted" });
-      await fetchPrincipals();
-      setPrincipalToDelete(null);
+      toast({ title: "Vice principal deleted" });
+      await fetchVicePrincipals();
+      setVicePrincipalToDelete(null);
     } catch {
       toast({ title: "Delete failed", variant: "destructive" });
     } finally {
@@ -360,36 +345,38 @@ export default function AddPrincipal() {
     }
   };
 
-  const filteredPrincipals = principals.filter(
-    (principal) =>
-      principal.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      principal.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      principal.college.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filteredVicePrincipals = vicePrincipals.filter(
+    (vicePrincipal) =>
+      vicePrincipal.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      vicePrincipal.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      vicePrincipal.college.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   return (
     <DashboardLayout
-      title="Add Principal"
-      subtitle="Manage principals by college"
+      title="Add Vice Principal"
+      subtitle="Manage vice principals by college"
     >
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Principal Management</h1>
-            <p className="text-muted-foreground">Add and manage principals</p>
+            <h1 className="text-2xl font-bold">Vice Principal Management</h1>
+            <p className="text-muted-foreground">
+              Add and manage vice principals
+            </p>
           </div>
-          {!isAddingPrincipal && (
-            <Button onClick={startNewPrincipal}>
-              <Plus className="mr-2 h-4 w-4" /> Add Principal
+          {!isAddingVicePrincipal && (
+            <Button onClick={startNewVicePrincipal}>
+              <Plus className="mr-2 h-4 w-4" /> Add Vice Principal
             </Button>
           )}
         </div>
 
-        {isAddingPrincipal && (
+        {isAddingVicePrincipal && (
           <Card className="border-2 border-primary">
             <CardHeader>
               <CardTitle>
-                {editingId ? "Edit Principal" : "Add Principal"}
+                {editingId ? "Edit Vice Principal" : "Add Vice Principal"}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -397,7 +384,7 @@ export default function AddPrincipal() {
                 <div className="space-y-2">
                   <Label>Full Name *</Label>
                   <Input
-                    placeholder="Enter principal name"
+                    placeholder="Enter vice principal name"
                     value={formData.name}
                     onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
@@ -408,7 +395,7 @@ export default function AddPrincipal() {
                   <Label>Email Address *</Label>
                   <Input
                     type="email"
-                    placeholder="principal@example.com"
+                    placeholder="viceprincipal@example.com"
                     value={formData.email}
                     onChange={(e) =>
                       setFormData({ ...formData, email: e.target.value })
@@ -465,7 +452,7 @@ export default function AddPrincipal() {
                   <Input
                     type="number"
                     min={0}
-                    placeholder="e.g., 12"
+                    placeholder="e.g., 8"
                     value={formData.experience}
                     onChange={(e) =>
                       setFormData({ ...formData, experience: e.target.value })
@@ -483,7 +470,9 @@ export default function AddPrincipal() {
                       }
                       className="h-4 w-4"
                     />
-                    <span className="text-sm">Principal has completed PhD</span>
+                    <span className="text-sm">
+                      Vice principal has completed PhD
+                    </span>
                   </label>
                 </div>
                 <div className="space-y-2">
@@ -562,7 +551,7 @@ export default function AddPrincipal() {
                   {isSaving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : null}
-                  {isSaving ? "Saving..." : "Save Principal"}
+                  {isSaving ? "Saving..." : "Save Vice Principal"}
                 </Button>
               </div>
             </CardContent>
@@ -574,8 +563,8 @@ export default function AddPrincipal() {
             <CardContent className="p-6 flex gap-4">
               <Users className="h-5 w-5" />
               <div>
-                <p>Total Principals</p>
-                <p className="text-2xl font-bold">{principals.length}</p>
+                <p>Total Vice Principals</p>
+                <p className="text-2xl font-bold">{vicePrincipals.length}</p>
               </div>
             </CardContent>
           </Card>
@@ -585,7 +574,7 @@ export default function AddPrincipal() {
               <div>
                 <p>Visible Results</p>
                 <p className="text-2xl font-bold">
-                  {filteredPrincipals.length}
+                  {filteredVicePrincipals.length}
                 </p>
               </div>
             </CardContent>
@@ -600,7 +589,7 @@ export default function AddPrincipal() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Principals</CardTitle>
+            <CardTitle>Vice Principals</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -623,21 +612,23 @@ export default function AddPrincipal() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPrincipals.map((principal) => (
-                    <TableRow key={principal.id}>
-                      <TableCell>{principal.name}</TableCell>
-                      <TableCell>{principal.email}</TableCell>
-                      <TableCell>{principal.phone || "-"}</TableCell>
-                      <TableCell>{principal.college}</TableCell>
-                      <TableCell>{principal.role || "-"}</TableCell>
-                      <TableCell>{principal.level ?? "-"}</TableCell>
-                      <TableCell>{principal.experience ?? "-"}</TableCell>
-                      <TableCell>{principal.hasPhD ? "Yes" : "No"}</TableCell>
+                  {filteredVicePrincipals.map((vicePrincipal) => (
+                    <TableRow key={vicePrincipal.id}>
+                      <TableCell>{vicePrincipal.name}</TableCell>
+                      <TableCell>{vicePrincipal.email}</TableCell>
+                      <TableCell>{vicePrincipal.phone || "-"}</TableCell>
+                      <TableCell>{vicePrincipal.college}</TableCell>
+                      <TableCell>{vicePrincipal.role || "-"}</TableCell>
+                      <TableCell>{vicePrincipal.level ?? "-"}</TableCell>
+                      <TableCell>{vicePrincipal.experience ?? "-"}</TableCell>
+                      <TableCell>
+                        {vicePrincipal.hasPhD ? "Yes" : "No"}
+                      </TableCell>
                       <TableCell className="text-right">
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => openEdit(principal)}
+                          onClick={() => openEdit(vicePrincipal)}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -645,20 +636,22 @@ export default function AddPrincipal() {
                           size="icon"
                           variant="ghost"
                           className="text-destructive"
-                          onClick={() => setPrincipalToDelete(principal)}
+                          onClick={() =>
+                            setVicePrincipalToDelete(vicePrincipal)
+                          }
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {filteredPrincipals.length === 0 && (
+                  {filteredVicePrincipals.length === 0 && (
                     <TableRow>
                       <TableCell
                         colSpan={9}
                         className="text-center text-muted-foreground py-8"
                       >
-                        No principal data available.
+                        No vice principal data available.
                       </TableCell>
                     </TableRow>
                   )}
@@ -669,16 +662,16 @@ export default function AddPrincipal() {
         </Card>
 
         <DeleteConfirmationDialog
-          open={!!principalToDelete}
+          open={!!vicePrincipalToDelete}
           onOpenChange={(open) => {
-            if (!open && !isDeleting) setPrincipalToDelete(null);
+            if (!open && !isDeleting) setVicePrincipalToDelete(null);
           }}
-          title="Delete principal?"
-          description={`This will permanently delete ${principalToDelete?.name || "this principal"}.`}
+          title="Delete vice principal?"
+          description={`This will permanently delete ${vicePrincipalToDelete?.name || "this vice principal"}.`}
           confirmText="Delete"
           isLoading={isDeleting}
           onConfirm={() => {
-            if (principalToDelete) handleDelete(principalToDelete.id);
+            if (vicePrincipalToDelete) handleDelete(vicePrincipalToDelete.id);
           }}
         />
       </div>

@@ -1,4 +1,4 @@
-export type UserRole = 'faculty' | 'hod' | 'committee' | 'admin';
+export type UserRole = "faculty" | "hod" | "committee" | "principle";
 
 export interface User {
   id: string;
@@ -12,7 +12,13 @@ export interface User {
   avatar?: string;
 }
 
-export type SubmissionStatus = 'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'locked';
+export type SubmissionStatus =
+  | "draft"
+  | "submitted"
+  | "under_review"
+  | "approved"
+  | "rejected"
+  | "locked";
 
 export interface FPMSModule {
   id: string;
@@ -29,7 +35,7 @@ export interface ModuleEntry {
   maxPoints: number;
   claimedPoints: number;
   evidence?: string;
-  evidenceType?: 'pdf' | 'image' | 'link';
+  evidenceType?: "pdf" | "image" | "link";
 }
 
 export interface FPMSSubmission {
@@ -56,18 +62,37 @@ export interface AcademicYear {
 }
 
 export const FPMS_MODULES = [
-  { id: 'teaching', name: 'Teaching & Learning', maxPoints: 70 },
-  { id: 'research', name: 'Research & Consultancy', maxPoints: 75 },
-  { id: 'professional', name: 'Professional Development', maxPoints: 65 },
-  { id: 'student', name: 'Student Development', maxPoints: 45 },
-  { id: 'institutional', name: 'Institutional Development', maxPoints: 45 },
+  { id: "teaching", name: "Teaching & Learning", maxPoints: 70 },
+  { id: "research", name: "Research & Consultancy", maxPoints: 75 },
+  { id: "professional", name: "Professional Development", maxPoints: 65 },
+  { id: "student", name: "Student Development", maxPoints: 45 },
+  { id: "institutional", name: "Institutional Development", maxPoints: 45 },
 ] as const;
 
-export const STATUS_CONFIG: Record<SubmissionStatus, { label: string; color: string; bgColor: string }> = {
-  draft: { label: 'Draft', color: 'text-muted-foreground', bgColor: 'bg-muted' },
-  submitted: { label: 'Submitted', color: 'text-info', bgColor: 'bg-info/10' },
-  under_review: { label: 'Under Review', color: 'text-warning', bgColor: 'bg-warning/10' },
-  approved: { label: 'Approved', color: 'text-success', bgColor: 'bg-success/10' },
-  rejected: { label: 'Rejected', color: 'text-destructive', bgColor: 'bg-destructive/10' },
-  locked: { label: 'Locked', color: 'text-primary', bgColor: 'bg-primary/10' },
+export const STATUS_CONFIG: Record<
+  SubmissionStatus,
+  { label: string; color: string; bgColor: string }
+> = {
+  draft: {
+    label: "Draft",
+    color: "text-muted-foreground",
+    bgColor: "bg-muted",
+  },
+  submitted: { label: "Submitted", color: "text-info", bgColor: "bg-info/10" },
+  under_review: {
+    label: "Under Review",
+    color: "text-warning",
+    bgColor: "bg-warning/10",
+  },
+  approved: {
+    label: "Approved",
+    color: "text-success",
+    bgColor: "bg-success/10",
+  },
+  rejected: {
+    label: "Rejected",
+    color: "text-destructive",
+    bgColor: "bg-destructive/10",
+  },
+  locked: { label: "Locked", color: "text-primary", bgColor: "bg-primary/10" },
 };

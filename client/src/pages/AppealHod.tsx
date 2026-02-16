@@ -143,9 +143,7 @@ const AppealHod = () => {
   useEffect(() => {
     if (!formData.criterionName) return;
 
-    const crit = criteriaOptions.find(
-      (c) => c.name === formData.criterionName
-    );
+    const crit = criteriaOptions.find((c) => c.name === formData.criterionName);
 
     if (!crit) return;
 
@@ -156,10 +154,7 @@ const AppealHod = () => {
     }));
   }, [formData.criterionName, criteriaOptions]);
 
-  const handleInputChange = (
-    field: keyof AppealFormData,
-    value: any
-  ) => {
+  const handleInputChange = (field: keyof AppealFormData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -184,13 +179,13 @@ const AppealHod = () => {
     try {
       await api.post(
         `/api/hod/appeals/modules/${module}/sub/${subId}/criteria/${encodeURIComponent(
-          criterionName
+          criterionName,
         )}/appeal`,
         {
           requestedScore,
           hodDescription: appealReason,
           evidence,
-        }
+        },
       );
 
       toast.success("Appeal submitted successfully");
@@ -211,17 +206,13 @@ const AppealHod = () => {
       setSubsections([]);
       setCriteriaOptions([]);
     } catch (err: any) {
-      toast.error(
-        err?.response?.data?.message || "Failed to submit appeal"
-      );
+      toast.error(err?.response?.data?.message || "Failed to submit appeal");
     }
   };
 
   const toggleExpand = (id: string) => {
     setExpandedAppealIds((prev) =>
-      prev.includes(id)
-        ? prev.filter((i) => i !== id)
-        : [...prev, id]
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
     );
   };
 
@@ -229,7 +220,7 @@ const AppealHod = () => {
      CURRENT CRITERION CARD
   ============================ */
   const selectedCriterion = criteriaOptions.find(
-    (c) => c.name === formData.criterionName
+    (c) => c.name === formData.criterionName,
   );
 
   return (
@@ -238,7 +229,6 @@ const AppealHod = () => {
       subtitle="Submit and view your appeals"
     >
       <div className="space-y-6 text-sm">
-
         {/* New Appeal Button */}
         <div className="flex justify-end">
           <Button size="sm" onClick={() => setIsDialogOpen(true)}>
@@ -254,15 +244,12 @@ const AppealHod = () => {
             </CardHeader>
 
             <CardContent className="grid gap-3">
-
               {/* Module */}
               <div>
                 <Label>Module</Label>
                 <Select
                   value={formData.module}
-                  onValueChange={(v) =>
-                    handleInputChange("module", v)
-                  }
+                  onValueChange={(v) => handleInputChange("module", v)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select Module" />
@@ -279,17 +266,13 @@ const AppealHod = () => {
                 <Label>Subsection</Label>
                 <Select
                   value={formData.subId}
-                  onValueChange={(v) =>
-                    handleInputChange("subId", v)
-                  }
+                  onValueChange={(v) => handleInputChange("subId", v)}
                   disabled={!subsections.length}
                 >
                   <SelectTrigger>
                     <SelectValue
                       placeholder={
-                        loadingSubsections
-                          ? "Loading..."
-                          : "Select Subsection"
+                        loadingSubsections ? "Loading..." : "Select Subsection"
                       }
                     />
                   </SelectTrigger>
@@ -308,9 +291,7 @@ const AppealHod = () => {
                 <Label>Criterion</Label>
                 <Select
                   value={formData.criterionName}
-                  onValueChange={(v) =>
-                    handleInputChange("criterionName", v)
-                  }
+                  onValueChange={(v) => handleInputChange("criterionName", v)}
                   disabled={!criteriaOptions.length}
                 >
                   <SelectTrigger>
@@ -359,10 +340,7 @@ const AppealHod = () => {
                   type="number"
                   value={formData.requestedScore}
                   onChange={(e) =>
-                    handleInputChange(
-                      "requestedScore",
-                      Number(e.target.value)
-                    )
+                    handleInputChange("requestedScore", Number(e.target.value))
                   }
                   className="border rounded px-2 py-1 text-sm w-full"
                 />
@@ -385,10 +363,7 @@ const AppealHod = () => {
                 <Textarea
                   value={formData.appealReason}
                   onChange={(e) =>
-                    handleInputChange(
-                      "appealReason",
-                      e.target.value
-                    )
+                    handleInputChange("appealReason", e.target.value)
                   }
                 />
               </div>
@@ -400,11 +375,8 @@ const AppealHod = () => {
                 >
                   Cancel
                 </Button>
-                <Button onClick={handleSubmitAppeal}>
-                  Submit
-                </Button>
+                <Button onClick={handleSubmitAppeal}>Submit</Button>
               </div>
-
             </CardContent>
           </Card>
         )}
@@ -417,18 +389,14 @@ const AppealHod = () => {
                 {a.module} - {a.subId} - {a.criterionName}
               </CardTitle>
               <Button size="sm" onClick={() => toggleExpand(a.id)}>
-                {expandedAppealIds.includes(a.id)
-                  ? "Hide"
-                  : "View"}
+                {expandedAppealIds.includes(a.id) ? "Hide" : "View"}
               </Button>
             </CardHeader>
 
             {expandedAppealIds.includes(a.id) && (
               <CardContent className="space-y-2">
-
                 <div>
-                  <strong>Requested Score:</strong>{" "}
-                  {a.requestedScore}
+                  <strong>Requested Score:</strong> {a.requestedScore}
                 </div>
 
                 <div>
@@ -445,8 +413,7 @@ const AppealHod = () => {
                 </div>
 
                 <div>
-                  <strong>Reason:</strong>{" "}
-                  {a.hodDescription}
+                  <strong>Reason:</strong> {a.hodDescription}
                 </div>
 
                 <div>
@@ -455,22 +422,18 @@ const AppealHod = () => {
 
                 <div>
                   <strong>Submitted:</strong>{" "}
-                  {a.createdAt
-                    ? new Date(a.createdAt).toLocaleString()
-                    : "-"}
+                  {a.createdAt ? new Date(a.createdAt).toLocaleString() : "-"}
                 </div>
 
                 {/* Committee Decision */}
                 {a.status === "committee_verified" && (
                   <div className="mt-3 p-3 bg-green-50 rounded-md border border-green-200 space-y-1">
-
                     <div className="text-green-700 font-semibold">
                       Committee Decision
                     </div>
 
                     <div>
-                      <strong>Approved Score:</strong>{" "}
-                      {a.committeeScore}
+                      <strong>Approved Score:</strong> {a.committeeScore}
                     </div>
 
                     <div>
@@ -481,19 +444,15 @@ const AppealHod = () => {
                     {a.committeeVerifiedAt && (
                       <div>
                         <strong>Verified At:</strong>{" "}
-                        {new Date(
-                          a.committeeVerifiedAt
-                        ).toLocaleString()}
+                        {new Date(a.committeeVerifiedAt).toLocaleString()}
                       </div>
                     )}
                   </div>
                 )}
-
               </CardContent>
             )}
           </Card>
         ))}
-
       </div>
     </DashboardLayout>
   );

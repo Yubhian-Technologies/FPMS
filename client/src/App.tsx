@@ -12,11 +12,13 @@ import FPMSForm from "./pages/FPMSForm";
 import Review from "./pages/Review";
 import Reports from "./pages/Reports";
 import Faculty from "./pages/Faculty";
+import Designations from "./pages/Designations";
 import Departments from "./pages/Departments";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 import TeachingLearning from "./pages/fpms/TeachingLearning";
+import DynamicCriteriaForm from "./pages/fpms/DynamicCriteriaForm";
 import ResearchDevelopment from "./pages/fpms/ResearchDevelopment";
 import ProfessionalDevelopment from "./pages/fpms/ProfessionalDevelopment";
 import StudentDevelopment from "./pages/fpms/StudentDevelopment";
@@ -25,21 +27,54 @@ import Submissions from "./pages/Submissions";
 import Appeals from "./pages/Appeals";
 import College from "./pages/College";
 import AddAdmin from "./pages/AddAdmin";
-import TeachingandLearning from './pages/hod-forms/TeachingandLearning'
+import AddVicePrincipal from "./pages/AddVicePrincipal";
+import TeachingandLearning from "./pages/hod-forms/TeachingandLearning";
 import AdminReview from "./pages/AdminReview";
 import AcademicLeadershipCurriculumGovernance from "./pages/hodb-forms/AcademicLeadershipCurriculumGovernance";
 import AppealHod from "./pages/AppealHod";
 import CommitteeReview from "./pages/CommitteeReview";
 import AddDean from "./pages/AddDean";
+import AddHod from "./pages/AddHod";
 import DeanTeachingLearning from "./pages/dean-forms/DeanTeachingLearning";
 import DeanBTeachingLearning from "./pages/deanb-forms/DeanBTeachingLearning";
 import DeanAppeals from "./pages/DeanAppeal";
 import SuperAdminCriteriaManagement from "./pages/superadmin";
-
+import RoleManagement from "./pages/RoleManagement";
+import ManageColleges from "./pages/ManageColleges";
+import CreateFormScreen from "./pages/CreateFormScreen";
+import FormPreviewScreen from "./pages/FormPreviewScreen";
+import WorkflowRules from "./pages/WorkflowRules";
 
 const queryClient = new QueryClient();
 
-function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode; allowedRoles?: string[] }) {
+const normalizeRoleForAccess = (role?: string) => {
+  const value = String(role || "")
+    .trim()
+    .toLowerCase();
+
+  if (value.startsWith("dean")) return "dean";
+  if (value === "principal" || value === "principle" || value === "admin") {
+    return "principle";
+  }
+  if (
+    value === "vice principal" ||
+    value === "vice principle" ||
+    value === "vice-principal" ||
+    value === "viceprincipal"
+  ) {
+    return "vice principle";
+  }
+
+  return value;
+};
+
+function ProtectedRoute({
+  children,
+  allowedRoles,
+}: {
+  children: React.ReactNode;
+  allowedRoles?: string[];
+}) {
   const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
@@ -54,7 +89,11 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+  if (
+    allowedRoles &&
+    user &&
+    !allowedRoles.includes(normalizeRoleForAccess(user.role))
+  ) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -67,9 +106,11 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Index />} />
-      <Route 
-        path="/login" 
-        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} 
+      <Route
+        path="/login"
+        element={
+          isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />
+        }
       />
       <Route
         path="/dashboard"
@@ -82,7 +123,7 @@ function AppRoutes() {
       <Route
         path="/fpms-form"
         element={
-          <ProtectedRoute allowedRoles={['faculty']}>
+          <ProtectedRoute allowedRoles={["faculty"]}>
             <FPMSForm />
           </ProtectedRoute>
         }
@@ -90,7 +131,7 @@ function AppRoutes() {
       <Route
         path="/review"
         element={
-          <ProtectedRoute allowedRoles={['hod', 'committee']}>
+          <ProtectedRoute allowedRoles={["hod", "committee"]}>
             <Review />
           </ProtectedRoute>
         }
@@ -98,7 +139,7 @@ function AppRoutes() {
       <Route
         path="/reports"
         element={
-          <ProtectedRoute allowedRoles={['hod', 'committee', 'admin']}>
+          <ProtectedRoute allowedRoles={["hod", "committee", "principle"]}>
             <Reports />
           </ProtectedRoute>
         }
@@ -106,41 +147,131 @@ function AppRoutes() {
       <Route
         path="/faculty"
         element={
-          <ProtectedRoute allowedRoles={['hod', 'committee', 'admin']}>
+          <ProtectedRoute allowedRoles={["hod"]}>
             <Faculty />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/designations"
+        element={
+          <ProtectedRoute allowedRoles={["hod"]}>
+            <Designations />
           </ProtectedRoute>
         }
       />
       <Route
         path="/departments"
         element={
-          <ProtectedRoute allowedRoles={['committee', 'admin']}>
+          <ProtectedRoute allowedRoles={["committee", "principle"]}>
             <Departments />
           </ProtectedRoute>
         }
       />
-     
       <Route path="/fpms/teaching" element={<TeachingLearning />} />
-          <Route path="/fpms/research" element={<ResearchDevelopment></ResearchDevelopment>} />
-          <Route path="/fpms/professional" element={<ProfessionalDevelopment />} />
-          <Route path="/fpms/student" element={<StudentDevelopment />} />
-          <Route path="/fpms/institutional" element={<InstitutionalDevelopment />} />
-          <Route path="/fpms/dean-teaching" element={<DeanTeachingLearning></DeanTeachingLearning>}></Route>
-          <Route path="/fpms/deanb-teaching" element={<DeanBTeachingLearning></DeanBTeachingLearning>}></Route>\
-          <Route path="/dean-appeals" element={<DeanAppeals></DeanAppeals>}></Route>
+      <Route
+        path="/fpms/research"
+        element={<ResearchDevelopment></ResearchDevelopment>}
+      />
+      <Route path="/fpms/professional" element={<ProfessionalDevelopment />} />
+      <Route path="/fpms/student" element={<StudentDevelopment />} />
+      <Route
+        path="/fpms/institutional"
+        element={<InstitutionalDevelopment />}
+      />
+      <Route
+        path="/fpms/forms/:formId/criteria/:criteriaId"
+        element={
+          <ProtectedRoute>
+            <DynamicCriteriaForm />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/fpms/dean-teaching"
+        element={<DeanTeachingLearning></DeanTeachingLearning>}
+      ></Route>
+      <Route
+        path="/fpms/deanb-teaching"
+        element={<DeanBTeachingLearning></DeanBTeachingLearning>}
+      ></Route>
+      <Route path="/dean-appeals" element={<DeanAppeals></DeanAppeals>}></Route>
       <Route path="*" element={<NotFound />} />
       <Route path="/submissions" element={<Submissions></Submissions>}></Route>
-      <Route path='/appeals' element={<Appeals></Appeals>}></Route>
+      <Route path="/appeals" element={<Appeals></Appeals>}></Route>
       <Route path="/college" element={<College></College>}></Route>
       <Route path="/add" element={<AddAdmin></AddAdmin>}></Route>
+      <Route
+        path="/add-vice-principal"
+        element={<AddVicePrincipal></AddVicePrincipal>}
+      ></Route>
       <Route path="/settings" element={<Settings></Settings>}></Route>
+      <Route
+        path="/workflow-rules"
+        element={
+          <ProtectedRoute allowedRoles={["committee"]}>
+            <WorkflowRules />
+          </ProtectedRoute>
+        }
+      ></Route>
       <Route path="/hod-review" element={<AdminReview></AdminReview>}></Route>
-      <Route path="/fpms/hod-teaching" element={<TeachingandLearning></TeachingandLearning>}></Route>
+      <Route
+        path="/fpms/hod-teaching"
+        element={<TeachingandLearning></TeachingandLearning>}
+      ></Route>
       <Route path="/hod-appeals" element={<AppealHod></AppealHod>}></Route>
-      <Route path="/committee-review" element={<CommitteeReview></CommitteeReview>}></Route>
+      <Route
+        path="/committee-review"
+        element={<CommitteeReview></CommitteeReview>}
+      ></Route>
       <Route path="/add-dean" element={<AddDean></AddDean>}></Route>
-      <Route path="/fpms/hodb-teaching" element={<AcademicLeadershipCurriculumGovernance></AcademicLeadershipCurriculumGovernance>}></Route>
-      <Route path="/superadmin" element={<SuperAdminCriteriaManagement />} />
+      <Route path="/add-hod" element={<AddHod></AddHod>}></Route>
+      <Route
+        path="/fpms/hodb-teaching"
+        element={
+          <AcademicLeadershipCurriculumGovernance></AcademicLeadershipCurriculumGovernance>
+        }
+      ></Route>
+      <Route
+        path="/superadmin"
+        element={
+          <ProtectedRoute allowedRoles={["superadmin"]}>
+            <SuperAdminCriteriaManagement />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/superadmin/roles"
+        element={
+          <ProtectedRoute allowedRoles={["superadmin"]}>
+            <RoleManagement />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/superadmin/colleges"
+        element={
+          <ProtectedRoute allowedRoles={["superadmin"]}>
+            <ManageColleges />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/superadmin/form-builder"
+        element={
+          <ProtectedRoute allowedRoles={["superadmin"]}>
+            <CreateFormScreen />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/superadmin/form-builder/preview/:formId"
+        element={
+          <ProtectedRoute allowedRoles={["superadmin"]}>
+            <FormPreviewScreen />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }

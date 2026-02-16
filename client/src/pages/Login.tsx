@@ -3,10 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { GraduationCap, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { DEMO_LOGIN_CREDENTIALS } from "@/lib/demoLogins";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -36,7 +43,7 @@ export default function Login() {
           description: `Welcome ${user.role.toUpperCase()}!`,
         });
 
-        navigate("/dashboard", { replace: true }); 
+        navigate("/dashboard", { replace: true });
       } else {
         toast({
           title: "Login failed",
@@ -58,52 +65,85 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/50 to-background p-4">
       <div className="w-full max-w-md space-y-8 animate-fade-in">
-
         <div className="text-center bg-white mt-5 ">
           <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl gradient-primary shadow-lg p-5 mt-5">
             <GraduationCap className="h-8 w-8 text-primary-foreground" />
           </div>
-          <h1 className="mt-4 font-display text-3xl font-bold text-foreground">FPMS</h1>
-          <p className="mt-1 text-muted-foreground">Faculty Performance Management System</p>
+          <h1 className="mt-4 font-display text-3xl font-bold text-foreground">
+            FPMS
+          </h1>
+          <p className="mt-1 text-muted-foreground">
+            Faculty Performance Management System
+          </p>
 
-        <Card className="border-border/50 shadow-xl">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-display">Sign in</CardTitle>
-            <CardDescription>Enter your credentials to access the system</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="faculty@demo.edu"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Sign in
-              </Button>
-            </form>
+          <Card className="border-border/50 shadow-xl">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-2xl font-display">Sign in</CardTitle>
+              <CardDescription>
+                Enter your credentials to access the system
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="faculty@demo.edu"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Sign in
+                </Button>
+              </form>
 
-            
-          </CardContent>
-        </Card>
+              <div className="mt-6 space-y-2 border-t pt-4">
+                <p className="text-sm font-medium">Demo logins</p>
+                <div className="grid gap-2">
+                  {DEMO_LOGIN_CREDENTIALS.map((item) => (
+                    <Button
+                      key={item.role}
+                      type="button"
+                      variant="outline"
+                      className="justify-between"
+                      onClick={() => {
+                        setEmail(item.email);
+                        setPassword(item.password);
+                      }}
+                    >
+                      <span className="text-xs font-semibold uppercase">
+                        {item.role}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {item.email}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  All demo accounts use password: demo123
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

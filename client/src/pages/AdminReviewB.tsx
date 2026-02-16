@@ -2,18 +2,12 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/api/api";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
 
 type Criterion = {
   name: string;
@@ -38,8 +32,6 @@ type HodSubmission = {
   subsections: Subsection[];
 };
 
-
-
 export default function AdminReviewB() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -50,8 +42,6 @@ export default function AdminReviewB() {
   const [expandedHod, setExpandedHod] = useState<string | null>(null);
   const [expandedSubs, setExpandedSubs] = useState<string[]>([]);
   const [verifying, setVerifying] = useState<Record<string, boolean>>({});
-
- 
 
   const loadData = async () => {
     try {
@@ -66,25 +56,24 @@ export default function AdminReviewB() {
   };
 
   useEffect(() => {
-    if (user?.role === "admin") loadData();
+    if (user?.role === "principle") loadData();
   }, [user]);
-
 
   const verifyCriterion = async (
     hodId: string,
     subId: string,
     c: Criterion,
     adminScore: number,
-    adminDesc: string
+    adminDesc: string,
   ) => {
     const key = `${hodId}-${subId}-${c.name}`;
     try {
       setVerifying((v) => ({ ...v, [key]: true }));
       await api.put(
         `/api/hod/partb/admin/verify/${hodId}/${subId}/${encodeURIComponent(
-          c.name
+          c.name,
         )}`,
-        { adminScore, adminDescription: adminDesc }
+        { adminScore, adminDescription: adminDesc },
       );
       toast({ title: "Criterion verified" });
       loadData();
@@ -95,7 +84,7 @@ export default function AdminReviewB() {
     }
   };
 
-  if (!user || user.role !== "admin") return null;
+  if (!user || user.role !== "principle") return null;
 
   if (loading) {
     return (
@@ -107,11 +96,10 @@ export default function AdminReviewB() {
     );
   }
 
-
   const filtered = data.filter(
     (h) =>
       h.hodName.toLowerCase().includes(search.toLowerCase()) ||
-      h.department.toLowerCase().includes(search.toLowerCase())
+      h.department.toLowerCase().includes(search.toLowerCase()),
   );
 
   const renderHodCard = (hod: HodSubmission, type: "pending" | "verified") => {
@@ -136,7 +124,9 @@ export default function AdminReviewB() {
       >
         <CardHeader className="flex flex-row items-center justify-between pb-4">
           <div>
-            <CardTitle className="text-lg font-semibold">{hod.hodName}</CardTitle>
+            <CardTitle className="text-lg font-semibold">
+              {hod.hodName}
+            </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
               {hod.department} • {hod.college}
             </p>
@@ -173,7 +163,7 @@ export default function AdminReviewB() {
                         setExpandedSubs((p) =>
                           p.includes(subKey)
                             ? p.filter((x) => x !== subKey)
-                            : [...p, subKey]
+                            : [...p, subKey],
                         )
                       }
                     >
@@ -201,13 +191,13 @@ export default function AdminReviewB() {
                               <div className="space-y-2 text-sm">
                                 <div className="font-medium">{c.name}</div>
                                 <div className="text-muted-foreground">
-                                  Claimed: <span className="font-semibold text-foreground">
+                                  Claimed:{" "}
+                                  <span className="font-semibold text-foreground">
                                     {c.claimedScore} / {c.maxScore}
                                   </span>
                                 </div>
                               </div>
 
-                            
                               <div className="space-y-1.5">
                                 <label className="text-xs font-medium text-muted-foreground block">
                                   Admin Score
@@ -260,7 +250,7 @@ export default function AdminReviewB() {
                                           sub.id,
                                           c,
                                           c.adminScore ?? 0,
-                                          c.adminDescription ?? ""
+                                          c.adminDescription ?? "",
                                         )
                                       }
                                       className="min-w-[90px]"
@@ -291,8 +281,6 @@ export default function AdminReviewB() {
       </Card>
     );
   };
-
-
 
   return (
     <DashboardLayout title="Admin Review – Module 1">
