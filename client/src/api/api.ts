@@ -18,12 +18,12 @@ api.interceptors.request.use((config) => {
     try {
       const user = JSON.parse(userStr);
       config.headers = config.headers ?? {};
-      config.headers['x-user-id'] = user.uid || user.id || '';
-      config.headers['x-user-email'] = user.email || '';
-      config.headers['x-user-name'] = user.name || user.displayName || '';
-      config.headers['x-user-role'] = user.role || 'faculty';
-      config.headers['x-college'] = user.college || '';
-      config.headers['x-department'] = user.department || '';
+      config.headers["x-user-id"] = user.uid || user.id || "";
+      config.headers["x-user-email"] = user.email || "";
+      config.headers["x-user-name"] = user.name || user.displayName || "";
+      config.headers["x-user-role"] = user.role || "faculty";
+      config.headers["x-college"] = user.college || "";
+      config.headers["x-department"] = user.department || "";
     } catch (e) {
       console.error("Failed to parse user data:", e);
     }
