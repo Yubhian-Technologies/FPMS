@@ -13,6 +13,7 @@ import {
   getUserTotal,
 } from "../controllers/submissionController.js";
 import optionalAuth from "../middleware/optionalAuth.js";
+import upload from "../middleware/upload.js";
 
 const router = express.Router();
 
@@ -20,7 +21,7 @@ const router = express.Router();
 router.use(optionalAuth);
 
 // Faculty endpoints
-router.post("/submit", submitTask);
+router.post("/submit",upload.single("file"), submitTask);
 router.get("/my-submissions", getMySubmissions);
 router.post("/:id/accept", acceptReview);
 router.post("/:id/appeal", raiseAppeal);

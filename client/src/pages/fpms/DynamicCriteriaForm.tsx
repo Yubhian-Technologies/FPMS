@@ -59,7 +59,7 @@ interface CriteriaPayload {
 
 interface TaskProgress {
   claimedScore: number;
-  evidenceUrl: string;
+  evidenceUrl: string | File;
   description: string;
 }
 
@@ -473,31 +473,50 @@ export default function DynamicCriteriaForm() {
         description: "",
       };
 
-      if (!progress.evidenceUrl?.trim()) {
-        toast({
-          title: "Evidence required",
-          description: "Please provide evidence URL before submitting.",
-          variant: "destructive",
-        });
-        return;
-      }
+      if (!progress.evidenceUrl) {
+  toast({
+    title: "Evidence required",
+    description: "Please provide evidence before submitting.",
+    variant: "destructive",
+  });
+  return;
+}
 
       setSubmittingTaskId(task.id);
+      
+      const formData = new FormData();
 
-      const submitRes = await api.post("/api/submissions/submit", {
-        formId,
-        formTitle: payload?.formTitle || formId,
-        criteriaId,
-        criteriaName: payload?.criteria?.criteriaName || criteriaId,
-        moduleId: moduleItem.id,
-        moduleName: moduleItem.moduleName,
-        taskId: task.id,
-        taskName: task.title,
-        maxMarks: Number(task.marks || 0),
-        claimedScore: progress.claimedScore,
-        evidence: progress.evidenceUrl,
-        description: progress.description,
-      });
+formData.append("formId", formId || "");
+formData.append("formTitle", payload?.formTitle || "");
+formData.append("criteriaId", criteriaId || "");
+formData.append(
+  "criteriaName",
+  payload?.criteria?.criteriaName || ""
+);
+formData.append("moduleId", moduleItem.id);
+formData.append("moduleName", moduleItem.moduleName);
+formData.append("taskId", task.id);
+formData.append("taskName", task.title);
+formData.append("maxMarks", String(task.marks || 0));
+formData.append("claimedScore", String(progress.claimedScore));
+formData.append("description", progress.description || "");
+
+// 🔥 IMPORTANT PART
+if (progress.evidenceUrl instanceof File) {
+  formData.append("file", progress.evidenceUrl);
+} else {
+  formData.append("evidence", progress.evidenceUrl || "");
+}
+
+const submitRes = await api.post(
+  "/api/submissions/submit",
+  formData,
+  {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  }
+);
 
       const submissionData = submitRes.data?.data;
       const submitToRoleIds = Array.isArray(submissionData?.submitToRoleIds)
@@ -1036,26 +1055,61 @@ export default function DynamicCriteriaForm() {
                           </div>
 
                           <div>
-                            <label className="text-sm font-medium block mb-1.5">
-                              Evidence URL
-                            </label>
-                            {taskFrozen ? (
-                              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm break-all">
-                                {progress.evidenceUrl || "No evidence provided"}
-                              </div>
-                            ) : (
-                              <Input
-                                value={progress.evidenceUrl}
-                                className="w-full"
-                                onChange={(e) =>
-                                  updateTaskProgress(task.id, {
-                                    evidenceUrl: e.target.value,
-                                  })
-                                }
-                                placeholder="Paste supporting link"
-                              />
-                            )}
-                          </div>
+  <label className="text-sm font-medium block mb-1.5">
+    Evidence (Upload File or Paste Link)
+  </label>
+
+  {taskFrozen ? (
+  <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+    {typeof progress.evidenceUrl === "string" &&
+    progress.evidenceUrl ? (
+      <button
+        type="button"
+        onClick={() => window.open(progress.evidenceUrl as string, "_blank")}
+        className=" bg-blue-900 p-1 text-white  hover:bg-blue-600"
+      >
+        View Evidence
+      </button>
+    ) : progress.evidenceUrl instanceof File ? (
+      <span>File Uploaded</span>
+    ) : (
+      <span>No evidence provided</span>
+    )}
+  </div>
+) : (
+    <>
+      {/* File Upload */}
+      <Input
+        type="file"
+        className="w-full mb-2"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            updateTaskProgress(task.id, {
+              evidenceUrl: file,
+            });
+          }
+        }}
+      />
+
+      {/* OR Link */}
+      <Input
+        value={
+          typeof progress.evidenceUrl === "string"
+            ? progress.evidenceUrl
+            : ""
+        }
+        className="w-full"
+        onChange={(e) =>
+          updateTaskProgress(task.id, {
+            evidenceUrl: e.target.value,
+          })
+        }
+        placeholder="Or paste supporting link"
+      />
+    </>
+  )}
+</div>
 
                           <div className="md:col-span-2">
                             <label className="text-sm font-medium block mb-1.5">

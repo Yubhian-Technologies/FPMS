@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+dotenv.config();
 
 import "./config/firebase.js";
 import authRouter from "./routes/authRoutes.js";
@@ -20,7 +21,7 @@ import deanRouter from "./routes/deanRoutes.js";
 import superadminRouter from "./routes/superadminRoutes.js";
 import submissionRouter from "./routes/submissionRoutes.js";
 
-dotenv.config();
+
 
 const app = express();
 app.use(cors());

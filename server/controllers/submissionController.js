@@ -64,6 +64,13 @@ export const submitTask = async (req, res) => {
         message: "Missing required fields",
       });
     }
+    let finalEvidence = "";
+
+    if (req.file) {
+      finalEvidence = req.file.path; 
+    } else {
+      finalEvidence = evidence || "";
+    }
 
     // Get workflow rules for this user role
     let workflowRules = [];
@@ -170,7 +177,7 @@ export const submitTask = async (req, res) => {
       college: college || "",
       department: department || "",
       claimedScore: Number(claimedScore),
-      evidence: evidence || "",
+      evidence: finalEvidence,
       description: description || "",
       maxMarks: Number(maxMarks || 0),
       reviewerScore: null,
