@@ -68,13 +68,7 @@ const modules = [
 ];
 
 export default function Index() {
-  const { setDemoUser } = useAuth();
   const navigate = useNavigate();
-
-  const handleSuperAdminClick = () => {
-    setDemoUser("superadmin");
-    navigate("/superadmin");
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -91,13 +85,6 @@ export default function Index() {
             <Link to="/login">
               <Button variant="ghost">Sign In</Button>
             </Link>
-            <Button
-              onClick={handleSuperAdminClick}
-              variant="outline"
-              className="border-purple-600 text-purple-700 hover:bg-purple-50 hover:text-purple-800 font-medium"
-            >
-              Super Admin
-            </Button>
             <Link to="/login">
               <Button>Get Started</Button>
             </Link>
@@ -134,11 +121,6 @@ export default function Index() {
                 <Button size="lg" className="gap-2 px-8">
                   Start Evaluation
                   <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
-              <Link to="/login">
-                <Button size="lg" variant="outline" className="gap-2">
-                  View Demo
                 </Button>
               </Link>
             </div>
@@ -337,6 +319,13 @@ export default function Index() {
             © {new Date().getFullYear()} Faculty Performance Management System.
             All rights reserved.
           </p>
+          <Link
+            to="/register-superadmin"
+            className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+          >
+            <Shield className="h-3 w-3" />
+            System Admin Setup
+          </Link>
         </div>
       </footer>
     </div>

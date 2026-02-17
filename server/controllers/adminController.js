@@ -1,4 +1,3 @@
-import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { db, auth } from "../config/firebase.js";
 import admin from "firebase-admin";
@@ -57,21 +56,9 @@ export const adminLogin = async (req, res) => {
       });
     }
 
-    const token = jwt.sign(
-      {
-        id: adminDoc.id,
-        role: "admin",
-        email: adminData.email,
-        college: adminData.college,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "24h" },
-    );
-
     return res.status(200).json({
       success: true,
       message: "Admin login successful",
-      token,
       user: {
         id: adminDoc.id,
         name: adminData.name,
@@ -535,9 +522,55 @@ export const getDeanColleges = async (req, res) => {
   }
 };
 
-export const getPrincipalCollegeDetails = async (req, res) => {
+export const getDeanCollegeDetails = async (req, res) => {
   try {
-    const principalCollege = String(req.admin?.college || "").trim();
+    console.log("[getDeanCollegeDetails] Admin user:", {
+      uid: req.admin?.uid,
+      id: req.admin?.id,
+      college: req.admin?.college,
+    });
+
+    const adminUid = String(req.admin?.uid || req.admin?.id || "").trim();
+
+    if (!adminUid) {
+      console.log("[getDeanCollegeDetails] No admin UID found");
+      return res.status(401).json({
+        success: false,
+        message: "Admin user not authenticated",
+      });
+    }
+
+    // Fetch admin user from users collection
+    const adminUserDoc = await db
+      .collection(USERS_COLLECTION)
+      .doc(adminUid)
+      .get();
+
+    if (!adminUserDoc.exists) {
+      console.log(
+        "[getDeanCollegeDetails] Admin user doc not found:",
+        adminUid,
+      );
+      return res.status(404).json({
+        success: false,
+        message: "Admin user not found in database",
+      });
+    }
+
+    const adminData = adminUserDoc.data() || {};
+    const principalCollege = String(adminData.college || "").trim();
+
+    console.log("[getDeanCollegeDetails] Admin data:", {
+      college: principalCollege,
+      role: adminData.role,
+    });
+
+    if (!principalCollege) {
+      return res.status(400).json({
+        success: false,
+        message: "Admin college not found in user profile",
+      });
+    }
 
     const superadminDoc = await db
       .collection("superadmin")
@@ -545,6 +578,103 @@ export const getPrincipalCollegeDetails = async (req, res) => {
       .get();
 
     if (!superadminDoc.exists) {
+      console.log(
+        "[getDeanCollegeDetails] Superadmin doc not found, returning basic data",
+      );
+      return res.status(200).json({
+        success: true,
+        data: {
+          name: principalCollege,
+          code: "",
+        },
+      });
+    }
+
+    const data = superadminDoc.data() || {};
+    const colleges = Array.isArray(data.colleges) ? data.colleges : [];
+
+    const matchedCollege = colleges.find(
+      (item) =>
+        String(item?.name || "")
+          .trim()
+          .toLowerCase() === principalCollege.toLowerCase(),
+    );
+
+    console.log("[getDeanCollegeDetails] Matched college:", matchedCollege);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        id: matchedCollege?.id,
+        name: matchedCollege?.name || principalCollege,
+        code: matchedCollege?.code || "",
+      },
+    });
+  } catch (error) {
+    console.error("Get dean college details error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const getPrincipalCollegeDetails = async (req, res) => {
+  try {
+    console.log("[getPrincipalCollegeDetails] Admin user:", {
+      uid: req.admin?.uid,
+      id: req.admin?.id,
+      college: req.admin?.college,
+    });
+
+    const adminUid = String(req.admin?.uid || req.admin?.id || "").trim();
+
+    if (!adminUid) {
+      console.log("[getPrincipalCollegeDetails] No admin UID found");
+      return res.status(401).json({
+        success: false,
+        message: "Admin user not authenticated",
+      });
+    }
+
+    // Fetch admin user from users collection
+    const adminUserDoc = await db
+      .collection(USERS_COLLECTION)
+      .doc(adminUid)
+      .get();
+
+    if (!adminUserDoc.exists) {
+      console.log(
+        "[getPrincipalCollegeDetails] Admin user doc not found:",
+        adminUid,
+      );
+      return res.status(404).json({
+        success: false,
+        message: "Admin user not found in database",
+      });
+    }
+
+    const adminData = adminUserDoc.data() || {};
+    const principalCollege = String(adminData.college || "").trim();
+
+    console.log("[getPrincipalCollegeDetails] Admin data:", {
+      college: principalCollege,
+      role: adminData.role,
+    });
+
+    if (!principalCollege) {
+      return res.status(400).json({
+        success: false,
+        message: "Admin college not found in user profile",
+      });
+    }
+
+    const superadminDoc = await db
+      .collection("superadmin")
+      .doc(SUPERADMIN_DOC_ID)
+      .get();
+
+    if (!superadminDoc.exists) {
+      console.log(
+        "[getPrincipalCollegeDetails] Superadmin doc not found, returning basic data",
+      );
       return res.status(200).json({
         success: true,
         data: {
@@ -563,6 +693,11 @@ export const getPrincipalCollegeDetails = async (req, res) => {
         String(item?.name || "")
           .trim()
           .toLowerCase() === principalCollege.toLowerCase(),
+    );
+
+    console.log(
+      "[getPrincipalCollegeDetails] Matched college:",
+      matchedCollege,
     );
 
     const branches = Array.isArray(matchedCollege?.branches)

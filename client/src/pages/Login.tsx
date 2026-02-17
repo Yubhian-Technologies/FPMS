@@ -13,7 +13,6 @@ import {
 import { GraduationCap, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { DEMO_LOGIN_CREDENTIALS } from "@/lib/demoLogins";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -90,7 +89,7 @@ export default function Login() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="faculty@demo.edu"
+                    placeholder="your.email@university.edu"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -114,34 +113,6 @@ export default function Login() {
                   Sign in
                 </Button>
               </form>
-
-              <div className="mt-6 space-y-2 border-t pt-4">
-                <p className="text-sm font-medium">Demo logins</p>
-                <div className="grid gap-2">
-                  {DEMO_LOGIN_CREDENTIALS.map((item) => (
-                    <Button
-                      key={item.role}
-                      type="button"
-                      variant="outline"
-                      className="justify-between"
-                      onClick={() => {
-                        setEmail(item.email);
-                        setPassword(item.password);
-                      }}
-                    >
-                      <span className="text-xs font-semibold uppercase">
-                        {item.role}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {item.email}
-                      </span>
-                    </Button>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  All demo accounts use password: demo123
-                </p>
-              </div>
             </CardContent>
           </Card>
         </div>

@@ -11,9 +11,12 @@ type Role =
 
 interface User {
   id?: string;
+  uid?: string;
   name: string;
   email: string;
   role: Role;
+  college?: string;
+  department?: string;
 }
 
 interface AuthContextType {
@@ -100,9 +103,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const setDemoUser = (role: Role) => {
     const demoUser: User = {
       id: "demo-" + role,
+      uid: "demo-" + role,
       name: role === "superadmin" ? "Super Admin" : "Demo User",
       email: `${role}@demo.com`,
       role: role,
+      college:
+        role === "hod" || role === "faculty" || role === "dean"
+          ? "Vishnu Institute of Technology"
+          : "",
+      department: role === "hod" || role === "faculty" ? "CSE" : "",
     };
     localStorage.setItem("user", JSON.stringify(demoUser));
     localStorage.setItem("token", "demo-token-" + role);

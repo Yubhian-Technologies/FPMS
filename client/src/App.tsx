@@ -24,9 +24,10 @@ import ProfessionalDevelopment from "./pages/fpms/ProfessionalDevelopment";
 import StudentDevelopment from "./pages/fpms/StudentDevelopment";
 import InstitutionalDevelopment from "./pages/fpms/InstitutionalDevelopment";
 import Submissions from "./pages/Submissions";
-import Appeals from "./pages/Appeals";
+import AppealReview from "./pages/AppealReview";
 import College from "./pages/College";
 import AddAdmin from "./pages/AddAdmin";
+import AddSuperAdmin from "./pages/AddSuperAdmin";
 import AddVicePrincipal from "./pages/AddVicePrincipal";
 import TeachingandLearning from "./pages/hod-forms/TeachingandLearning";
 import AdminReview from "./pages/AdminReview";
@@ -106,6 +107,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Index />} />
+      <Route path="/register-superadmin" element={<AddSuperAdmin />} />
       <Route
         path="/login"
         element={
@@ -131,8 +133,26 @@ function AppRoutes() {
       <Route
         path="/review"
         element={
-          <ProtectedRoute allowedRoles={["hod", "committee"]}>
+          <ProtectedRoute
+            allowedRoles={[
+              "hod",
+              "committee",
+              "dean",
+              "vice principle",
+              "principle",
+            ]}
+          >
             <Review />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/appeal-review"
+        element={
+          <ProtectedRoute
+            allowedRoles={["dean", "vice principle", "principle", "committee"]}
+          >
+            <AppealReview />
           </ProtectedRoute>
         }
       />
@@ -198,7 +218,6 @@ function AppRoutes() {
       <Route path="/dean-appeals" element={<DeanAppeals></DeanAppeals>}></Route>
       <Route path="*" element={<NotFound />} />
       <Route path="/submissions" element={<Submissions></Submissions>}></Route>
-      <Route path="/appeals" element={<Appeals></Appeals>}></Route>
       <Route path="/college" element={<College></College>}></Route>
       <Route path="/add" element={<AddAdmin></AddAdmin>}></Route>
       <Route

@@ -1,4 +1,3 @@
-import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { db, auth } from "../config/firebase.js";
 import admin from "firebase-admin";
@@ -57,28 +56,17 @@ export const hodLogin = async (req, res) => {
       });
     }
 
-    const token = jwt.sign(
-      {
-        id: hodDoc.id,
-        role: "hod",
-        email: hodData.email,
-        college: hodData.college,
-        department: hodData.department,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "24h" },
-    );
-
     return res.status(200).json({
       success: true,
       message: "HOD login successful",
-      token,
       user: {
         id: hodDoc.id,
+        uid: hodDoc.id,
         name: hodData.name,
         email: hodData.email,
         role: "hod",
-        department: hodData.department,
+        college: hodData.college || "",
+        department: hodData.department || "",
       },
     });
   } catch (error) {
@@ -231,7 +219,10 @@ export const getAllFaculty = async (req, res) => {
     const hodCollege = String(req.hod?.college || "")
       .trim()
       .toLowerCase();
+    console.log("[getAllFaculty] START - HOD college:", hodCollege);
+
     const snapshot = await db.collection(USERS_COLLECTION).get();
+    console.log("[getAllFaculty] Total users in DB:", snapshot.size);
 
     const facultyList = snapshot.docs
       .map((doc) => ({
@@ -247,9 +238,14 @@ export const getAllFaculty = async (req, res) => {
         return itemCollege === hodCollege;
       });
 
+    console.log(
+      "[getAllFaculty] SUCCESS - Found",
+      facultyList.length,
+      "faculty members",
+    );
     return res.status(200).json({ success: true, data: facultyList });
   } catch (error) {
-    console.error("Get Faculty Error:", error);
+    console.error("[getAllFaculty] ERROR:", error);
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
@@ -433,6 +429,17 @@ export const deleteFaculty = async (req, res) => {
 export const getHodCollegeDesignations = async (req, res) => {
   try {
     const hodCollege = String(req.hod?.college || "").trim();
+    console.log("[getHodCollegeDesignations] START - HOD college:", hodCollege);
+
+    if (!hodCollege) {
+      console.log(
+        "[getHodCollegeDesignations] No college specified, returning empty array",
+      );
+      return res.status(200).json({
+        success: true,
+        data: { designations: [] },
+      });
+    }
 
     const superadminDoc = await db
       .collection("superadmin")
@@ -440,34 +447,56 @@ export const getHodCollegeDesignations = async (req, res) => {
       .get();
 
     if (!superadminDoc.exists) {
+      console.log("[getHodCollegeDesignations] Superadmin doc does not exist");
       return res.status(200).json({
         success: true,
-        data: {
-          college: hodCollege,
-          designations: [],
-        },
+        data: { designations: [] },
       });
     }
 
-    const data = superadminDoc.data() || {};
-    const colleges = Array.isArray(data.colleges) ? data.colleges : [];
-
-    const matchedCollege = colleges.find(
-      (item) =>
-        String(item?.name || "")
-          .trim()
-          .toLowerCase() === hodCollege.toLowerCase(),
+    const superadminData = superadminDoc.data();
+    const colleges = superadminData?.colleges || [];
+    console.log(
+      "[getHodCollegeDesignations] Total colleges found:",
+      colleges.length,
+    );
+    console.log(
+      "[getHodCollegeDesignations] College names:",
+      colleges.map((c) => c?.name),
     );
 
-    return res.status(200).json({
-      success: true,
-      data: {
-        college: matchedCollege?.name || hodCollege,
-        designations: normalizeStringArray(matchedCollege?.designations || []),
-      },
+    // Find matching college (case-insensitive)
+    const matchedCollege = colleges.find((college) => {
+      const collegeName = String(college?.name || "").trim();
+      return collegeName.toLowerCase() === hodCollege.toLowerCase();
     });
+
+    if (matchedCollege) {
+      const designations = Array.isArray(matchedCollege.designations)
+        ? matchedCollege.designations.filter((d) => d && String(d).trim())
+        : [];
+      console.log(
+        "[getHodCollegeDesignations] SUCCESS - Found",
+        designations.length,
+        "designations:",
+        designations,
+      );
+      return res.status(200).json({
+        success: true,
+        data: { designations },
+      });
+    } else {
+      console.log(
+        "[getHodCollegeDesignations] No matching college found for:",
+        hodCollege,
+      );
+      return res.status(200).json({
+        success: true,
+        data: { designations: [] },
+      });
+    }
   } catch (error) {
-    console.error("Get HOD college designations error:", error);
+    console.error("[getHodCollegeDesignations] ERROR:", error);
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
@@ -586,42 +615,63 @@ export const getHodCollegeDetails = async (req, res) => {
 
 export const getFacultyRoleOption = async (req, res) => {
   try {
+    console.log("[getFacultyRoleOption] START - Called by:", req.hod?.email);
+
     const superadminDoc = await db
       .collection("superadmin")
       .doc(SUPERADMIN_DOC_ID)
       .get();
 
     if (!superadminDoc.exists) {
+      console.log(
+        "[getFacultyRoleOption] Superadmin doc does not exist, returning default",
+      );
       return res.status(200).json({
         success: true,
-        data: { name: "faculty", level: 0 },
+        data: { name: "Faculty", level: 3 },
       });
     }
 
-    const data = superadminDoc.data() || {};
-    const roles = Array.isArray(data.roles) ? data.roles : [];
+    const superadminData = superadminDoc.data();
+    const roles = superadminData?.roles || [];
+    console.log("[getFacultyRoleOption] Total roles found:", roles.length);
+    console.log(
+      "[getFacultyRoleOption] Roles:",
+      roles.map((r) => `${r.name}(${r.level})`),
+    );
 
-    const facultyRole = roles
-      .map((item) => ({
-        id: item.id,
-        name: String(item.name || "").trim(),
-        level: Number(item.level),
-      }))
-      .find(
-        (item) =>
-          item.name && Number.isFinite(item.level) && isFacultyRole(item.name),
-      );
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        id: facultyRole?.id,
-        name: facultyRole?.name || "faculty",
-        level: Number(facultyRole?.level ?? 0),
-      },
+    // Find Faculty role (case-insensitive)
+    const facultyRole = roles.find((role) => {
+      const roleName = String(role?.name || "")
+        .trim()
+        .toLowerCase();
+      return roleName === "faculty";
     });
+
+    if (facultyRole) {
+      const result = {
+        name: facultyRole.name,
+        level: Number(facultyRole.level) || 0,
+      };
+      console.log(
+        "[getFacultyRoleOption] SUCCESS - Found faculty role:",
+        result,
+      );
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } else {
+      console.log(
+        "[getFacultyRoleOption] No Faculty role found, returning default",
+      );
+      return res.status(200).json({
+        success: true,
+        data: { name: "Faculty", level: 3 },
+      });
+    }
   } catch (error) {
-    console.error("Get faculty role option error:", error);
+    console.error("[getFacultyRoleOption] ERROR:", error);
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };

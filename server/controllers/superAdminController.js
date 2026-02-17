@@ -1096,3 +1096,79 @@ export const deleteForm = async (req, res) => {
       .json({ success: false, message: error.message || "Server error" });
   }
 };
+
+export const registerSuperAdmin = async (req, res) => {
+  try {
+    const { email, password, name } = req.body;
+
+    // Validate inputs
+    const normalizedEmail = String(email || "")
+      .trim()
+      .toLowerCase();
+    const normalizedName = String(name || "").trim();
+    const normalizedPassword = String(password || "");
+
+    if (!normalizedEmail || !normalizedPassword || !normalizedName) {
+      return res.status(400).json({
+        success: false,
+        message: "Email, password, and name are required",
+      });
+    }
+
+    if (normalizedPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters long",
+      });
+    }
+
+    // Check if email is already registered
+    try {
+      const existingUser = await auth.getUserByEmail(normalizedEmail);
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          message: "A user with this email already exists",
+        });
+      }
+    } catch (error) {
+      // User doesn't exist, continue with registration
+    }
+
+    // Create Firebase Auth user
+    const userRecord = await auth.createUser({
+      email: normalizedEmail,
+      password: normalizedPassword,
+      displayName: normalizedName,
+    });
+
+    // Set custom claims for superadmin role
+    await auth.setCustomUserClaims(userRecord.uid, {
+      role: "superadmin",
+      superadmin: true,
+    });
+
+    // Note: Superadmin does NOT get a document in the users collection
+    // It's only authenticated via Firebase Auth with custom claims
+
+    // Generate a custom token for immediate login
+    const customToken = await auth.createCustomToken(userRecord.uid);
+
+    return res.status(201).json({
+      success: true,
+      message: "Super Admin registered successfully",
+      data: {
+        uid: userRecord.uid,
+        email: normalizedEmail,
+        name: normalizedName,
+        token: customToken,
+      },
+    });
+  } catch (error) {
+    console.error("Register SuperAdmin error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to register Super Admin",
+    });
+  }
+};

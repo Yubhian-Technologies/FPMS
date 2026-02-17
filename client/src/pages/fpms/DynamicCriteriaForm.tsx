@@ -10,6 +10,14 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
@@ -57,24 +65,42 @@ interface TaskProgress {
 
 interface WorkflowTaskStatusItem {
   id: string;
+  formId?: string;
+  formTitle?: string;
+  criteriaId?: string;
+  criteriaName?: string;
   taskId: string;
-  moduleId: string;
-  status: TaskWorkflowStatus;
-  currentFlow?: string;
-  canAppeal?: boolean;
+  taskName?: string;
+  moduleId?: string;
+  status: string;
   claimedScore?: number;
-  evidenceUrl?: string;
+  evidence?: string;
   description?: string;
-  submitToRoles?: string[];
-  appealToRoles?: string[];
-  assignments?: Array<{
-    role?: string;
-    status?: string;
-  }>;
+  reviewerScore?: number;
+  reviewerReason?: string;
+  reviewerId?: string;
+  reviewerRole?: string;
+  isAppealed?: boolean;
+  appealReason?: string;
+  appealRequestedScore?: number;
+  appealerScore?: number;
+  appealerReason?: string;
+  appealerId?: string;
+  appealerRole?: string;
+  finalScore?: number;
+  submitToRoleIds?: string[];
+  appealToRoleIds?: string[];
+  maxMarks?: number;
 }
 
 type TaskStatus = "pending" | "submitted";
-type TaskWorkflowStatus = "pending" | "submitted" | "appealed" | "approved";
+type TaskWorkflowStatus =
+  | "pending"
+  | "submitted"
+  | "reviewed"
+  | "accepted"
+  | "appealed"
+  | "appeal-resolved";
 
 export default function DynamicCriteriaForm() {
   const { formId, criteriaId } = useParams();
@@ -84,6 +110,7 @@ export default function DynamicCriteriaForm() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submittingTaskId, setSubmittingTaskId] = useState<string | null>(null);
+  const [acceptingTaskId, setAcceptingTaskId] = useState<string | null>(null);
   const [appealingTaskId, setAppealingTaskId] = useState<string | null>(null);
   const [submittingModuleId, setSubmittingModuleId] = useState<string | null>(
     null,
@@ -101,6 +128,21 @@ export default function DynamicCriteriaForm() {
   const [taskCanAppeal, setTaskCanAppeal] = useState<Record<string, boolean>>(
     {},
   );
+  const [taskSubmissionIds, setTaskSubmissionIds] = useState<
+    Record<string, string>
+  >({});
+  const [taskReviewData, setTaskReviewData] = useState<
+    Record<string, { reviewerScore: number; reviewerReason: string }>
+  >({});
+  const [taskAppealData, setTaskAppealData] = useState<
+    Record<string, { appealerScore: number; appealerReason: string }>
+  >({});
+  const [appealDialogOpen, setAppealDialogOpen] = useState(false);
+  const [appealFormData, setAppealFormData] = useState({
+    taskId: "",
+    moduleId: "",
+    reason: "",
+  });
 
   const storageKey = useMemo(() => {
     const userId = user?.id || "anonymous";
@@ -121,90 +163,8 @@ export default function DynamicCriteriaForm() {
       });
     });
 
-    const parseStoredStatus = (
-      value: unknown,
-      fallbackValue: TaskWorkflowStatus = "pending",
-    ): TaskWorkflowStatus => {
-      const normalized = String(value || "")
-        .trim()
-        .toLowerCase();
-      if (
-        normalized === "submitted" ||
-        normalized === "appealed" ||
-        normalized === "approved"
-      ) {
-        return normalized;
-      }
-      return fallbackValue;
-    };
-
-    try {
-      const stored = localStorage.getItem(storageKey);
-      const storedSubmitted = localStorage.getItem(`${storageKey}-submitted`);
-      const storedStatuses = localStorage.getItem(`${storageKey}-statuses`);
-      if (!stored) {
-        setTaskProgress(fallback);
-        if (storedStatuses) {
-          const parsedStatuses = JSON.parse(storedStatuses);
-          const mergedStatuses: Record<string, TaskWorkflowStatus> = {};
-          Object.keys(statusFallback).forEach((taskId) => {
-            mergedStatuses[taskId] = parseStoredStatus(
-              parsedStatuses?.[taskId],
-            );
-          });
-          setTaskStatuses(mergedStatuses);
-        } else if (storedSubmitted) {
-          const parsedSubmitted = JSON.parse(storedSubmitted);
-          const mergedStatuses: Record<string, TaskWorkflowStatus> = {};
-          Object.keys(statusFallback).forEach((taskId) => {
-            mergedStatuses[taskId] = Boolean(parsedSubmitted?.[taskId])
-              ? "submitted"
-              : "pending";
-          });
-          setTaskStatuses(mergedStatuses);
-        } else {
-          setTaskStatuses(statusFallback);
-        }
-        return;
-      }
-
-      const parsed = JSON.parse(stored);
-      const merged: Record<string, TaskProgress> = {};
-
-      Object.keys(fallback).forEach((taskId) => {
-        const entry = parsed?.[taskId];
-        merged[taskId] = {
-          claimedScore: Number(entry?.claimedScore || 0),
-          evidenceUrl: String(entry?.evidenceUrl || ""),
-          description: String(entry?.description || ""),
-        };
-      });
-
-      setTaskProgress(merged);
-
-      if (storedStatuses) {
-        const parsedStatuses = JSON.parse(storedStatuses);
-        const mergedStatuses: Record<string, TaskWorkflowStatus> = {};
-        Object.keys(statusFallback).forEach((taskId) => {
-          mergedStatuses[taskId] = parseStoredStatus(parsedStatuses?.[taskId]);
-        });
-        setTaskStatuses(mergedStatuses);
-      } else if (storedSubmitted) {
-        const parsedSubmitted = JSON.parse(storedSubmitted);
-        const mergedStatuses: Record<string, TaskWorkflowStatus> = {};
-        Object.keys(statusFallback).forEach((taskId) => {
-          mergedStatuses[taskId] = Boolean(parsedSubmitted?.[taskId])
-            ? "submitted"
-            : "pending";
-        });
-        setTaskStatuses(mergedStatuses);
-      } else {
-        setTaskStatuses(statusFallback);
-      }
-    } catch {
-      setTaskProgress(fallback);
-      setTaskStatuses(statusFallback);
-    }
+    setTaskProgress(fallback);
+    setTaskStatuses(statusFallback);
   };
 
   const fetchCriteriaData = async () => {
@@ -218,6 +178,9 @@ export default function DynamicCriteriaForm() {
       const data = response.data?.data as CriteriaPayload;
       setPayload(data);
       initializeProgress(data?.criteria?.modules || []);
+
+      // Sync workflow statuses after initializing progress
+      await syncWorkflowStatuses();
     } catch (error: any) {
       toast({
         title: "Failed to load criteria",
@@ -235,96 +198,136 @@ export default function DynamicCriteriaForm() {
   }, [formId, criteriaId, user?.role]);
 
   const syncWorkflowStatuses = async () => {
-    if (!formId || !criteriaId) return;
+    if (!formId || !criteriaId || !user?.id) return;
 
     try {
-      const res = await api.get(
-        "/api/committee/workflow/submissions/my-statuses",
-        {
-          params: { formId, criteriaId },
+      const res = await api.get("/api/submissions/my-submissions", {
+        params: {
+          formId,
+          criteriaId,
         },
-      );
+      });
 
-      const rows: WorkflowTaskStatusItem[] = Array.isArray(res.data?.data)
+      const submissionsData: WorkflowTaskStatusItem[] = Array.isArray(
+        res.data?.data,
+      )
         ? res.data.data
         : [];
 
-      if (!rows.length) return;
+      console.log("Fetched submissions data:", submissionsData);
+      console.log("Total submissions:", submissionsData.length);
+      console.log("FormId:", formId, "CriteriaId:", criteriaId);
 
+      // Build new state objects
       const nextStatuses: Record<string, TaskWorkflowStatus> = {};
       const nextSubmittedRoles: Record<string, string[]> = {};
-      const nextTaskProgress: Record<string, TaskProgress> = {};
-      const nextTaskCanAppeal: Record<string, boolean> = {};
+      const nextCanAppeal: Record<string, boolean> = {};
+      const nextSubmissionIds: Record<string, string> = {};
+      const nextProgress: Record<string, TaskProgress> = {};
+      const nextReviewData: Record<
+        string,
+        { reviewerScore: number; reviewerReason: string }
+      > = {};
+      const nextAppealData: Record<
+        string,
+        { appealerScore: number; appealerReason: string }
+      > = {};
 
-      rows.forEach((item) => {
-        const taskId = String(item.taskId || "").trim();
+      submissionsData.forEach((submission) => {
+        const taskId = submission.taskId;
         if (!taskId) return;
 
-        const normalizedStatus = String(item.status || "pending")
-          .trim()
-          .toLowerCase();
+        // Map backend status to UI status
+        let uiStatus: TaskWorkflowStatus = "pending";
+        const backendStatus = String(submission.status || "").toLowerCase();
 
-        const mappedStatus: TaskWorkflowStatus =
-          normalizedStatus === "approved"
-            ? "approved"
-            : normalizedStatus === "appealed"
-              ? "appealed"
-              : normalizedStatus === "submitted"
-                ? "submitted"
-                : "pending";
+        if (backendStatus === "submitted") {
+          uiStatus = "submitted";
+        } else if (backendStatus === "reviewed") {
+          uiStatus = "reviewed";
+        } else if (backendStatus === "accepted") {
+          uiStatus = "accepted";
+        } else if (backendStatus === "appealed") {
+          uiStatus = "appealed";
+        } else if (backendStatus === "appeal-resolved") {
+          uiStatus = "appeal-resolved";
+        }
 
-        nextStatuses[taskId] = mappedStatus;
-        nextTaskCanAppeal[taskId] = Boolean(item.canAppeal);
-        nextTaskProgress[taskId] = {
-          claimedScore: Number(item.claimedScore || 0),
-          evidenceUrl: String(item.evidenceUrl || ""),
-          description: String(item.description || ""),
+        nextStatuses[taskId] = uiStatus;
+
+        // Store submission ID
+        if (submission.id) {
+          nextSubmissionIds[taskId] = submission.id;
+        }
+
+        // Store submitted roles
+        if (Array.isArray(submission.submitToRoleIds)) {
+          nextSubmittedRoles[taskId] = submission.submitToRoleIds;
+        }
+
+        // Store appeal roles if appealed
+        if (
+          submission.isAppealed &&
+          Array.isArray(submission.appealToRoleIds)
+        ) {
+          nextSubmittedRoles[taskId] = submission.appealToRoleIds;
+        }
+
+        // Determine if can appeal (reviewed status and not already appealed/accepted)
+        nextCanAppeal[taskId] =
+          backendStatus === "reviewed" && !submission.isAppealed;
+
+        // Store review data
+        if (
+          submission.reviewerScore !== null &&
+          submission.reviewerScore !== undefined
+        ) {
+          nextReviewData[taskId] = {
+            reviewerScore: submission.reviewerScore,
+            reviewerReason: submission.reviewerReason || "",
+          };
+        }
+
+        // Store appeal data
+        if (
+          submission.appealerScore !== null &&
+          submission.appealerScore !== undefined
+        ) {
+          nextAppealData[taskId] = {
+            appealerScore: submission.appealerScore,
+            appealerReason: submission.appealerReason || "",
+          };
+        }
+
+        // Update progress with claimed data
+        nextProgress[taskId] = {
+          claimedScore: submission.claimedScore || 0,
+          evidenceUrl: submission.evidence || "",
+          description: submission.description || "",
         };
-
-        const rolesFromAssignments = Array.isArray(item.assignments)
-          ? item.assignments
-              .filter(
-                (assignment) =>
-                  String(assignment?.status || "") === "submitted",
-              )
-              .map((assignment) => String(assignment?.role || "").trim())
-              .filter(Boolean)
-          : [];
-
-        const rolesFromSubmission = Array.isArray(item.submitToRoles)
-          ? item.submitToRoles
-              .map((role) => String(role || "").trim())
-              .filter(Boolean)
-          : [];
-
-        const rolesFromAppeal = Array.isArray(item.appealToRoles)
-          ? item.appealToRoles
-              .map((role) => String(role || "").trim())
-              .filter(Boolean)
-          : [];
-
-        nextSubmittedRoles[taskId] =
-          mappedStatus === "appealed"
-            ? rolesFromAssignments.length > 0
-              ? rolesFromAssignments
-              : rolesFromAppeal
-            : rolesFromAssignments.length > 0
-              ? rolesFromAssignments
-              : rolesFromSubmission;
       });
 
+      // Apply all state updates
       setTaskStatuses((prev) => ({ ...prev, ...nextStatuses }));
       setTaskSubmittedRoles((prev) => ({ ...prev, ...nextSubmittedRoles }));
-      setTaskProgress((prev) => ({ ...prev, ...nextTaskProgress }));
-      setTaskCanAppeal((prev) => ({ ...prev, ...nextTaskCanAppeal }));
-    } catch {
-      // silent fallback to local statuses
+      setTaskCanAppeal((prev) => ({ ...prev, ...nextCanAppeal }));
+      setTaskSubmissionIds((prev) => ({ ...prev, ...nextSubmissionIds }));
+      setTaskProgress((prev) => ({ ...prev, ...nextProgress }));
+      setTaskReviewData((prev) => ({ ...prev, ...nextReviewData }));
+      setTaskAppealData((prev) => ({ ...prev, ...nextAppealData }));
+
+      console.log("Synced task statuses:", nextStatuses);
+      console.log("Synced task progress:", nextProgress);
+      console.log("Review data:", nextReviewData);
+      console.log("Appeal data:", nextAppealData);
+    } catch (error: any) {
+      console.error("Failed to fetch submissions:", error);
     }
   };
 
   useEffect(() => {
-    syncWorkflowStatuses();
-  }, [formId, criteriaId, user?.id]);
+    fetchCriteriaData();
+  }, [formId, criteriaId, user?.role]);
 
   const allTasks = useMemo(() => {
     if (!payload) return [] as TaskItem[];
@@ -351,7 +354,11 @@ export default function DynamicCriteriaForm() {
 
   const submittedCount = useMemo(
     () =>
-      allTasks.filter((task) => taskStatuses[task.id] === "submitted").length,
+      allTasks.filter(
+        (task) =>
+          taskStatuses[task.id] === "submitted" ||
+          taskStatuses[task.id] === "reviewed",
+      ).length,
     [allTasks, taskStatuses],
   );
 
@@ -363,9 +370,25 @@ export default function DynamicCriteriaForm() {
 
   const approvedCount = useMemo(
     () =>
-      allTasks.filter((task) => taskStatuses[task.id] === "approved").length,
+      allTasks.filter(
+        (task) =>
+          taskStatuses[task.id] === "accepted" ||
+          taskStatuses[task.id] === "appeal-resolved",
+      ).length,
     [allTasks, taskStatuses],
   );
+
+  const totalFinalScore = useMemo(() => {
+    return allTasks.reduce((sum, task) => {
+      const status = taskStatuses[task.id];
+      if (status === "accepted" && taskReviewData[task.id]) {
+        return sum + Number(taskReviewData[task.id].reviewerScore || 0);
+      } else if (status === "appeal-resolved" && taskAppealData[task.id]) {
+        return sum + Number(taskAppealData[task.id].appealerScore || 0);
+      }
+      return sum;
+    }, 0);
+  }, [allTasks, taskStatuses, taskReviewData, taskAppealData]);
 
   const progressPercent = useMemo(() => {
     if (!allTasks.length) return 0;
@@ -389,9 +412,16 @@ export default function DynamicCriteriaForm() {
     }, 0);
 
   const getModuleStatus = (moduleItem: ModuleItem) => {
-    const submittedCount = moduleItem.tasks.filter(
-      (task) => getTaskStatus(task.id) === "submitted",
-    ).length;
+    const submittedCount = moduleItem.tasks.filter((task) => {
+      const status = getTaskStatus(task.id);
+      return (
+        status === "submitted" ||
+        status === "reviewed" ||
+        status === "accepted" ||
+        status === "appealed" ||
+        status === "appeal-resolved"
+      );
+    }).length;
     if (submittedCount === 0) return "not-started";
     if (submittedCount === moduleItem.tasks.length) return "completed";
     return "in-progress";
@@ -417,25 +447,9 @@ export default function DynamicCriteriaForm() {
   const saveProgress = async () => {
     try {
       setSaving(true);
-      localStorage.setItem(storageKey, JSON.stringify(taskProgress));
-      localStorage.setItem(
-        `${storageKey}-statuses`,
-        JSON.stringify(taskStatuses),
-      );
-      localStorage.setItem(
-        `${storageKey}-submitted`,
-        JSON.stringify(
-          Object.fromEntries(
-            Object.entries(taskStatuses).map(([taskId, status]) => [
-              taskId,
-              status !== "pending",
-            ]),
-          ),
-        ),
-      );
       toast({
         title: "Progress saved",
-        description: "Your task progress was saved locally.",
+        description: "Your task progress is stored in memory.",
       });
     } finally {
       setSaving(false);
@@ -444,86 +458,75 @@ export default function DynamicCriteriaForm() {
 
   const submitTask = async (moduleItem: ModuleItem, task: TaskItem) => {
     try {
-      if (isTaskFrozen(task.id)) {
+      const taskStatus = getTaskStatus(task.id);
+      if (taskStatus !== "pending") {
         toast({
           title: "Task already submitted",
-          description: "Submitted tasks are locked for editing.",
+          description: "This task has already been submitted to the workflow.",
         });
         return;
       }
 
-      setSubmittingTaskId(task.id);
       const progress = taskProgress[task.id] || {
         claimedScore: 0,
         evidenceUrl: "",
         description: "",
       };
 
-      localStorage.setItem(
-        `${storageKey}-task-${task.id}`,
-        JSON.stringify(progress),
-      );
+      if (!progress.evidenceUrl?.trim()) {
+        toast({
+          title: "Evidence required",
+          description: "Please provide evidence URL before submitting.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-      const submitRes = await api.post(
-        "/api/committee/workflow/submissions/task",
-        {
-          formId,
-          criteriaId,
-          moduleId: moduleItem.id,
-          moduleName: moduleItem.moduleName,
-          taskId: task.id,
-          taskTitle: task.title,
-          claimedScore: progress.claimedScore,
-          maxMarks: Number(task.marks || 0),
-          evidenceUrl: progress.evidenceUrl,
-          description: progress.description,
-        },
-      );
+      setSubmittingTaskId(task.id);
 
-      const submitToRoles = Array.isArray(submitRes.data?.data?.submitToRoles)
-        ? submitRes.data.data.submitToRoles
-            .map((role: string) => String(role || "").trim())
-            .filter(Boolean)
+      const submitRes = await api.post("/api/submissions/submit", {
+        formId,
+        formTitle: payload?.formTitle || formId,
+        criteriaId,
+        criteriaName: payload?.criteria?.criteriaName || criteriaId,
+        moduleId: moduleItem.id,
+        moduleName: moduleItem.moduleName,
+        taskId: task.id,
+        taskName: task.title,
+        maxMarks: Number(task.marks || 0),
+        claimedScore: progress.claimedScore,
+        evidence: progress.evidenceUrl,
+        description: progress.description,
+      });
+
+      const submissionData = submitRes.data?.data;
+      const submitToRoleIds = Array.isArray(submissionData?.submitToRoleIds)
+        ? submissionData.submitToRoleIds
         : [];
+      const submissionId = submissionData?.id || submissionData?.submissionId;
 
-      const nextStatuses = {
-        ...taskStatuses,
-        [task.id]: "submitted" as TaskWorkflowStatus,
-      };
-      setTaskStatuses(nextStatuses);
+      // Update local state
+      setTaskStatuses((prev) => ({ ...prev, [task.id]: "submitted" }));
       setTaskSubmittedRoles((prev) => ({
         ...prev,
-        [task.id]: submitToRoles,
+        [task.id]: submitToRoleIds,
       }));
-      localStorage.setItem(
-        `${storageKey}-statuses`,
-        JSON.stringify(nextStatuses),
-      );
-      localStorage.setItem(
-        `${storageKey}-submitted`,
-        JSON.stringify(
-          Object.fromEntries(
-            Object.entries(nextStatuses).map(([currentTaskId, status]) => [
-              currentTaskId,
-              status !== "pending",
-            ]),
-          ),
-        ),
-      );
+      if (submissionId) {
+        setTaskSubmissionIds((prev) => ({ ...prev, [task.id]: submissionId }));
+      }
 
       toast({
-        title: "Task submitted",
-        description:
-          submitToRoles.length > 0
-            ? `${task.title || "Task"} submitted to ${submitToRoles.join(", ")}.`
-            : `${task.title || "Task"} submitted successfully.`,
+        title: "Task submitted successfully",
+        description: submitToRoleIds.length
+          ? `Submitted to ${submitToRoleIds.join(", ")} for review.`
+          : "Task submitted to workflow.",
       });
     } catch (error: any) {
       toast({
         title: "Task submission failed",
         description:
           error?.response?.data?.message ||
-          "Unable to submit task. Please check workflow roles.",
+          "Unable to submit task. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -542,23 +545,6 @@ export default function DynamicCriteriaForm() {
       }
 
       setSubmittingModuleId(moduleItem.id);
-
-      const modulePayload = moduleItem.tasks.reduce(
-        (acc, task) => {
-          acc[task.id] = taskProgress[task.id] || {
-            claimedScore: 0,
-            evidenceUrl: "",
-            description: "",
-          };
-          return acc;
-        },
-        {} as Record<string, TaskProgress>,
-      );
-
-      localStorage.setItem(
-        `${storageKey}-module-${moduleItem.id}`,
-        JSON.stringify(modulePayload),
-      );
 
       const nextStatuses = { ...taskStatuses };
       const nextSubmittedRoles = { ...taskSubmittedRoles };
@@ -605,21 +591,6 @@ export default function DynamicCriteriaForm() {
       });
       setTaskStatuses(nextStatuses);
       setTaskSubmittedRoles(nextSubmittedRoles);
-      localStorage.setItem(
-        `${storageKey}-statuses`,
-        JSON.stringify(nextStatuses),
-      );
-      localStorage.setItem(
-        `${storageKey}-submitted`,
-        JSON.stringify(
-          Object.fromEntries(
-            Object.entries(nextStatuses).map(([taskId, status]) => [
-              taskId,
-              status !== "pending",
-            ]),
-          ),
-        ),
-      );
 
       toast({
         title: "Section submitted",
@@ -638,10 +609,45 @@ export default function DynamicCriteriaForm() {
     }
   };
 
+  const acceptReview = async (task: TaskItem) => {
+    try {
+      const submissionId = taskSubmissionIds[task.id];
+      if (!submissionId) {
+        toast({
+          title: "Cannot accept",
+          description: "Submission ID not found.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setAcceptingTaskId(task.id);
+
+      await api.post(`/api/submissions/${submissionId}/accept`);
+
+      setTaskStatuses((prev) => ({ ...prev, [task.id]: "accepted" }));
+      setTaskCanAppeal((prev) => ({ ...prev, [task.id]: false }));
+
+      toast({
+        title: "Review accepted",
+        description: "The reviewer's score has been set as your final score.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Accept failed",
+        description:
+          error?.response?.data?.message || "Unable to accept review.",
+        variant: "destructive",
+      });
+    } finally {
+      setAcceptingTaskId(null);
+    }
+  };
+
   const submitTaskAppeal = async (moduleItem: ModuleItem, task: TaskItem) => {
     try {
       const taskStatus = getTaskStatus(task.id);
-      if (taskStatus === "appealed") {
+      if (taskStatus === "appealed" || taskStatus === "appeal-resolved") {
         toast({
           title: "Appeal already submitted",
           description: "This task is already in appeal workflow.",
@@ -649,54 +655,95 @@ export default function DynamicCriteriaForm() {
         return;
       }
 
-      if (
-        !taskCanAppeal[task.id] &&
-        taskStatus !== "submitted" &&
-        taskStatus !== "approved"
-      ) {
+      if (taskStatus !== "reviewed") {
         toast({
           title: "Appeal not allowed",
-          description: "This task is not eligible for appeal yet.",
+          description: "This task must be reviewed before appealing.",
           variant: "destructive",
         });
         return;
       }
 
-      const reason = window.prompt("Enter appeal reason");
-      if (reason === null) return;
+      const submissionId = taskSubmissionIds[task.id];
+      if (!submissionId) {
+        toast({
+          title: "Cannot appeal",
+          description:
+            "Submission ID not found. Please try submitting the task again.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-      setAppealingTaskId(task.id);
+      // Open dialog for appeal
+      setAppealFormData({
+        taskId: task.id,
+        moduleId: moduleItem.id,
+        reason: "",
+      });
+      setAppealDialogOpen(true);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error?.message || "Unable to initiate appeal.",
+        variant: "destructive",
+      });
+    }
+  };
 
-      const progress = taskProgress[task.id] || {
+  const handleAppealSubmit = async () => {
+    try {
+      if (!appealFormData.reason.trim()) {
+        toast({
+          title: "Appeal reason required",
+          description: "Please provide a reason for the appeal.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const submissionId = taskSubmissionIds[appealFormData.taskId];
+      if (!submissionId) {
+        toast({
+          title: "Cannot appeal",
+          description: "Submission ID not found.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setAppealingTaskId(appealFormData.taskId);
+
+      const progress = taskProgress[appealFormData.taskId] || {
         claimedScore: 0,
         evidenceUrl: "",
         description: "",
       };
 
       const response = await api.post(
-        "/api/committee/workflow/submissions/task/appeal",
+        `/api/submissions/${submissionId}/appeal`,
         {
-          formId,
-          criteriaId,
-          moduleId: moduleItem.id,
-          taskId: task.id,
-          reason,
-          requestedScore: progress.claimedScore,
+          appealReason: appealFormData.reason,
+          appealRequestedScore: progress.claimedScore,
         },
       );
 
-      const appealToRoles = Array.isArray(response.data?.data?.appealToRoles)
-        ? response.data.data.appealToRoles
-            .map((role: string) => String(role || "").trim())
-            .filter(Boolean)
+      const appealToRoles = Array.isArray(response.data?.data?.appealToRoleIds)
+        ? response.data.data.appealToRoleIds
         : [];
 
-      setTaskStatuses((prev) => ({ ...prev, [task.id]: "appealed" }));
+      setTaskStatuses((prev) => ({
+        ...prev,
+        [appealFormData.taskId]: "appealed",
+      }));
       setTaskSubmittedRoles((prev) => ({
         ...prev,
-        [task.id]: appealToRoles,
+        [appealFormData.taskId]: appealToRoles,
       }));
-      setTaskCanAppeal((prev) => ({ ...prev, [task.id]: false }));
+      setTaskCanAppeal((prev) => ({ ...prev, [appealFormData.taskId]: false }));
+
+      setAppealDialogOpen(false);
+      setAppealFormData({ taskId: "", moduleId: "", reason: "" });
 
       toast({
         title: "Appeal submitted",
@@ -779,9 +826,17 @@ export default function DynamicCriteriaForm() {
               </div>
             </div>
             <div className="flex justify-between text-sm text-muted-foreground">
-              <span>
-                {totalClaimedMarks} / {totalMaxMarks} Points
-              </span>
+              <div className="flex flex-col gap-0.5">
+                {totalFinalScore > 0 ? (
+                  <span className="text-emerald-600 font-medium">
+                    Final Score: {totalFinalScore} / {totalMaxMarks}
+                  </span>
+                ) : (
+                  <span>
+                    Claimed: {totalClaimedMarks} / {totalMaxMarks}
+                  </span>
+                )}
+              </div>
               <span>
                 Submitted: {completedTasks} • Tasks: {allTasks.length}
               </span>
@@ -869,13 +924,21 @@ export default function DynamicCriteriaForm() {
                           </div>
 
                           <div className="flex flex-col items-end gap-1">
-                            {taskStatus === "approved" ? (
+                            {taskStatus === "accepted" ? (
                               <Badge className="bg-emerald-600 text-white">
-                                Approved
+                                Accepted
+                              </Badge>
+                            ) : taskStatus === "appeal-resolved" ? (
+                              <Badge className="bg-emerald-600 text-white">
+                                Appeal Resolved
                               </Badge>
                             ) : taskStatus === "appealed" ? (
                               <Badge className="bg-amber-500 text-white">
                                 Appealed
+                              </Badge>
+                            ) : taskStatus === "reviewed" ? (
+                              <Badge className="bg-blue-600 text-white">
+                                Reviewed
                               </Badge>
                             ) : taskStatus === "submitted" ? (
                               <Badge variant="secondary">Submitted</Badge>
@@ -996,7 +1059,7 @@ export default function DynamicCriteriaForm() {
 
                           <div className="md:col-span-2">
                             <label className="text-sm font-medium block mb-1.5">
-                              Faculty Description
+                              Description
                             </label>
                             {taskFrozen ? (
                               <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm min-h-[100px] whitespace-pre-wrap">
@@ -1019,42 +1082,109 @@ export default function DynamicCriteriaForm() {
                           </div>
                         </div>
 
+                        {/* Reviewer Section */}
+                        {taskStatus !== "pending" &&
+                          taskReviewData[task.id] && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                              <div>
+                                <label className="text-sm font-medium block mb-1.5">
+                                  Verified Score
+                                </label>
+                                <div className="rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-900">
+                                  {taskReviewData[task.id].reviewerScore} /{" "}
+                                  {task.marks}
+                                </div>
+                              </div>
+                              <div className="md:col-span-1">
+                                <label className="text-sm font-medium block mb-1.5">
+                                  Reviewer Remarks
+                                </label>
+                                <div className="rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-sm min-h-[42px] text-blue-900 whitespace-pre-wrap">
+                                  {taskReviewData[task.id].reviewerReason ||
+                                    "No remarks provided"}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                        {/* Appeal Section */}
+                        {taskStatus === "appeal-resolved" &&
+                          taskAppealData[task.id] && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                              <div>
+                                <label className="text-sm font-medium block mb-1.5">
+                                  Final Appeal Score
+                                </label>
+                                <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">
+                                  {taskAppealData[task.id].appealerScore} /{" "}
+                                  {task.marks}
+                                </div>
+                              </div>
+                              <div className="md:col-span-1">
+                                <label className="text-sm font-medium block mb-1.5">
+                                  Appeal Resolution Remarks
+                                </label>
+                                <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm min-h-[42px] text-emerald-900 whitespace-pre-wrap">
+                                  {taskAppealData[task.id].appealerReason ||
+                                    "No remarks provided"}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
                         <div className="flex justify-end pt-1">
                           <div className="flex items-center gap-2">
-                            {(taskCanAppeal[task.id] ||
-                              taskStatus === "submitted" ||
-                              taskStatus === "approved") &&
-                            taskStatus !== "appealed" ? (
+                            {taskStatus === "reviewed" ? (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  onClick={() =>
+                                    submitTaskAppeal(moduleItem, task)
+                                  }
+                                  disabled={appealingTaskId === task.id}
+                                >
+                                  {appealingTaskId === task.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                  ) : null}
+                                  {appealingTaskId === task.id
+                                    ? "Appealing..."
+                                    : "Appeal"}
+                                </Button>
+                                <Button
+                                  onClick={() => acceptReview(task)}
+                                  disabled={acceptingTaskId === task.id}
+                                >
+                                  {acceptingTaskId === task.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                  ) : null}
+                                  {acceptingTaskId === task.id
+                                    ? "Accepting..."
+                                    : "Accept"}
+                                </Button>
+                              </>
+                            ) : taskStatus === "pending" ? (
                               <Button
-                                variant="outline"
-                                onClick={() =>
-                                  submitTaskAppeal(moduleItem, task)
-                                }
-                                disabled={appealingTaskId === task.id}
+                                onClick={() => submitTask(moduleItem, task)}
+                                disabled={submittingTaskId === task.id}
                               >
-                                {appealingTaskId === task.id ? (
+                                {submittingTaskId === task.id ? (
                                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                                 ) : null}
-                                {appealingTaskId === task.id
-                                  ? "Appealing..."
-                                  : "Appeal Task"}
-                              </Button>
-                            ) : null}
-                            <Button
-                              onClick={() => submitTask(moduleItem, task)}
-                              disabled={
-                                submittingTaskId === task.id || taskFrozen
-                              }
-                            >
-                              {submittingTaskId === task.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                              ) : null}
-                              {taskFrozen
-                                ? "Submitted"
-                                : submittingTaskId === task.id
+                                {submittingTaskId === task.id
                                   ? "Submitting..."
                                   : "Submit Task"}
-                            </Button>
+                              </Button>
+                            ) : (
+                              <Badge className="bg-gray-600 text-white px-4 py-2">
+                                {taskStatus === "accepted"
+                                  ? "Accepted"
+                                  : taskStatus === "appeal-resolved"
+                                    ? "Appeal Resolved"
+                                    : taskStatus === "appealed"
+                                      ? "Under Appeal"
+                                      : "Submitted"}
+                              </Badge>
+                            )}
                           </div>
                         </div>
                       </CardContent>
@@ -1092,6 +1222,65 @@ export default function DynamicCriteriaForm() {
           </Button>
         </div>
       </div>
+
+      {/* Appeal Dialog */}
+      <Dialog open={appealDialogOpen} onOpenChange={setAppealDialogOpen}>
+        <DialogContent className="sm:max-w-[525px]">
+          <DialogHeader>
+            <DialogTitle>Submit Appeal</DialogTitle>
+            <DialogDescription>
+              Provide a reason for appealing the reviewer's score. Your appeal
+              will be sent to the designated appeal reviewers.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="appeal-reason" className="text-sm font-medium">
+                Appeal Reason <span className="text-destructive">*</span>
+              </label>
+              <Textarea
+                id="appeal-reason"
+                placeholder="Explain why you are appealing the reviewer's score..."
+                value={appealFormData.reason}
+                onChange={(e) =>
+                  setAppealFormData((prev) => ({
+                    ...prev,
+                    reason: e.target.value,
+                  }))
+                }
+                rows={5}
+                className="resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setAppealDialogOpen(false);
+                setAppealFormData({ taskId: "", moduleId: "", reason: "" });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAppealSubmit}
+              disabled={
+                appealingTaskId !== null || !appealFormData.reason.trim()
+              }
+            >
+              {appealingTaskId ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                "Submit Appeal"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

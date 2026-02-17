@@ -595,7 +595,8 @@ export default function CreateFormScreen() {
     [draft.criteria],
   );
 
-  if (user?.role !== "superadmin") {
+  // Only superadmin can access (case-insensitive)
+  if (String(user?.role || "").toLowerCase() !== "superadmin") {
     return (
       <DashboardLayout title="Create Form" subtitle="Super admin access only">
         <Card>

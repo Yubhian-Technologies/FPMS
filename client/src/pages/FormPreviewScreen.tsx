@@ -51,7 +51,8 @@ export default function FormPreviewScreen() {
     loadForm();
   }, [formId]);
 
-  if (user?.role !== "superadmin") {
+  // Only superadmin can access (case-insensitive)
+  if (String(user?.role || "").toLowerCase() !== "superadmin") {
     return (
       <DashboardLayout title="Form Preview" subtitle="Super admin access only">
         <Card>

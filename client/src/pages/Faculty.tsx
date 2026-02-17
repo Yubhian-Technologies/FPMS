@@ -131,27 +131,42 @@ export default function Faculty() {
   };
 
   const fetchDesignations = async () => {
-    const res = await api.get("/api/hod/designations");
-    const payload = res.data?.data;
+    try {
+      const res = await api.get("/api/hod/designations");
+      console.log("[Faculty] Designations response:", res.data);
 
-    const designationList = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.designations)
-        ? payload.designations
-        : [];
+      const payload = res.data?.data;
+      const designationList = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.designations)
+          ? payload.designations
+          : [];
 
-    setDesignations(
-      designationList
-        .map((item: string) => String(item || "").trim())
-        .filter(Boolean),
-    );
+      console.log("[Faculty] Parsed designations:", designationList);
+      setDesignations(
+        designationList
+          .map((item: string) => String(item || "").trim())
+          .filter(Boolean),
+      );
+    } catch (error) {
+      console.error("[Faculty] Failed to fetch designations:", error);
+      setDesignations([]);
+    }
   };
 
   const fetchFacultyRole = async () => {
-    const res = await api.get("/api/hod/faculty-role");
-    const data = res.data?.data || {};
-    const resolvedLevel = Number(data.level);
-    setFacultyRoleLevel(Number.isFinite(resolvedLevel) ? resolvedLevel : 0);
+    try {
+      const res = await api.get("/api/hod/faculty-role");
+      console.log("[Faculty] Faculty role response:", res.data);
+
+      const data = res.data?.data || {};
+      const resolvedLevel = Number(data.level);
+      console.log("[Faculty] Faculty level:", resolvedLevel);
+      setFacultyRoleLevel(Number.isFinite(resolvedLevel) ? resolvedLevel : 0);
+    } catch (error) {
+      console.error("[Faculty] Failed to fetch faculty role:", error);
+      setFacultyRoleLevel(0);
+    }
   };
 
   useEffect(() => {

@@ -50,66 +50,91 @@ interface SubmissionItem {
   updatedAt: any;
 }
 
-export default function Review() {
+export default function AppealReview() {
   const { user } = useAuth();
   const { toast } = useToast();
 
   const [queue, setQueue] = useState<SubmissionItem[]>([]);
-  const [reviewedItems, setReviewedItems] = useState<SubmissionItem[]>([]);
+  const [resolvedItems, setResolvedItems] = useState<SubmissionItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState<Record<string, boolean>>({});
   const [reviewInputs, setReviewInputs] = useState<
-    Record<string, { verifiedScore: string; remarks: string }>
+    Record<string, { appealerScore: string; appealerReason: string }>
   >({});
 
-  // Allow any authenticated user with a role to access review page
-  // The backend will filter submissions based on their role
-  const canReview = user?.role && user.role !== "faculty";
+  // Can review appeals if user is dean, vice-principal, principal, or committee
+  const canReviewAppeal =
+    user?.role === "dean" ||
+    user?.role === "principle" ||
+    user?.role === "committee" ||
+    String(user?.role || "")
+      .toLowerCase()
+      .includes("vice");
 
   const fetchQueue = async () => {
     setLoading(true);
     try {
-      // Fetch both pending and reviewed submissions
-      const [pendingRes, reviewedRes] = await Promise.all([
-        api.get("/api/submissions/review-queue"),
-        api.get("/api/submissions/my-reviewed"),
+      console.log(
+        "[AppealReview] Fetching appeal queue and resolved appeals...",
+      );
+      console.log("[AppealReview] User role:", user?.role);
+
+      // Fetch both pending appeals and resolved appeals
+      const [pendingRes, resolvedRes] = await Promise.all([
+        api.get("/api/submissions/appeal-queue"),
+        api.get("/api/submissions/my-resolved-appeals"),
       ]);
 
       const pending: SubmissionItem[] = Array.isArray(pendingRes.data?.data)
         ? pendingRes.data.data
         : [];
 
-      const reviewed: SubmissionItem[] = Array.isArray(reviewedRes.data?.data)
-        ? reviewedRes.data.data
+      const resolved: SubmissionItem[] = Array.isArray(resolvedRes.data?.data)
+        ? resolvedRes.data.data
         : [];
 
-      console.log("Fetched review queue:", pending);
-      console.log("Fetched reviewed items:", reviewed);
+      console.log(
+        "[AppealReview] Fetched appeal queue:",
+        pending.length,
+        "items",
+      );
+      console.log(
+        "[AppealReview] Fetched resolved appeals:",
+        resolved.length,
+        "items",
+      );
+      if (pending.length > 0) {
+        console.log("[AppealReview] First pending appeal:", pending[0]);
+      }
 
       setQueue(pending);
-      setReviewedItems(reviewed);
+      setResolvedItems(resolved);
       setReviewInputs((prev) => {
         const next = { ...prev };
         pending.forEach((item) => {
           const id = String(item.id || "").trim();
           if (!id || next[id]) return;
+          // Initialize with requested score or reviewer score
+          const defaultScore =
+            item.appealRequestedScore ??
+            item.reviewerScore ??
+            item.claimedScore;
           next[id] = {
-            verifiedScore:
-              item.claimedScore !== null &&
-              Number.isFinite(Number(item.claimedScore))
-                ? String(item.claimedScore)
+            appealerScore:
+              defaultScore !== null && Number.isFinite(Number(defaultScore))
+                ? String(defaultScore)
                 : "",
-            remarks: "",
+            appealerReason: "",
           };
         });
         return next;
       });
     } catch (error) {
-      console.error("Failed to fetch review queue:", error);
+      console.error("[AppealReview] Failed to fetch appeal queue:", error);
       toast({
         title: "Error",
-        description: "Failed to fetch review queue",
+        description: "Failed to fetch appeal queue",
         variant: "destructive",
       });
     } finally {
@@ -118,7 +143,7 @@ export default function Review() {
   };
 
   useEffect(() => {
-    if (!user || !canReview) {
+    if (!user || !canReviewAppeal) {
       setLoading(false);
       return;
     }
@@ -128,11 +153,11 @@ export default function Review() {
 
   if (!user) return null;
 
-  if (!canReview) {
+  if (!canReviewAppeal) {
     return (
-      <DashboardLayout title="Review Submissions">
+      <DashboardLayout title="Review Appeals">
         <div className="text-center text-muted-foreground py-16">
-          Access restricted to reviewer roles.
+          Access restricted to Dean, Vice Principal, and Committee roles.
         </div>
       </DashboardLayout>
     );
@@ -140,7 +165,7 @@ export default function Review() {
 
   if (loading) {
     return (
-      <DashboardLayout title="Review Submissions">
+      <DashboardLayout title="Review Appeals">
         <div className="flex justify-center items-center h-64">
           <Loader2 className="animate-spin h-10 w-10 text-primary" />
         </div>
@@ -166,7 +191,7 @@ export default function Review() {
     );
   });
 
-  const filteredReviewed = reviewedItems.filter((item) => {
+  const filteredResolved = resolvedItems.filter((item) => {
     const query = searchTerm.toLowerCase();
     return (
       String(item.userName || "")
@@ -184,10 +209,6 @@ export default function Review() {
     );
   });
 
-  const pendingAppeals = queue.filter(
-    (item) => String(item.status || "").toLowerCase() === "appealed",
-  ).length;
-
   const resolveFormTitle = (formTitle?: string | null) => {
     return String(formTitle || "").trim() || "-";
   };
@@ -196,14 +217,14 @@ export default function Review() {
     return String(criteriaName || "").trim() || "-";
   };
 
-  const updateReviewInput = (
+  const updateAppealInput = (
     submissionId: string,
-    field: "verifiedScore" | "remarks",
+    field: "appealerScore" | "appealerReason",
     value: string,
     maxMarks?: number,
   ) => {
     const clampScoreInput = () => {
-      if (field !== "verifiedScore") return value;
+      if (field !== "appealerScore") return value;
 
       const trimmedValue = String(value || "").trim();
       if (trimmedValue === "") return "";
@@ -219,23 +240,23 @@ export default function Review() {
     setReviewInputs((prev) => ({
       ...prev,
       [submissionId]: {
-        verifiedScore: prev[submissionId]?.verifiedScore || "",
-        remarks: prev[submissionId]?.remarks || "",
+        appealerScore: prev[submissionId]?.appealerScore || "",
+        appealerReason: prev[submissionId]?.appealerReason || "",
         [field]: clampScoreInput(),
       },
     }));
   };
 
-  const handleReview = async (item: SubmissionItem) => {
+  const handleAppealReview = async (item: SubmissionItem) => {
     const submissionId = String(item.id || "").trim();
     if (!submissionId) return;
 
     const input = reviewInputs[submissionId] || {
-      verifiedScore: "",
-      remarks: "",
+      appealerScore: "",
+      appealerReason: "",
     };
 
-    const numericScore = Number(input.verifiedScore);
+    const numericScore = Number(input.appealerScore);
     const maxMarks = Number(item.maxMarks || 0);
 
     if (
@@ -253,32 +274,32 @@ export default function Review() {
 
     setReviewing((prev) => ({ ...prev, [submissionId]: true }));
     try {
-      await api.post(`/api/submissions/${submissionId}/review`, {
-        reviewerScore: numericScore,
-        reviewerReason: input.remarks,
+      await api.post(`/api/submissions/${submissionId}/review-appeal`, {
+        appealerScore: numericScore,
+        appealerReason: input.appealerReason,
       });
 
-      // Update the item with review data before moving to reviewed
-      const reviewedItem: SubmissionItem = {
+      // Update the item with appeal review data before moving to resolved
+      const resolvedItem: SubmissionItem = {
         ...item,
-        reviewerScore: numericScore,
-        reviewerReason: input.remarks,
-        status: "reviewed",
+        appealerScore: numericScore,
+        appealerReason: input.appealerReason,
+        status: "appeal-resolved",
         finalScore: numericScore,
       };
 
       setQueue((prev) => prev.filter((row) => row.id !== submissionId));
-      setReviewedItems((prev) => [reviewedItem, ...prev]);
+      setResolvedItems((prev) => [resolvedItem, ...prev]);
 
       toast({
-        title: "Reviewed successfully",
-        description: "Submission moved to next workflow stage.",
+        title: "Appeal reviewed successfully",
+        description: "Appeal has been resolved.",
       });
     } catch (error: any) {
       toast({
-        title: "Review failed",
+        title: "Appeal review failed",
         description:
-          error?.response?.data?.message || "Unable to review submission.",
+          error?.response?.data?.message || "Unable to review appeal.",
         variant: "destructive",
       });
     } finally {
@@ -286,19 +307,18 @@ export default function Review() {
     }
   };
 
-  const renderQueueCard = (
+  const renderAppealCard = (
     item: SubmissionItem,
-    type: "pending" | "reviewed",
+    type: "pending" | "resolved",
   ) => {
     const submissionId = String(item.id || "").trim();
     const input = reviewInputs[submissionId] || {
-      verifiedScore: "",
-      remarks: "",
+      appealerScore: "",
+      appealerReason: "",
     };
     const isReviewing = Boolean(reviewing[submissionId]);
     const maxMarks = Number(item.maxMarks || 0);
-    const status = String(item.status || "submitted").toLowerCase();
-    const isAppealFlow = item.isAppealed && item.appealToRoleIds.length > 0;
+    const status = String(item.status || "appealed").toLowerCase();
 
     return (
       <Card key={submissionId} className="border shadow-sm">
@@ -319,17 +339,17 @@ export default function Review() {
             </div>
             <div className="flex flex-col items-end gap-1">
               <Badge
-                variant={status === "appealed" ? "destructive" : "secondary"}
+                variant={
+                  status === "appealed"
+                    ? "destructive"
+                    : status === "appeal-resolved"
+                      ? "default"
+                      : "secondary"
+                }
               >
-                {status || "submitted"}
+                {status || "appealed"}
               </Badge>
-              {isAppealFlow && <Badge variant="outline">Appeal Flow</Badge>}
-              {item.submitToRoleIds.length > 0 && !isAppealFlow && (
-                <Badge variant="outline">
-                  To: {item.submitToRoleIds.join(", ")}
-                </Badge>
-              )}
-              {isAppealFlow && item.appealToRoleIds.length > 0 && (
+              {item.appealToRoleIds.length > 0 && (
                 <Badge variant="outline">
                   Appeal To: {item.appealToRoleIds.join(", ")}
                 </Badge>
@@ -345,14 +365,13 @@ export default function Review() {
                 <strong>Claimed:</strong> {Number(item.claimedScore || 0)} /{" "}
                 {maxMarks}
               </p>
+              <p className="mt-1">
+                <strong>Reviewer Score:</strong>{" "}
+                {item.reviewerScore !== null ? item.reviewerScore : "-"}
+              </p>
               <p className="mt-1 break-all">
                 <strong>Evidence:</strong> {item.evidence || "-"}
               </p>
-              {item.reviewerScore !== null && (
-                <p className="mt-1">
-                  <strong>Reviewer Score:</strong> {item.reviewerScore}
-                </p>
-              )}
             </div>
             <div className="rounded-md border p-3 text-sm">
               <p className="font-medium">Description</p>
@@ -362,66 +381,23 @@ export default function Review() {
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Verified Score
-              </label>
-              <Input
-                type="number"
-                min={0}
-                max={maxMarks}
-                value={
-                  type === "pending"
-                    ? input.verifiedScore
-                    : (item.reviewerScore ?? "")
-                }
-                onChange={(e) =>
-                  updateReviewInput(
-                    submissionId,
-                    "verifiedScore",
-                    e.target.value,
-                    maxMarks,
-                  )
-                }
-                disabled={type === "reviewed"}
-                className={type === "reviewed" ? "bg-muted" : ""}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Remarks</label>
-              <Textarea
-                value={
-                  type === "pending"
-                    ? input.remarks
-                    : (item.reviewerReason ?? "")
-                }
-                onChange={(e) =>
-                  updateReviewInput(submissionId, "remarks", e.target.value)
-                }
-                placeholder="Enter review remarks"
-                rows={3}
-                disabled={type === "reviewed"}
-                className={type === "reviewed" ? "bg-muted" : ""}
-              />
-            </div>
-          </div>
-
-          {type === "reviewed" && (
-            <div className="flex items-center gap-2">
-              {status === "accepted" && (
-                <div className="text-sm text-emerald-600 font-medium">
-                  ✓ Faculty accepted this review
-                </div>
-              )}
-              {status === "appealed" && (
-                <div className="text-sm text-amber-600 font-medium">
-                  ⚠ Faculty appealed this review
-                </div>
-              )}
+          {/* Review Details Section */}
+          {item.reviewerScore !== null && item.reviewerReason && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
+              <p className="text-sm font-medium mb-2 text-blue-900">
+                Reviewer's Evaluation
+              </p>
+              <p className="text-sm text-blue-800">
+                <strong>Verified Score:</strong> {item.reviewerScore} /{" "}
+                {maxMarks}
+              </p>
+              <p className="text-sm text-blue-800 mt-1">
+                <strong>Remarks:</strong> {item.reviewerReason}
+              </p>
             </div>
           )}
 
+          {/* Appeal Information Section */}
           {item.isAppealed && item.appealReason && (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
               <p className="text-sm font-medium mb-2 text-amber-900">
@@ -438,53 +414,78 @@ export default function Review() {
             </div>
           )}
 
-          {status === "appeal-resolved" && item.appealerScore !== null && (
-            <div className="rounded-md border border-purple-200 bg-purple-50 p-3">
-              <p className="text-sm font-medium mb-2 text-purple-900">
-                Appeal Resolution
-              </p>
-              <p className="text-sm text-purple-800">
-                <strong>Final Score (After Appeal):</strong>{" "}
-                {item.appealerScore} / {maxMarks}
-              </p>
-              {item.appealerReason && (
-                <p className="text-sm text-purple-800 mt-1">
-                  <strong>Appealer Remarks:</strong> {item.appealerReason}
-                </p>
-              )}
-              {item.appealerRole && (
-                <p className="text-sm text-purple-800 mt-1">
-                  <strong>Resolved By:</strong> {item.appealerRole}
-                </p>
-              )}
-              <p className="text-sm text-purple-800 mt-2 font-medium">
-                ✓ Appeal has been resolved
-              </p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Final Score
+              </label>
+              <Input
+                type="number"
+                min={0}
+                max={maxMarks}
+                value={
+                  type === "pending"
+                    ? input.appealerScore
+                    : (item.appealerScore ?? "")
+                }
+                onChange={(e) =>
+                  updateAppealInput(
+                    submissionId,
+                    "appealerScore",
+                    e.target.value,
+                    maxMarks,
+                  )
+                }
+                disabled={type === "resolved"}
+                className={type === "resolved" ? "bg-muted" : ""}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">Remarks</label>
+              <Textarea
+                value={
+                  type === "pending"
+                    ? input.appealerReason
+                    : (item.appealerReason ?? "")
+                }
+                onChange={(e) =>
+                  updateAppealInput(
+                    submissionId,
+                    "appealerReason",
+                    e.target.value,
+                  )
+                }
+                placeholder="Enter appeal review remarks"
+                rows={3}
+                disabled={type === "resolved"}
+                className={type === "resolved" ? "bg-muted" : ""}
+              />
+            </div>
+          </div>
+
+          {type === "resolved" && (
+            <div className="text-sm text-purple-600 font-medium">
+              ✓ Appeal resolved
             </div>
           )}
 
           {type === "pending" ? (
             <div className="flex justify-end">
-              <Button onClick={() => handleReview(item)} disabled={isReviewing}>
+              <Button
+                onClick={() => handleAppealReview(item)}
+                disabled={isReviewing}
+              >
                 {isReviewing ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
-                {isReviewing ? "Reviewing..." : "Submit Review"}
+                {isReviewing ? "Reviewing..." : "Submit Appeal Review"}
               </Button>
             </div>
           ) : (
             <div className="flex justify-end">
-              {status === "accepted" ? (
-                <Badge className="bg-emerald-600 text-white">Accepted</Badge>
-              ) : status === "appealed" ? (
-                <Badge className="bg-amber-600 text-white">Appealed</Badge>
-              ) : status === "appeal-resolved" ? (
-                <Badge className="bg-purple-600 text-white">
-                  Appeal Resolved
-                </Badge>
-              ) : (
-                <Badge className="bg-blue-600 text-white">Reviewed</Badge>
-              )}
+              <Badge className="bg-purple-600 text-white">
+                Appeal Resolved
+              </Badge>
             </div>
           )}
         </CardContent>
@@ -494,30 +495,30 @@ export default function Review() {
 
   return (
     <DashboardLayout
-      title="Review Submissions"
-      subtitle="Faculty Submissions Review"
+      title="Review Appeals"
+      subtitle="Faculty Appeal Submissions Review"
     >
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3 mb-6">
         <Card>
           <CardHeader className="flex justify-between items-center pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Submissions
+              Total Appeals
             </CardTitle>
             <FileText className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold font-display">
-              {queue.length + reviewedItems.length}
+              {queue.length + resolvedItems.length}
             </p>
-            <p className="text-xs text-muted-foreground">workflow items</p>
+            <p className="text-xs text-muted-foreground">appeal items</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex justify-between items-center pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Pending
+              Pending Appeals
             </CardTitle>
             <TrendingUp className="h-5 w-5 text-destructive rotate-180" />
           </CardHeader>
@@ -526,7 +527,7 @@ export default function Review() {
               {queue.length}
             </p>
             <p className="text-xs text-muted-foreground">
-              pending review items
+              pending appeal reviews
             </p>
           </CardContent>
         </Card>
@@ -534,15 +535,15 @@ export default function Review() {
         <Card>
           <CardHeader className="flex justify-between items-center pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Reviewed
+              Resolved
             </CardTitle>
             <TrendingUp className="h-5 w-5 text-success" />
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold font-display text-success">
-              {reviewedItems.length}
+              {resolvedItems.length}
             </p>
-            <p className="text-xs text-muted-foreground">reviewed by you</p>
+            <p className="text-xs text-muted-foreground">resolved by you</p>
           </CardContent>
         </Card>
       </div>
@@ -556,24 +557,24 @@ export default function Review() {
         />
       </div>
 
-      {/* Pending Review */}
-      <h2 className="text-lg font-semibold mb-4">Pending Review</h2>
+      {/* Pending Appeals */}
+      <h2 className="text-lg font-semibold mb-4">Pending Appeals</h2>
       <div className="space-y-6 mb-12">
         {filteredQueue.length === 0 && (
           <p className="text-center text-muted-foreground py-8 border rounded-lg bg-muted/20">
-            No workflow submissions available for review.
+            No appeals available for review.
           </p>
         )}
-        {filteredQueue.map((item) => renderQueueCard(item, "pending"))}
+        {filteredQueue.map((item) => renderAppealCard(item, "pending"))}
       </div>
 
-      {/* Verified Submissions */}
-      <h2 className="text-lg font-semibold mb-4">My Reviewed Submissions</h2>
+      {/* Resolved Appeals */}
+      <h2 className="text-lg font-semibold mb-4">My Resolved Appeals</h2>
       <div className="space-y-6">
-        {filteredReviewed.map((item) => renderQueueCard(item, "reviewed"))}
-        {filteredReviewed.length === 0 && (
+        {filteredResolved.map((item) => renderAppealCard(item, "resolved"))}
+        {filteredResolved.length === 0 && (
           <p className="text-center text-muted-foreground py-8">
-            No submissions have been reviewed by you yet.
+            No appeals have been resolved by you yet.
           </p>
         )}
       </div>

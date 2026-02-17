@@ -1,4 +1,3 @@
-import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { db } from "../config/firebase.js";
 import admin from "firebase-admin";
@@ -53,22 +52,9 @@ export const deanLogin = async (req, res) => {
       });
     }
 
-    const token = jwt.sign(
-      {
-        id: deanDoc.id,
-        role: "dean",
-        email: deanData.email,
-        college: deanData.college,
-        department: deanData.department,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "24h" },
-    );
-
     return res.status(200).json({
       success: true,
       message: "Dean login successful",
-      token,
       user: {
         id: deanDoc.id,
         name: deanData.name,

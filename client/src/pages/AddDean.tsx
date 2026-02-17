@@ -42,8 +42,8 @@ interface Dean {
   hasPhd?: boolean;
 }
 
-interface CollegeOption {
-  id: string;
+interface CollegeDetails {
+  id?: string;
   name: string;
   code?: string;
 }
@@ -56,7 +56,9 @@ interface RoleOption {
 
 export default function AddDean() {
   const [deans, setDeans] = useState<Dean[]>([]);
-  const [collegeOptions, setCollegeOptions] = useState<CollegeOption[]>([]);
+  const [collegeDetails, setCollegeDetails] = useState<CollegeDetails | null>(
+    null,
+  );
   const [roleOptions, setRoleOptions] = useState<RoleOption[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddingDean, setIsAddingDean] = useState(false);
@@ -79,7 +81,7 @@ export default function AddDean() {
     hasPhd: false,
   });
 
-  const lockedCollegeName = collegeOptions[0]?.name || "";
+  const lockedCollegeName = collegeDetails?.name || "";
 
   const normalizedLockedCollege = String(lockedCollegeName || "")
     .trim()
@@ -148,13 +150,16 @@ export default function AddDean() {
     }
   };
 
-  const fetchColleges = async () => {
+  const fetchCollegeDetails = async () => {
     try {
-      const res = await api.get("/api/dean/colleges");
-      const data = Array.isArray(res.data?.data) ? res.data.data : [];
-      setCollegeOptions(data);
+      const res = await api.get("/api/dean/college-details");
+      const data = res.data?.data || null;
+      setCollegeDetails(data);
     } catch {
-      toast({ title: "Failed to load colleges", variant: "destructive" });
+      toast({
+        title: "Failed to load college details",
+        variant: "destructive",
+      });
     }
   };
 
@@ -172,7 +177,7 @@ export default function AddDean() {
     const load = async () => {
       try {
         setIsLoading(true);
-        await Promise.all([fetchDeans(), fetchColleges(), fetchRoles()]);
+        await Promise.all([fetchDeans(), fetchCollegeDetails(), fetchRoles()]);
       } finally {
         setIsLoading(false);
       }
@@ -421,31 +426,14 @@ export default function AddDean() {
                 </div>
                 <div className="space-y-2">
                   <Label>College *</Label>
-                  <Select
-                    value={lockedCollegeName || formData.college}
-                    disabled
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, college: value })
+                  <Input
+                    value={
+                      lockedCollegeName
+                        ? `${lockedCollegeName}${collegeDetails?.code ? ` (${collegeDetails.code})` : ""}`
+                        : ""
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={
-                          collegeOptions.length
-                            ? "Select college"
-                            : "No colleges available"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {collegeOptions.map((college) => (
-                        <SelectItem key={college.id} value={college.name}>
-                          {college.name}
-                          {college.code ? ` (${college.code})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    disabled
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Role *</Label>

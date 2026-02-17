@@ -130,24 +130,6 @@ const getNavItems = (
     },
     {
       icon: ClipboardCheck,
-      label: "Appeals",
-      href: "/appeals",
-      roles: ["faculty"],
-    },
-    {
-      icon: ClipboardCheck,
-      label: "Appeals",
-      href: "/hod-appeals",
-      roles: ["hod"],
-    },
-    {
-      icon: ClipboardCheck,
-      label: "Appeals",
-      href: "/dean-appeals",
-      roles: ["dean"],
-    },
-    {
-      icon: ClipboardCheck,
       label: "Add Dean",
       href: "/add-dean",
       roles: ["principle", "vice principle"],
@@ -160,21 +142,15 @@ const getNavItems = (
     },
     {
       icon: ClipboardCheck,
-      label: "Review Hod Appeals",
-      href: "/committee-review",
-      roles: ["committee"],
-    },
-    {
-      icon: ClipboardCheck,
-      label: "Review Submissions",
-      href: "/hod-review",
-      roles: ["principle"],
-    },
-    {
-      icon: ClipboardCheck,
       label: "Review Submissions",
       href: "/review",
-      roles: ["hod", "committee"],
+      roles: ["hod", "committee", "dean", "vice principle", "principle"],
+    },
+    {
+      icon: ClipboardCheck,
+      label: "Review Appeals",
+      href: "/appeal-review",
+      roles: ["vice principle", "principle", "committee"],
     },
     {
       icon: BarChart3,
@@ -253,7 +229,7 @@ export function AppSidebar() {
 
       try {
         setIsFormsLoading(true);
-        const response = await api.get("/api/committee/forms");
+        const response = await api.get("/api/auth/forms");
         setDynamicForms(
           Array.isArray(response.data?.data) ? response.data.data : [],
         );

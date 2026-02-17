@@ -1,4 +1,3 @@
-import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { db } from "../config/firebase.js";
 
@@ -61,21 +60,9 @@ export const facultyLogin = async (req, res) => {
       });
     }
 
-    const token = jwt.sign(
-      {
-        id: facultyDoc.id,
-        role: "faculty",
-        email: facultyData.email,
-        department: facultyData.department,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "24h" },
-    );
-
     return res.status(200).json({
       success: true,
       message: "Faculty login successful",
-      token,
       user: {
         id: facultyDoc.id,
         name: facultyData.name,

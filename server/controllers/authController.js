@@ -1,41 +1,6 @@
-import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { db, auth } from "../config/firebase.js";
 import admin from "firebase-admin";
-
-const DEMO_USERS = [
-  {
-    role: "faculty",
-    email: "faculty@demo.edu",
-    password: "demo123",
-    name: "Demo Faculty",
-  },
-  { role: "hod", email: "hod@demo.edu", password: "demo123", name: "Demo HoD" },
-  {
-    role: "dean",
-    email: "dean@demo.edu",
-    password: "demo123",
-    name: "Demo Dean",
-  },
-  {
-    role: "principle",
-    email: "principle@demo.edu",
-    password: "demo123",
-    name: "Demo Principle",
-  },
-  {
-    role: "committee",
-    email: "committee@demo.edu",
-    password: "demo123",
-    name: "Demo Committee",
-  },
-  {
-    role: "superadmin",
-    email: "superadmin@demo.edu",
-    password: "demo123",
-    name: "Super Admin",
-  },
-];
 
 const SUPERADMIN_DOC_ID = process.env.SUPERADMIN_DOC_ID || "root";
 const formsCollectionRef = () => db.collection("fpmsForms");
@@ -44,8 +9,28 @@ const normalizeRoleValue = (value) => {
   const role = String(value || "")
     .trim()
     .toLowerCase();
-  if (role === "principal" || role === "principle" || role === "admin")
+
+  // Normalize principle variations
+  if (role === "principal" || role === "principle" || role === "admin") {
     return "principle";
+  }
+
+  // Normalize vice principle variations
+  if (
+    role === "vice principal" ||
+    role === "vice principle" ||
+    role === "vice-principal" ||
+    role === "viceprincipal" ||
+    role === "viceprinciple"
+  ) {
+    return "vice principle";
+  }
+
+  // Normalize committee spelling variations
+  if (role === "committee" || role === "commitee") {
+    return "committee";
+  }
+
   return role;
 };
 
@@ -106,20 +91,11 @@ const resolveRoleFromAuthorizationHeader = async (authorizationHeader) => {
   const token = authorizationHeader.split(" ")[1];
   if (!token) return null;
 
-  if (token.startsWith("demo-token-")) {
-    return normalizeRoleValue(token.replace("demo-token-", ""));
-  }
-
   try {
-    const decodedJwt = jwt.verify(token, process.env.JWT_SECRET);
-    return normalizeRoleValue(decodedJwt?.role);
-  } catch (jwtError) {
-    try {
-      const decodedFirebase = await auth.verifyIdToken(token);
-      return inferRoleFromTokenContext(decodedFirebase);
-    } catch (firebaseError) {
-      return null;
-    }
+    const decodedFirebase = await auth.verifyIdToken(token);
+    return inferRoleFromTokenContext(decodedFirebase);
+  } catch (firebaseError) {
+    return null;
   }
 };
 
@@ -207,91 +183,57 @@ const resolveActorContextFromAuthorizationHeader = async (
   const token = authorizationHeader.split(" ")[1];
   if (!token) return null;
 
-  if (token.startsWith("demo-token-")) {
-    const role = token.replace("demo-token-", "");
-    return {
-      id: `demo-${role}`,
-      uid: `demo-${role}`,
-      role,
-      roleKey: normalizeRoleKey(role),
-      email: `${role}@demo.edu`,
-      college: "",
-      department: "",
-      name: role,
-    };
-  }
-
   try {
-    const decodedJwt = jwt.verify(token, process.env.JWT_SECRET);
-    const role = String(decodedJwt?.role || "");
+    const decodedFirebase = await auth.verifyIdToken(token);
+    const email = String(decodedFirebase?.email || "")
+      .trim()
+      .toLowerCase();
+
+    const roleFromClaim =
+      decodedFirebase?.role ||
+      decodedFirebase?.claims?.role ||
+      (decodedFirebase?.committeeMember ? "committee" : "");
+
+    let userDocData = null;
+    try {
+      const userDoc = await db
+        .collection("users")
+        .doc(decodedFirebase.uid)
+        .get();
+      if (userDoc.exists) userDocData = userDoc.data() || null;
+    } catch (docError) {}
+
+    const resolvedRole = String(
+      roleFromClaim || userDocData?.role || inferRoleFromEmail(email),
+    );
     const specificRole = await resolveSpecificRoleByEmail({
-      role,
-      email: decodedJwt?.email,
+      role: resolvedRole,
+      email,
     });
 
     return {
-      id: decodedJwt?.id || decodedJwt?.uid || decodedJwt?.email,
-      uid: decodedJwt?.uid,
+      id: decodedFirebase.uid,
+      uid: decodedFirebase.uid,
       role: specificRole,
       roleKey: normalizeRoleKey(specificRole),
-      email: decodedJwt?.email,
-      college: decodedJwt?.college,
-      department: decodedJwt?.department,
-      name: decodedJwt?.name,
+      email,
+      college:
+        decodedFirebase?.college ||
+        decodedFirebase?.claims?.college ||
+        userDocData?.college ||
+        "",
+      department:
+        decodedFirebase?.department ||
+        decodedFirebase?.claims?.department ||
+        userDocData?.department ||
+        "",
+      name:
+        decodedFirebase?.name ||
+        userDocData?.name ||
+        (email ? email.split("@")[0] : "User"),
     };
-  } catch (jwtError) {
-    try {
-      const decodedFirebase = await auth.verifyIdToken(token);
-      const email = String(decodedFirebase?.email || "")
-        .trim()
-        .toLowerCase();
-
-      const roleFromClaim =
-        decodedFirebase?.role ||
-        decodedFirebase?.claims?.role ||
-        (decodedFirebase?.committeeMember ? "committee" : "");
-
-      let userDocData = null;
-      try {
-        const userDoc = await db
-          .collection("users")
-          .doc(decodedFirebase.uid)
-          .get();
-        if (userDoc.exists) userDocData = userDoc.data() || null;
-      } catch (docError) {}
-
-      const resolvedRole = String(
-        roleFromClaim || userDocData?.role || inferRoleFromEmail(email),
-      );
-      const specificRole = await resolveSpecificRoleByEmail({
-        role: resolvedRole,
-        email,
-      });
-
-      return {
-        id: decodedFirebase.uid,
-        uid: decodedFirebase.uid,
-        role: specificRole,
-        roleKey: normalizeRoleKey(specificRole),
-        email,
-        college:
-          decodedFirebase?.college ||
-          decodedFirebase?.claims?.college ||
-          userDocData?.college ||
-          "",
-        department:
-          decodedFirebase?.department ||
-          decodedFirebase?.claims?.department ||
-          userDocData?.department ||
-          "",
-        name:
-          decodedFirebase?.name ||
-          userDocData?.name ||
-          (email ? email.split("@")[0] : "User"),
-      };
-    } catch (firebaseError) {
-      return null;
-    }
+  } catch (firebaseError) {
+    return null;
   }
 };
 
@@ -1126,26 +1068,6 @@ export const unifiedLogin = async (req, res) => {
 
     const normalizedEmail = String(email).trim().toLowerCase();
 
-    const demoUser = DEMO_USERS.find(
-      (item) =>
-        item.email.toLowerCase() === normalizedEmail &&
-        item.password === password,
-    );
-
-    if (demoUser) {
-      const token = `demo-token-${demoUser.role}`;
-      return res.status(200).json({
-        success: true,
-        token,
-        user: {
-          id: `demo-${demoUser.role}`,
-          name: demoUser.name,
-          email: demoUser.email,
-          role: demoUser.role,
-        },
-      });
-    }
-
     const apiKey = process.env.FIREBASE_WEB_API_KEY;
     if (!apiKey) {
       return res.status(500).json({
@@ -1236,14 +1158,10 @@ export const committeeLogin = async (req, res) => {
     type: "committee",
   };
 
-  const token = jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: "24h",
-  });
-
+  // For Firebase auth, return a simple success without JWT token
   return res.json({
     success: true,
     message: "Committee login successful",
-    token,
     user: {
       email,
       role: "committee",
@@ -1855,16 +1773,28 @@ export const updateSubmissionAppealWorkflowRules = async (req, res) => {
 
 export const getApplicableForms = async (req, res) => {
   try {
-    const role = await resolveRoleFromAuthorizationHeader(
+    let role = await resolveRoleFromAuthorizationHeader(
       req.headers.authorization,
     );
 
+    // Dev mode fallback: check x-user-role header
+    if (!role && req.headers["x-user-role"]) {
+      role = normalizeRoleValue(req.headers["x-user-role"]);
+      console.log(
+        "[getApplicableForms] DEV MODE - Using x-user-role header:",
+        role,
+      );
+    }
+
     if (!role) {
+      console.log("[getApplicableForms] No role found, returning 401");
       return res.status(401).json({
         success: false,
         message: "Unauthorized",
       });
     }
+
+    console.log("[getApplicableForms] User role:", role);
 
     const formsSnapshot = await formsCollectionRef()
       .orderBy("updatedAt", "desc")
@@ -1876,6 +1806,19 @@ export const getApplicableForms = async (req, res) => {
         const applicableRoles = Array.isArray(data.applicableRoles)
           ? data.applicableRoles.map((item) => normalizeRoleValue(item))
           : [];
+
+        console.log(
+          "[getApplicableForms] Form:",
+          data.formTitle,
+          "| Raw roles:",
+          data.applicableRoles,
+          "| Normalized:",
+          applicableRoles,
+          "| User role:",
+          role,
+          "| Match:",
+          applicableRoles.includes(role),
+        );
 
         if (!applicableRoles.includes(role)) {
           return null;
@@ -1921,9 +1864,14 @@ export const getApplicableForms = async (req, res) => {
 export const getCriteriaModulesTasks = async (req, res) => {
   try {
     const { formId, criteriaId } = req.params;
-    const role = await resolveRoleFromAuthorizationHeader(
+    let role = await resolveRoleFromAuthorizationHeader(
       req.headers.authorization,
     );
+
+    // Dev mode fallback: check x-user-role header
+    if (!role && req.headers["x-user-role"]) {
+      role = normalizeRoleValue(req.headers["x-user-role"]);
+    }
 
     if (!role) {
       return res.status(401).json({

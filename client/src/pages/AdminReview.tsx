@@ -56,7 +56,7 @@ export default function AdminReview() {
   };
 
   useEffect(() => {
-    if (user?.role === "principle") loadData();
+    if (String(user?.role || "").toLowerCase() === "principle") loadData();
   }, [user]);
 
   const verifyCriterion = async (
@@ -84,7 +84,9 @@ export default function AdminReview() {
     }
   };
 
-  if (!user || user.role !== "principle") return null;
+  // Only principle can access (case-insensitive)
+  if (!user || String(user.role || "").toLowerCase() !== "principle")
+    return null;
 
   if (loading) {
     return (

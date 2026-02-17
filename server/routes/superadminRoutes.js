@@ -13,14 +13,18 @@ import {
   getCommitteeMember,
   getRoles,
   registerCommitteeMember,
+  registerSuperAdmin,
   updateForm,
   updateCollege,
   updateCommitteeMember,
   updateRole,
 } from "../controllers/superadminController.js";
-import { superadminAuth } from "../middleware/superadminAuth.js";
+import { superadminAuth } from "../middleware/superAdminAuth.js";
 
 const superadminRouter = express.Router();
+
+// PUBLIC ROUTE - No auth required for initial superadmin registration
+superadminRouter.post("/register", registerSuperAdmin);
 
 superadminRouter.get("/roles", superadminAuth, getRoles);
 superadminRouter.post("/roles", superadminAuth, createRole);
