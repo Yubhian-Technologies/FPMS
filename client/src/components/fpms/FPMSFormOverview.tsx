@@ -1,68 +1,76 @@
 import { CategoryCard } from "./CategoryCard";
 
-const categories = [
-  {
-    title: "Teaching & Learning",
-    description: "Lectures, feedback, curriculum development, innovations",
-    score: 72,
-    maxScore: 100,
-    completedItems: 8,
-    totalItems: 12,
-    status: "in-progress" as const,
-    href: "/fpms/teaching",
-  },
-  {
-    title: "Research & Consultancy",
-    description: "Publications, projects, patents, consultancy work",
-    score: 45,
-    maxScore: 80,
-    completedItems: 5,
-    totalItems: 10,
-    status: "in-progress" as const,
-    href: "/fpms/research",
-  },
-  {
-    title: "Professional Development",
-    description: "FDPs, certifications, workshops, memberships",
-    score: 28,
-    maxScore: 40,
-    completedItems: 6,
-    totalItems: 8,
-    status: "complete" as const,
-    href: "/fpms/professional",
-  },
-  {
-    title: "Student Development",
-    description: "Mentoring, placements, competitions, activities",
-    score: 32,
-    maxScore: 40,
-    completedItems: 7,
-    totalItems: 8,
-    status: "complete" as const,
-    href: "/fpms/student",
-  },
-  {
-    title: "Institutional Development",
-    description: "Accreditation, committees, outreach, admin duties",
-    score: 15,
-    maxScore: 40,
-    completedItems: 3,
-    totalItems: 10,
-    status: "needs-review" as const,
-    href: "/fpms/institutional",
-  },
-];
+interface FPMSFormOverviewProps {
+  submissions: any[];
+}
 
-export function FPMSFormOverview() {
+export function FPMSFormOverview({ submissions }: FPMSFormOverviewProps) {
+  const categoriesMap: Record<string, any> = {
+    "Teaching & Learning": {
+      description: "Lectures, feedback, curriculum development, innovations",
+      score: 0,
+      maxScore: 100,
+      completedItems: 0,
+      totalItems: 12,
+      href: "/fpms/teaching",
+    },
+    "Research & Consultancy": {
+      description: "Publications, projects, patents, consultancy work",
+      score: 0,
+      maxScore: 80,
+      completedItems: 0,
+      totalItems: 10,
+      href: "/fpms/research",
+    },
+    "Professional Development": {
+      description: "FDPs, certifications, workshops, memberships",
+      score: 0,
+      maxScore: 40,
+      completedItems: 0,
+      totalItems: 8,
+      href: "/fpms/professional",
+    },
+    "Student Development": {
+      description: "Mentoring, placements, competitions, activities",
+      score: 0,
+      maxScore: 40,
+      completedItems: 0,
+      totalItems: 8,
+      href: "/fpms/student",
+    },
+    "Institutional Development": {
+      description: "Accreditation, committees, outreach, admin duties",
+      score: 0,
+      maxScore: 40,
+      completedItems: 0,
+      totalItems: 10,
+      href: "/fpms/institutional",
+    },
+  };
+
+  submissions.forEach((sub) => {
+    const crit = sub.criteriaName;
+    if (categoriesMap[crit]) {
+      categoriesMap[crit].score += (sub.finalScore ?? 0);
+      categoriesMap[crit].completedItems += 1;
+    }
+  });
+
+  const displayCategories = Object.entries(categoriesMap).map(([title, data]) => ({
+    title,
+    ...data,
+    status: data.score >= data.maxScore ? "complete" : data.score > 0 ? "in-progress" : "needs-review"
+  }));
+
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {categories.map((category, index) => (
+      {displayCategories.map((category, index) => (
         <div 
           key={category.title}
           className="animate-slide-up"
           style={{ animationDelay: `${index * 100}ms` }}
         >
-          <CategoryCard {...category} />
+          <CategoryCard {...category as any} />
         </div>
       ))}
     </div>

@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileCheck, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { FileCheck, Clock, AlertCircle, CheckCircle2, FileText } from "lucide-react";
 
 interface StatusCardProps {
   title: string;
@@ -37,39 +37,58 @@ function StatusCard({ title, value, subtitle, icon: Icon, variant, badge }: Stat
   );
 }
 
-export function StatusCards() {
+interface StatusCardsProps {
+  submissions: any[];
+}
+
+export function StatusCards({ submissions }: StatusCardsProps) {
+  const pendingReviews = submissions.filter(s => s.status === "submitted" || s.status === "reviewed").length;
+  const evidenceUploaded = submissions.filter(s => s.evidence).length;
+  const appealsOpen = submissions.filter(s => s.status === "appealed").length;
+  
+  // Get latest submission for "Current Submission"
+  const latestSubmission = submissions.length > 0 ? submissions[0] : null;
+
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <StatusCard
-        title="Current Submission"
-        value="Draft"
-        subtitle="Last saved: 2 hours ago"
-        icon={FileCheck}
-        variant="stat"
-        badge={{ text: "In Progress", variant: "draft" }}
-      />
-      <StatusCard
-        title="Pending Reviews"
-        value="2"
-        subtitle="Awaiting HOD approval"
-        icon={Clock}
-        variant="warning"
-        badge={{ text: "Pending", variant: "pending" }}
-      />
-      <StatusCard
-        title="Evidence Uploaded"
-        value="24"
-        subtitle="Across 5 categories"
-        icon={CheckCircle2}
-        variant="success"
-      />
-      <StatusCard
-        title="Appeals Open"
-        value="0"
-        subtitle="No active appeals"
-        icon={AlertCircle}
-        variant="accent"
-      />
+      <div className="cursor-pointer" onClick={() => window.location.href = '/fpms-form'}>
+        <StatusCard
+          title="Current Submission"
+          value={latestSubmission ? latestSubmission.status.charAt(0).toUpperCase() + latestSubmission.status.slice(1) : "None"}
+          subtitle={latestSubmission ? `Last updated: ${new Date(latestSubmission.createdAt?.seconds * 1000).toLocaleDateString()}` : "No submissions yet"}
+          icon={FileText}
+          variant="stat"
+          badge={latestSubmission ? { text: latestSubmission.status, variant: "draft" } : undefined}
+        />
+      </div>
+      <div className="cursor-pointer" onClick={() => window.location.href = '/submissions'}>
+        <StatusCard
+          title="Pending Reviews"
+          value={pendingReviews}
+          subtitle="Awaiting approval"
+          icon={Clock}
+          variant="warning"
+          badge={{ text: "Pending", variant: "pending" }}
+        />
+      </div>
+      <div className="cursor-pointer" onClick={() => window.location.href = '/submissions'}>
+        <StatusCard
+          title="Evidence Uploaded"
+          value={evidenceUploaded}
+          subtitle="Across all categories"
+          icon={CheckCircle2}
+          variant="success"
+        />
+      </div>
+      <div className="cursor-pointer" onClick={() => window.location.href = '/submissions'}>
+        <StatusCard
+          title="Appeals Open"
+          value={appealsOpen}
+          subtitle="Active appeals"
+          icon={AlertCircle}
+          variant="accent"
+        />
+      </div>
     </div>
   );
 }

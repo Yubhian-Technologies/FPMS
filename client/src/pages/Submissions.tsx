@@ -79,7 +79,7 @@ interface Submission {
   academicYear?: string;
 }
 
-const statusConfig: Record<string, { label: string; variant: string; icon: any }> = {
+const statusConfig: Record<string, { label: string; variant: "outline" | "secondary" | "default" | "success" | "warning" | "info"; icon: any }> = {
   pending: { label: "Pending", variant: "outline", icon: Clock },
   submitted: { label: "Submitted", variant: "secondary", icon: Send },
   reviewed: { label: "Under Review", variant: "default", icon: Clock },

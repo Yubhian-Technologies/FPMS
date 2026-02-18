@@ -9,25 +9,41 @@ interface ScoreCategory {
   color: string;
 }
 
-const categories: ScoreCategory[] = [
-  { name: "Teaching & Learning", shortName: "T&L", score: 72, maxScore: 100, color: "bg-primary" },
-  { name: "Research & Consultancy", shortName: "R&C", score: 45, maxScore: 80, color: "bg-accent" },
-  { name: "Professional Development", shortName: "PD", score: 28, maxScore: 40, color: "bg-info" },
-  { name: "Student Development", shortName: "SD", score: 32, maxScore: 40, color: "bg-success" },
-  { name: "Institutional Development", shortName: "ID", score: 35, maxScore: 40, color: "bg-warning" },
-];
+interface ScoreOverviewProps {
+  submissions: any[];
+}
 
-export function ScoreOverview() {
-  const totalScore = categories.reduce((sum, cat) => sum + cat.score, 0);
-  const maxTotalScore = 300;
-  const percentComplete = Math.round((totalScore / maxTotalScore) * 100);
+export function ScoreOverview({ submissions }: ScoreOverviewProps) {
+  const categoriesMap: Record<string, { score: number; maxScore: number; color: string }> = {
+    "Teaching & Learning": { score: 0, maxScore: 100, color: "bg-primary" },
+    "Research & Consultancy": { score: 0, maxScore: 80, color: "bg-accent" },
+    "Professional Development": { score: 0, maxScore: 40, color: "bg-info" },
+    "Student Development": { score: 0, maxScore: 40, color: "bg-success" },
+    "Institutional Development": { score: 0, maxScore: 40, color: "bg-warning" },
+  };
+
+  submissions.forEach(sub => {
+    const crit = sub.criteriaName;
+    if (categoriesMap[crit]) {
+      categoriesMap[crit].score += (sub.finalScore ?? 0);
+    }
+  });
+
+  const displayCategories = Object.entries(categoriesMap).map(([name, data]) => ({
+    name,
+    ...data
+  }));
+
+  const totalScore = displayCategories.reduce((sum, cat) => sum + cat.score, 0);
+  const maxTotalScore = displayCategories.reduce((sum, cat) => sum + cat.maxScore, 0);
+  const percentComplete = maxTotalScore > 0 ? Math.round((totalScore / maxTotalScore) * 100) : 0;
 
   return (
     <Card className="overflow-hidden">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Score Overview</CardTitle>
-          <span className="text-sm text-muted-foreground">AY 2024-25</span>
+          <span className="text-sm text-muted-foreground">Live Data</span>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -65,8 +81,8 @@ export function ScoreOverview() {
 
         {/* Category Breakdown */}
         <div className="space-y-4">
-          {categories.map((category) => {
-            const percent = Math.round((category.score / category.maxScore) * 100);
+          {displayCategories.map((category) => {
+            const percent = category.maxScore > 0 ? Math.round((category.score / category.maxScore) * 100) : 0;
             return (
               <div key={category.name} className="space-y-2">
                 <div className="flex items-center justify-between text-sm">

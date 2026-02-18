@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileEdit, Upload, Eye, Send } from "lucide-react";
+import { FileEdit, Upload, Eye, Send, FileText, Edit } from "lucide-react";
 
 interface QuickAction {
   title: string;
@@ -12,32 +12,32 @@ interface QuickAction {
 
 const actions: QuickAction[] = [
   {
-    title: "Continue FPMS Form",
-    description: "Resume editing your current submission",
+    title: "Start/Resume FPMS",
+    description: "Continue your current submission",
     icon: FileEdit,
     variant: "default",
-    href: "/fpms",
+    href: "/fpms-form",
   },
   {
-    title: "Upload Evidence",
-    description: "Add supporting documents",
-    icon: Upload,
-    variant: "outline",
-    href: "/evidence",
-  },
-  {
-    title: "Preview Submission",
-    description: "Review before final submission",
+    title: "My Submissions",
+    description: "Track your review progress",
     icon: Eye,
     variant: "outline",
-    href: "/preview",
+    href: "/submissions",
   },
   {
-    title: "Submit for Review",
-    description: "Send to HOD for approval",
-    icon: Send,
-    variant: "accent",
-    href: "/submit",
+    title: "Reports & Analytics",
+    description: "Generate performance reports",
+    icon: FileText,
+    variant: "outline",
+    href: "/reports",
+  },
+  {
+    title: "Profile Settings",
+    description: "Manage your information",
+    icon: Edit,
+    variant: "outline",
+    href: "/settings",
   },
 ];
 
