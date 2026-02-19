@@ -1254,3 +1254,56 @@ export const deleteDean = async (req, res) => {
     });
   }
 };
+
+export const getCollegeDashboard = async (req, res) => {
+  try {
+    const adminDoc = await db.collection("users").doc(req.admin.uid).get();
+
+    if (!adminDoc.exists) {
+      return res.status(404).json({ success: false, message: "Admin not found" });
+    }
+
+    const adminData = adminDoc.data();
+    const college = adminData.college;
+
+    /* -------- FETCH SUBMISSIONS -------- */
+    const submissionsSnap = await db.collection("submissions").get();
+
+    const allSubmissions = submissionsSnap.docs.map(doc => ({
+      ...doc.data(),
+      id: doc.id,
+    }));
+
+    const submissionsMap = new Map();
+    allSubmissions.forEach(sub => {
+      if (!submissionsMap.has(sub.userId)) {
+        submissionsMap.set(sub.userId, []);
+      }
+      submissionsMap.get(sub.userId).push(sub);
+    });
+
+    /* -------- FETCH STAFF OF SAME COLLEGE -------- */
+    const staffSnap = await db
+      .collection("users")
+      .where("college", "==", college)
+      .get();
+
+    const staff = staffSnap.docs.map(doc => {
+      const data = doc.data();
+      return {
+        ...data,
+        id: doc.id,
+        submissions: submissionsMap.get(data.uid) || [],
+      };
+    });
+
+    return res.json({
+      success: true,
+      data: { staff },
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};

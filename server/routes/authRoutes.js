@@ -18,6 +18,7 @@ import {
   unifiedLogin,
   getApplicableForms,
   getCriteriaModulesTasks,
+  getCommitteeDashboard,
 } from "../controllers/authController.js";
 import {
   createCollege,
@@ -44,6 +45,7 @@ authRouter.post("/colleges", committeeAuth, createCollege);
 authRouter.put("/colleges/:id", committeeAuth, updateCollege);
 authRouter.delete("/colleges/:id", committeeAuth, deleteCollege);
 authRouter.get("/roles", committeeAuth, getCommitteeRoles);
+authRouter.get('/dashboard-data',committeeAuth,getCommitteeDashboard);
 authRouter.get(
   "/workflow-rules",
   committeeAuth,

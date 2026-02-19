@@ -9,6 +9,7 @@ import {
   updateHodCollegeDesignations,
   updateFaculty,
   deleteFaculty,
+  getHodDashboard,
 } from "../controllers/hodController.js";
 import { hodAuth } from "../middleware/hodAuth.js";
 
@@ -25,7 +26,7 @@ hodRouter.get("/designations", hodAuth, getHodCollegeDesignations);
 hodRouter.put("/designations", hodAuth, updateHodCollegeDesignations);
 
 hodRouter.put("/update-faculty/:id", hodAuth, updateFaculty);
-
+hodRouter.get('/hod-dashboard',hodAuth,getHodDashboard);
 hodRouter.delete("/delete-faculty/:id", hodAuth, deleteFaculty);
 
 export default hodRouter;

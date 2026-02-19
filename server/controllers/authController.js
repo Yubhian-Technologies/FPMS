@@ -2057,3 +2057,32 @@ export const getCriteriaModulesTasks = async (req, res) => {
     });
   }
 };
+
+
+
+export const getCommitteeDashboard = async (req, res) => {
+  try {
+    // Fetch all submissions first
+    const submissionsSnap = await db.collection("submissions").get();
+    const allSubmissions = submissionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // Build a map from userId → submissions
+    const submissionsMap = new Map();
+    allSubmissions.forEach(sub => {
+      if (!submissionsMap.has(sub.userId)) submissionsMap.set(sub.userId, []);
+      submissionsMap.get(sub.userId).push(sub);
+    });
+
+    // Fetch all users
+    const usersSnap = await db.collection("users").get();
+    const staff = usersSnap.docs.map(doc => {
+      const data = doc.data();
+      return { ...data, id: doc.id, submissions: submissionsMap.get(data.uid) || [] };
+    });
+
+    return res.json({ success: true, data: { staff } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};

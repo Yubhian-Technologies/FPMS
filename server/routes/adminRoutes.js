@@ -8,6 +8,7 @@ import {
   updatePrincipalCollegeBranches,
   updateHod,
   deleteHod,
+  getCollegeDashboard,
 } from "../controllers/adminController.js";
 import { adminAuth } from "../middleware/adminAuth.js";
 
@@ -24,5 +25,6 @@ adminRouter.put("/college-branches", adminAuth, updatePrincipalCollegeBranches);
 
 adminRouter.delete("/delete/:id", adminAuth, deleteHod);
 adminRouter.put("/update/:id", adminAuth, updateHod);
+adminRouter.get('/college-dashboard',adminAuth,getCollegeDashboard);
 
 export default adminRouter;
