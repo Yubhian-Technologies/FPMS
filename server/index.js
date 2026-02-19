@@ -20,6 +20,7 @@ import module4Router from "./routes/module4Routes.js";
 import deanRouter from "./routes/deanRoutes.js";
 import superadminRouter from "./routes/superadminRoutes.js";
 import submissionRouter from "./routes/submissionRoutes.js";
+import collegeRouter from "./routes/collegeRoutes.js";
 
 
 
@@ -48,6 +49,7 @@ app.use("/api/module3", module3Router);
 app.use("/api/module4", module4Router);
 app.use("/api/superadmin", superadminRouter);
 app.use("/api/submissions", submissionRouter);
+app.use('/api/colleges',collegeRouter);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

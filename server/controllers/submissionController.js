@@ -66,11 +66,14 @@ export const submitTask = async (req, res) => {
     }
     let finalEvidence = "";
 
-    if (req.file) {
-      finalEvidence = req.file.path; 
-    } else {
-      finalEvidence = evidence || "";
-    }
+
+if (req.file) {
+  
+  finalEvidence = req.file.path; 
+} else {
+ 
+  finalEvidence = evidence || "";
+}
 
     // Get workflow rules for this user role
     let workflowRules = [];

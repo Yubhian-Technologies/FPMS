@@ -1,3 +1,5 @@
+//adminController
+
 import bcrypt from "bcryptjs";
 import { db, auth } from "../config/firebase.js";
 import admin from "firebase-admin";
@@ -723,7 +725,46 @@ export const getPrincipalCollegeDetails = async (req, res) => {
 
 export const updatePrincipalCollegeBranches = async (req, res) => {
   try {
-    const principalCollege = String(req.admin?.college || "").trim();
+    let principalCollege = String(req.admin?.college || "").trim();
+
+    // If college not in middleware, try fetching from users collection
+    if (!principalCollege) {
+      const adminUid = String(req.admin?.uid || req.admin?.id || "").trim();
+      if (adminUid) {
+        try {
+          const adminUserDoc = await db
+            .collection(USERS_COLLECTION)
+            .doc(adminUid)
+            .get();
+          if (adminUserDoc.exists) {
+            const adminData = adminUserDoc.data() || {};
+            principalCollege = String(adminData.college || "").trim();
+            console.log(
+              "[updatePrincipalCollegeBranches] Fetched college from users collection:",
+              principalCollege,
+            );
+          }
+        } catch (err) {
+          console.error(
+            "[updatePrincipalCollegeBranches] Error fetching from users collection:",
+            err,
+          );
+        }
+      }
+    }
+
+    console.log(
+      "[updatePrincipalCollegeBranches] Using college:",
+      principalCollege,
+    );
+
+    if (!principalCollege) {
+      return res.status(400).json({
+        success: false,
+        message: "Principal college not found in user profile",
+      });
+    }
+
     const nextBranchesInput = Array.isArray(req.body?.branches)
       ? req.body.branches
       : [];
@@ -749,6 +790,11 @@ export const updatePrincipalCollegeBranches = async (req, res) => {
     const data = superadminDoc.data() || {};
     const colleges = Array.isArray(data.colleges) ? data.colleges : [];
 
+    console.log(
+      "[updatePrincipalCollegeBranches] Available colleges:",
+      colleges.map((c) => c?.name),
+    );
+
     const collegeIndex = colleges.findIndex(
       (item) =>
         String(item?.name || "")
@@ -757,6 +803,10 @@ export const updatePrincipalCollegeBranches = async (req, res) => {
     );
 
     if (collegeIndex === -1) {
+      console.error(
+        "[updatePrincipalCollegeBranches] College not found. Looking for:",
+        principalCollege,
+      );
       return res.status(404).json({
         success: false,
         message: "Principal college not found",

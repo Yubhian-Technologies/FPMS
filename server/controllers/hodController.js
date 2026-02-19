@@ -1,3 +1,5 @@
+//hodController
+
 import bcrypt from "bcryptjs";
 import { db, auth } from "../config/firebase.js";
 import admin from "firebase-admin";
@@ -216,9 +218,35 @@ export const addFaculty = async (req, res) => {
 
 export const getAllFaculty = async (req, res) => {
   try {
-    const hodCollege = String(req.hod?.college || "")
-      .trim()
-      .toLowerCase();
+    let hodCollege = String(req.hod?.college || "").trim();
+
+    // If college not in middleware, try fetching from users collection
+    if (!hodCollege) {
+      const hodUid = String(req.hod?.uid || req.hod?.id || "").trim();
+      if (hodUid) {
+        try {
+          const hodUserDoc = await db
+            .collection(USERS_COLLECTION)
+            .doc(hodUid)
+            .get();
+          if (hodUserDoc.exists) {
+            const hodData = hodUserDoc.data() || {};
+            hodCollege = String(hodData.college || "").trim();
+            console.log(
+              "[getAllFaculty] Fetched college from users collection:",
+              hodCollege,
+            );
+          }
+        } catch (err) {
+          console.error(
+            "[getAllFaculty] Error fetching from users collection:",
+            err,
+          );
+        }
+      }
+    }
+
+    const hodCollegeLower = hodCollege.toLowerCase();
     console.log("[getAllFaculty] START - HOD college:", hodCollege);
 
     const snapshot = await db.collection(USERS_COLLECTION).get();
@@ -231,17 +259,18 @@ export const getAllFaculty = async (req, res) => {
       }))
       .filter((item) => isFacultyRole(item.role || ""))
       .filter((item) => {
-        if (!hodCollege) return true;
+        if (!hodCollegeLower) return true;
         const itemCollege = String(item.college || "")
           .trim()
           .toLowerCase();
-        return itemCollege === hodCollege;
+        return itemCollege === hodCollegeLower;
       });
 
     console.log(
       "[getAllFaculty] SUCCESS - Found",
       facultyList.length,
-      "faculty members",
+      "faculty members for college:",
+      hodCollege,
     );
     return res.status(200).json({ success: true, data: facultyList });
   } catch (error) {
@@ -271,20 +300,43 @@ export const updateFaculty = async (req, res) => {
 
     const facultyRef = db.collection(USERS_COLLECTION).doc(id);
     const facultyDoc = await facultyRef.get();
-    const hodCollege = String(req.hod?.college || "")
-      .trim()
-      .toLowerCase();
+
+    let hodCollege = String(req.hod?.college || "").trim();
+
+    // If college not in middleware, try fetching from users collection
+    if (!hodCollege) {
+      const hodUid = String(req.hod?.uid || req.hod?.id || "").trim();
+      if (hodUid) {
+        try {
+          const hodUserDoc = await db
+            .collection(USERS_COLLECTION)
+            .doc(hodUid)
+            .get();
+          if (hodUserDoc.exists) {
+            const hodData = hodUserDoc.data() || {};
+            hodCollege = String(hodData.college || "").trim();
+          }
+        } catch (err) {
+          console.error(
+            "[updateFaculty] Error fetching from users collection:",
+            err,
+          );
+        }
+      }
+    }
+
+    const hodCollegeLower = hodCollege.toLowerCase();
 
     if (!facultyDoc.exists)
       return res
         .status(404)
         .json({ success: false, message: "Faculty not found" });
 
-    if (hodCollege) {
+    if (hodCollegeLower) {
       const facultyCollege = String(facultyDoc.data()?.college || "")
         .trim()
         .toLowerCase();
-      if (facultyCollege !== hodCollege) {
+      if (facultyCollege !== hodCollegeLower) {
         return res
           .status(403)
           .json({ success: false, message: "Access denied" });
@@ -385,9 +437,32 @@ export const updateFaculty = async (req, res) => {
 export const deleteFaculty = async (req, res) => {
   try {
     const { id } = req.params;
-    const hodCollege = String(req.hod?.college || "")
-      .trim()
-      .toLowerCase();
+
+    let hodCollege = String(req.hod?.college || "").trim();
+
+    // If college not in middleware, try fetching from users collection
+    if (!hodCollege) {
+      const hodUid = String(req.hod?.uid || req.hod?.id || "").trim();
+      if (hodUid) {
+        try {
+          const hodUserDoc = await db
+            .collection(USERS_COLLECTION)
+            .doc(hodUid)
+            .get();
+          if (hodUserDoc.exists) {
+            const hodData = hodUserDoc.data() || {};
+            hodCollege = String(hodData.college || "").trim();
+          }
+        } catch (err) {
+          console.error(
+            "[deleteFaculty] Error fetching from users collection:",
+            err,
+          );
+        }
+      }
+    }
+
+    const hodCollegeLower = hodCollege.toLowerCase();
 
     const facultyRef = db.collection(USERS_COLLECTION).doc(id);
     const facultyDoc = await facultyRef.get();
@@ -397,11 +472,11 @@ export const deleteFaculty = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Faculty not found" });
 
-    if (hodCollege) {
+    if (hodCollegeLower) {
       const facultyCollege = String(facultyDoc.data()?.college || "")
         .trim()
         .toLowerCase();
-      if (facultyCollege !== hodCollege) {
+      if (facultyCollege !== hodCollegeLower) {
         return res
           .status(403)
           .json({ success: false, message: "Access denied" });
@@ -428,7 +503,34 @@ export const deleteFaculty = async (req, res) => {
 
 export const getHodCollegeDesignations = async (req, res) => {
   try {
-    const hodCollege = String(req.hod?.college || "").trim();
+    let hodCollege = String(req.hod?.college || "").trim();
+
+    // If college not in middleware, try fetching from users collection
+    if (!hodCollege) {
+      const hodUid = String(req.hod?.uid || req.hod?.id || "").trim();
+      if (hodUid) {
+        try {
+          const hodUserDoc = await db
+            .collection(USERS_COLLECTION)
+            .doc(hodUid)
+            .get();
+          if (hodUserDoc.exists) {
+            const hodData = hodUserDoc.data() || {};
+            hodCollege = String(hodData.college || "").trim();
+            console.log(
+              "[getHodCollegeDesignations] Fetched college from users collection:",
+              hodCollege,
+            );
+          }
+        } catch (err) {
+          console.error(
+            "[getHodCollegeDesignations] Error fetching from users collection:",
+            err,
+          );
+        }
+      }
+    }
+
     console.log("[getHodCollegeDesignations] START - HOD college:", hodCollege);
 
     if (!hodCollege) {
@@ -437,7 +539,7 @@ export const getHodCollegeDesignations = async (req, res) => {
       );
       return res.status(200).json({
         success: true,
-        data: { designations: [] },
+        data: { college: "", designations: [] },
       });
     }
 
@@ -450,7 +552,7 @@ export const getHodCollegeDesignations = async (req, res) => {
       console.log("[getHodCollegeDesignations] Superadmin doc does not exist");
       return res.status(200).json({
         success: true,
-        data: { designations: [] },
+        data: { college: hodCollege, designations: [] },
       });
     }
 
@@ -483,7 +585,7 @@ export const getHodCollegeDesignations = async (req, res) => {
       );
       return res.status(200).json({
         success: true,
-        data: { designations },
+        data: { college: hodCollege, designations },
       });
     } else {
       console.log(
@@ -492,7 +594,7 @@ export const getHodCollegeDesignations = async (req, res) => {
       );
       return res.status(200).json({
         success: true,
-        data: { designations: [] },
+        data: { college: hodCollege, designations: [] },
       });
     }
   } catch (error) {
@@ -503,7 +605,43 @@ export const getHodCollegeDesignations = async (req, res) => {
 
 export const updateHodCollegeDesignations = async (req, res) => {
   try {
-    const hodCollege = String(req.hod?.college || "").trim();
+    let hodCollege = String(req.hod?.college || "").trim();
+
+    // If college not in middleware, try fetching from users collection
+    if (!hodCollege) {
+      const hodUid = String(req.hod?.uid || req.hod?.id || "").trim();
+      if (hodUid) {
+        try {
+          const hodUserDoc = await db
+            .collection(USERS_COLLECTION)
+            .doc(hodUid)
+            .get();
+          if (hodUserDoc.exists) {
+            const hodData = hodUserDoc.data() || {};
+            hodCollege = String(hodData.college || "").trim();
+            console.log(
+              "[updateHodCollegeDesignations] Fetched college from users collection:",
+              hodCollege,
+            );
+          }
+        } catch (err) {
+          console.error(
+            "[updateHodCollegeDesignations] Error fetching from users collection:",
+            err,
+          );
+        }
+      }
+    }
+
+    console.log("[updateHodCollegeDesignations] Using college:", hodCollege);
+
+    if (!hodCollege) {
+      return res.status(400).json({
+        success: false,
+        message: "HOD college not found in user profile",
+      });
+    }
+
     const nextDesignations = normalizeStringArray(req.body?.designations);
 
     const superadminRef = db.collection("superadmin").doc(SUPERADMIN_DOC_ID);
@@ -519,6 +657,11 @@ export const updateHodCollegeDesignations = async (req, res) => {
     const data = superadminDoc.data() || {};
     const colleges = Array.isArray(data.colleges) ? data.colleges : [];
 
+    console.log(
+      "[updateHodCollegeDesignations] Available colleges:",
+      colleges.map((c) => c?.name),
+    );
+
     const collegeIndex = colleges.findIndex(
       (item) =>
         String(item?.name || "")
@@ -527,6 +670,10 @@ export const updateHodCollegeDesignations = async (req, res) => {
     );
 
     if (collegeIndex === -1) {
+      console.error(
+        "[updateHodCollegeDesignations] College not found. Looking for:",
+        hodCollege,
+      );
       return res.status(404).json({
         success: false,
         message: "HOD college not found",
@@ -564,7 +711,33 @@ export const updateHodCollegeDesignations = async (req, res) => {
 
 export const getHodCollegeDetails = async (req, res) => {
   try {
-    const hodCollege = String(req.hod?.college || "").trim();
+    let hodCollege = String(req.hod?.college || "").trim();
+
+    // If college not in middleware, try fetching from users collection
+    if (!hodCollege) {
+      const hodUid = String(req.hod?.uid || req.hod?.id || "").trim();
+      if (hodUid) {
+        try {
+          const hodUserDoc = await db
+            .collection(USERS_COLLECTION)
+            .doc(hodUid)
+            .get();
+          if (hodUserDoc.exists) {
+            const hodData = hodUserDoc.data() || {};
+            hodCollege = String(hodData.college || "").trim();
+            console.log(
+              "[getHodCollegeDetails] Fetched college from users collection:",
+              hodCollege,
+            );
+          }
+        } catch (err) {
+          console.error(
+            "[getHodCollegeDetails] Error fetching from users collection:",
+            err,
+          );
+        }
+      }
+    }
 
     const superadminDoc = await db
       .collection("superadmin")

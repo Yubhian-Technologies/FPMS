@@ -50,6 +50,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   const displayName = user?.name || user?.email || "User";
+  const [deadline, setDeadline] = useState<string | null>(null);
 
   /* ---------------- FETCH (same as submissions.tsx) ---------------- */
 
@@ -87,6 +88,36 @@ export default function Dashboard() {
 
     fetchSubmissions();
   }, [user]);
+   
+  const fetchDeadline = async () => {
+  try {
+    console.log("Fetching deadline with headers:", {
+      "x-user-id": user.uid || user.id, 
+      "x-user-role": user.role,
+      "x-college": user.college,
+    });
+
+    const response = await api.get("/api/colleges/user-deadline", {
+      headers: {
+        "x-user-id": user.uid,
+        "x-user-role": user.role,
+        "x-college": user.college,
+      },
+    });
+
+    console.log("Deadline API response:", response.data);
+
+    if (response.data.success) {
+      setDeadline(response.data.data.deadline);
+    }
+  } catch (err) {
+    console.error("Failed to fetch college deadline:", err);
+  }
+};
+
+useEffect(() => {
+  if (user) fetchDeadline();
+}, [user]);
 
   /* ---------------- TOTALS (same logic) ---------------- */
 
@@ -138,7 +169,40 @@ export default function Dashboard() {
     >
       <div className="space-y-6">
 
-        <DeadlineAlert />
+    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 flex items-center justify-between">
+  <div>
+    <p className="font-medium text-yellow-700">Deadline Alert</p>
+    <p className="text-sm text-yellow-700">
+      {deadline ? (
+        (() => {
+          const today = new Date();
+          const end = new Date(deadline);
+          const diffTime = end.getTime() - today.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          return diffDays > 0
+            ? `Your submission deadline is in ${diffDays} day${diffDays > 1 ? "s" : ""} (${end.toLocaleDateString(undefined, {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })})`
+            : `Deadline has passed (${end.toLocaleDateString(undefined, {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })})`;
+        })()
+      ) : (
+        "No deadline set for your college."
+      )}
+    </p>
+  </div>
+
+  
+</div>
+
         <StatusCards submissions={submissions} />
 
         {/* MAIN GRID */}

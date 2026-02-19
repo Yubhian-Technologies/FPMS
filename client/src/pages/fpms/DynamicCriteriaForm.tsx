@@ -503,7 +503,7 @@ formData.append("description", progress.description || "");
 
 // 🔥 IMPORTANT PART
 if (progress.evidenceUrl instanceof File) {
-  formData.append("file", progress.evidenceUrl);
+  formData.append("evidence", progress.evidenceUrl);
 } else {
   formData.append("evidence", progress.evidenceUrl || "");
 }

@@ -30,6 +30,7 @@ interface College {
   location: string;
   code: string;
   isActive: boolean;
+  deadline?: string;
 }
 
 export default function College() {
@@ -58,6 +59,7 @@ export default function College() {
     location: "",
     code: "",
     isActive: true,
+    deadline: "",
   });
 
   const [editForm, setEditForm] = useState<Partial<College>>({});
@@ -74,6 +76,7 @@ export default function College() {
           location: item.location,
           code: item.code,
           isActive: Boolean(item.isActive),
+          deadline: item.deadline || null,
         })),
       );
     } catch (error: any) {
@@ -126,6 +129,7 @@ export default function College() {
         location: newCollege.location,
         code: newCollege.code,
         isActive: newCollege.isActive ?? true,
+        deadline: newCollege.deadline || null,
       });
 
       await fetchColleges(true);
@@ -178,6 +182,7 @@ export default function College() {
         name: editForm.name,
         location: editForm.location,
         code: editForm.code,
+        deadline: editForm.deadline || null,
       });
 
       await fetchColleges(true);
@@ -408,6 +413,16 @@ export default function College() {
                       }
                     />
                   </div>
+                  <div className="space-y-2">
+  <Label>Deadline</Label>
+  <Input
+    type="date"
+    value={newCollege.deadline?.split("T")[0] || ""} // show only YYYY-MM-DD
+    onChange={(event) =>
+      setNewCollege({ ...newCollege, deadline: event.target.value })
+    }
+  />
+</div>
                 </div>
 
                 <div className="flex justify-end gap-3">
@@ -445,6 +460,7 @@ export default function College() {
                     <TableHead>Location</TableHead>
                     <TableHead>Code</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Deadline</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -513,6 +529,21 @@ export default function College() {
                               : "Inactive"}
                         </Badge>
                       </TableCell>
+                     <TableCell>
+  {editingCollege === college.id ? (
+    <Input
+      type="date"
+      value={editForm.deadline?.split("T")[0] || ""}
+      onChange={(event) =>
+        setEditForm({ ...editForm, deadline: event.target.value })
+      }
+    />
+  ) : college.deadline ? (
+    new Date(college.deadline).toLocaleDateString()
+  ) : (
+    "-"
+  )}
+</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           {editingCollege === college.id ? (

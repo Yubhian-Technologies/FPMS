@@ -26,7 +26,7 @@ const ensureSuperadminDoc = async () => {
   return docRef;
 };
 
-const getSuperadminData = async () => {
+export const getSuperadminData = async () => {
   const docRef = await ensureSuperadminDoc();
   const doc = await docRef.get();
   const data = doc.data() || {};
@@ -539,7 +539,7 @@ export const getColleges = async (req, res) => {
 
 export const createCollege = async (req, res) => {
   try {
-    const { name, location, code, isActive = true, branches = [] } = req.body;
+    const { name, location, code, isActive = true, branches = [],deadline  } = req.body;
 
     if (!name || !location || !code) {
       return res.status(400).json({
@@ -557,6 +557,7 @@ export const createCollege = async (req, res) => {
       code: String(code).trim().toUpperCase(),
       isActive: Boolean(isActive),
       branches: toStringArray(branches),
+      deadline: deadline ? new Date(deadline).toISOString() : null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -583,7 +584,7 @@ export const createCollege = async (req, res) => {
 export const updateCollege = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, location, code, isActive, branches } = req.body;
+    const { name, location, code, isActive, branches, deadline } = req.body;
 
     const { docRef, colleges } = await getSuperadminData();
     const index = colleges.findIndex((item) => item.id === id);
@@ -601,6 +602,7 @@ export const updateCollege = async (req, res) => {
     if (code !== undefined) updates.code = String(code).trim().toUpperCase();
     if (isActive !== undefined) updates.isActive = Boolean(isActive);
     if (branches !== undefined) updates.branches = toStringArray(branches);
+    if (deadline !== undefined) updates.deadline = deadline ? new Date(deadline).toISOString() : null; 
 
     const nextColleges = [...colleges];
     nextColleges[index] = {

@@ -989,6 +989,8 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
         decodedToken?.level !== undefined
           ? Number(decodedToken.level)
           : undefined,
+      college: decodedToken?.college || "",      // ← add this
+      department: decodedToken?.department || "",
     };
   }
 
@@ -999,6 +1001,8 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
         decodedToken?.level !== undefined
           ? Number(decodedToken.level)
           : undefined,
+      college: decodedToken?.college || "",
+      department: decodedToken?.department || "",
     };
   }
 
@@ -1013,12 +1017,16 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
         role: "committee",
         level:
           userData.level !== undefined ? Number(userData.level) : undefined,
+        college: userData.college || "",       // ← add this
+        department: userData.department || "",
       };
     }
 
     return {
       role: String(userData.role || inferRoleFromEmail(email)),
       level: userData.level !== undefined ? Number(userData.level) : undefined,
+      college: userData.college || "",       // ← add this
+      department: userData.department || "",
     };
   }
 
@@ -1044,6 +1052,8 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
             committeeData.level !== undefined
               ? Number(committeeData.level)
               : undefined,
+          college: committeeData.college || "",       // ← add this
+          department: committeeData.department || "",
         };
       }
     }
@@ -1052,6 +1062,8 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
   return {
     role: inferRoleFromEmail(email),
     level: undefined,
+    college: "",       // ← add this
+    department: "", 
   };
 };
 
@@ -1112,6 +1124,8 @@ export const unifiedLogin = async (req, res) => {
         email: decodedToken.email || normalizedEmail,
         role: resolved.role,
         level: resolved.level,
+        college: resolved.college || "", 
+        department: resolved.department || "",
       },
     });
   } catch (error) {

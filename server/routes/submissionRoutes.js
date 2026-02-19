@@ -21,7 +21,7 @@ const router = express.Router();
 router.use(optionalAuth);
 
 // Faculty endpoints
-router.post("/submit",upload.single("file"), submitTask);
+router.post("/submit",upload.single("evidence"), submitTask);
 router.get("/my-submissions", getMySubmissions);
 router.post("/:id/accept", acceptReview);
 router.post("/:id/appeal", raiseAppeal);
