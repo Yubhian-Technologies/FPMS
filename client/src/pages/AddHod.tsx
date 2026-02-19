@@ -343,13 +343,20 @@ export default function AddHod() {
     }
   };
 
-  const filteredHods = hods.filter(
-    (hod) =>
-      hod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      hod.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      hod.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      hod.college.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const collegeHods = hods.filter((hod) => {
+    if (!normalizedLockedCollege) return true;
+    return String(hod.college || "").trim().toLowerCase() === normalizedLockedCollege;
+  });
+
+  const filteredHods = collegeHods.filter((hod) => {
+    const q = searchQuery.toLowerCase();
+    return (
+      hod.name.toLowerCase().includes(q) ||
+      hod.email.toLowerCase().includes(q) ||
+      hod.department.toLowerCase().includes(q) ||
+      hod.college.toLowerCase().includes(q)
+    );
+  });
 
   useEffect(() => {
     if (!lockedCollegeName) return;
@@ -592,7 +599,7 @@ export default function AddHod() {
               <Users className="h-5 w-5" />
               <div>
                 <p>Total HODs</p>
-                <p className="text-2xl font-bold">{hods.length}</p>
+                <p className="text-2xl font-bold">{collegeHods.length}</p>
               </div>
             </CardContent>
           </Card>

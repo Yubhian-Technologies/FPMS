@@ -335,13 +335,20 @@ export default function AddDean() {
     }
   };
 
-  const filteredDeans = deans.filter(
-    (dean) =>
-      dean.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dean.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dean.college.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dean.role.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const collegeDeans = deans.filter((dean) => {
+    if (!normalizedLockedCollege) return true;
+    return String(dean.college || "").trim().toLowerCase() === normalizedLockedCollege;
+  });
+
+  const filteredDeans = collegeDeans.filter((dean) => {
+    const q = searchQuery.toLowerCase();
+    return (
+      dean.name.toLowerCase().includes(q) ||
+      dean.email.toLowerCase().includes(q) ||
+      dean.college.toLowerCase().includes(q) ||
+      dean.role.toLowerCase().includes(q)
+    );
+  });
 
   useEffect(() => {
     if (!lockedCollegeName) return;
@@ -582,7 +589,7 @@ export default function AddDean() {
               <Users className="h-5 w-5" />
               <div>
                 <p>Total Deans</p>
-                <p className="text-2xl font-bold">{deans.length}</p>
+                <p className="text-2xl font-bold">{collegeDeans.length}</p>
               </div>
             </CardContent>
           </Card>

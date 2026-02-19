@@ -39,8 +39,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const token = localStorage.getItem("token");
 
     if (storedUser && token) {
-      setUser(JSON.parse(storedUser));
+      const parsed: User = JSON.parse(storedUser);
+      setUser(parsed);
       api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
+      // Self-heal: if principle has no college stored, fetch it from server
+      const isPrinciple =
+        parsed.role === "principle" || parsed.role === ("admin" as any);
+      if (isPrinciple && !parsed.college) {
+        api
+          .get("/api/admin/college-details")
+          .then((res) => {
+            const college = res.data?.data?.name || "";
+            if (college) {
+              const updated = { ...parsed, college };
+              localStorage.setItem("user", JSON.stringify(updated));
+              setUser(updated);
+            }
+          })
+          .catch(() => {});
+      }
     }
 
     setIsLoading(false);
@@ -79,6 +97,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       try {
         const res = await api.post(ep.url, { email, password });
         if (res.data.success) {
+          console.log("Login successful for role:", ep.role);
+          const userWithCollege = {
+            ...res.data.user,
+            college: res.data.user?.college ?? "",
+          };
+          res.data.user = userWithCollege;
           localStorage.setItem("token", res.data.token);
           localStorage.setItem("user", JSON.stringify(res.data.user));
 

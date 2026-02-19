@@ -636,13 +636,35 @@ export const getPrincipalCollegeDetails = async (req, res) => {
       });
     }
 
-    // Fetch admin user from users collection
+    // Fetch admin user — check users collection first, then admins collection
+    let adminData = {};
     const adminUserDoc = await db
       .collection(USERS_COLLECTION)
       .doc(adminUid)
       .get();
 
-    if (!adminUserDoc.exists) {
+    if (adminUserDoc.exists) {
+      adminData = adminUserDoc.data() || {};
+    } else {
+      // Admin accounts live in the "admins" collection, not "users"
+      const adminsDoc = await db.collection("admins").doc(adminUid).get();
+      if (adminsDoc.exists) {
+        adminData = adminsDoc.data() || {};
+      } else {
+        // Try by email as last resort
+        const adminEmail = String(req.admin?.email || "").trim().toLowerCase();
+        if (adminEmail) {
+          const snap = await db
+            .collection("admins")
+            .where("email", "==", adminEmail)
+            .limit(1)
+            .get();
+          if (!snap.empty) adminData = snap.docs[0].data() || {};
+        }
+      }
+    }
+
+    if (!Object.keys(adminData).length) {
       console.log(
         "[getPrincipalCollegeDetails] Admin user doc not found:",
         adminUid,
@@ -652,8 +674,6 @@ export const getPrincipalCollegeDetails = async (req, res) => {
         message: "Admin user not found in database",
       });
     }
-
-    const adminData = adminUserDoc.data() || {};
     const principalCollege = String(adminData.college || "").trim();
 
     console.log("[getPrincipalCollegeDetails] Admin data:", {

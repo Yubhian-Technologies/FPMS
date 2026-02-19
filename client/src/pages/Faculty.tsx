@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,9 +56,9 @@ interface CollegeDetails {
 }
 
 export default function Faculty() {
+  const { user } = useAuth();
   const [faculty, setFaculty] = useState<FacultyMember[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterDepartment, setFilterDepartment] = useState<string>("all");
   const [designations, setDesignations] = useState<string[]>([]);
   const [collegeDetails, setCollegeDetails] = useState<CollegeDetails | null>(
     null,
@@ -91,6 +92,9 @@ export default function Faculty() {
   });
 
   const lockedCollegeName = collegeDetails?.name || "";
+  const lockedDepartment = user?.department || "";
+  const normalizedLockedCollege = String(lockedCollegeName).trim().toLowerCase();
+  const normalizedLockedDepartment = String(lockedDepartment).trim().toLowerCase();
 
   const branchOptions = useMemo(
     () =>
@@ -196,7 +200,7 @@ export default function Faculty() {
       pass: "",
       confirm_pass: "",
       college: lockedCollegeName,
-      department: branchOptions[0] || "",
+      department: lockedDepartment || branchOptions[0] || "",
       designation: designations[0] || "",
       role: "faculty",
       level: facultyRoleLevel,
@@ -226,7 +230,7 @@ export default function Faculty() {
       pass: "",
       confirm_pass: "",
       college: lockedCollegeName || member.college,
-      department: member.department,
+      department: lockedDepartment || member.department,
       designation: member.designation,
       role: "faculty",
       level:
@@ -332,18 +336,22 @@ export default function Faculty() {
     }
   };
 
-  const filteredFaculty = faculty.filter((member) => {
+  const collegeDeptFaculty = faculty.filter((member) => {
+    const memberCollege = String(member.college || "").trim().toLowerCase();
+    const memberDept = String(member.department || "").trim().toLowerCase();
+    const collegeMatch = normalizedLockedCollege ? memberCollege === normalizedLockedCollege : true;
+    const deptMatch = normalizedLockedDepartment ? memberDept === normalizedLockedDepartment : true;
+    return collegeMatch && deptMatch;
+  });
+
+  const filteredFaculty = collegeDeptFaculty.filter((member) => {
     const query = searchQuery.toLowerCase();
-    const matchesSearch =
+    return (
       member.name.toLowerCase().includes(query) ||
       member.email.toLowerCase().includes(query) ||
       member.department.toLowerCase().includes(query) ||
-      member.designation.toLowerCase().includes(query);
-
-    const matchesDepartment =
-      filterDepartment === "all" || member.department === filterDepartment;
-
-    return matchesSearch && matchesDepartment;
+      member.designation.toLowerCase().includes(query)
+    );
   });
 
   useEffect(() => {
@@ -371,8 +379,8 @@ export default function Faculty() {
   useEffect(() => {
     if (!isAddingFaculty) return;
 
-    if (!formData.department && branchOptions.length > 0) {
-      setFormData((prev) => ({ ...prev, department: branchOptions[0] }));
+    if (!formData.department && (lockedDepartment || branchOptions.length > 0)) {
+      setFormData((prev) => ({ ...prev, department: lockedDepartment || branchOptions[0] }));
     }
 
     if (!formData.designation && designations.length > 0) {
@@ -446,23 +454,10 @@ export default function Faculty() {
                 </div>
                 <div className="space-y-2">
                   <Label>Department *</Label>
-                  <Select
-                    value={formData.department}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({ ...prev, department: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {branchOptions.map((branch) => (
-                        <SelectItem key={branch} value={branch}>
-                          {branch}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    value={lockedDepartment || formData.department}
+                    disabled
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -634,7 +629,14 @@ export default function Faculty() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Faculty List</CardTitle>
+            <CardTitle>
+                Faculty List
+                {collegeDeptFaculty.length > 0 && (
+                  <span className="ml-2 text-sm font-normal text-muted-foreground">
+                    ({collegeDeptFaculty.length} total)
+                  </span>
+                )}
+              </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-col gap-3 md:flex-row">
@@ -642,27 +644,11 @@ export default function Faculty() {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className="pl-10"
-                  placeholder="Search by name, email, department, designation"
+                  placeholder="Search by name, email, designation"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <Select
-                value={filterDepartment}
-                onValueChange={setFilterDepartment}
-              >
-                <SelectTrigger className="w-full md:w-[240px]">
-                  <SelectValue placeholder="Filter by department" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {branchOptions.map((branch) => (
-                    <SelectItem key={branch} value={branch}>
-                      {branch}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
 
             <div className="rounded-lg border">

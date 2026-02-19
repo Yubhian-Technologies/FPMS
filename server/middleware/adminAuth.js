@@ -18,10 +18,24 @@ export const adminAuth = async (req, res, next) => {
     const userEmail = req.headers["x-user-email"];
     const userName = req.headers["x-user-name"];
     const userRole = req.headers["x-user-role"];
-    const userCollege = req.headers["x-college"];
+    let userCollege = req.headers["x-college"];
     const userDepartment = req.headers["x-department"];
 
     if (userId && userEmail && userRole) {
+      // If college is empty for a principle, look it up from the admins collection
+      if (!userCollege && isPrincipalRole(userRole)) {
+        try {
+          const snap = await db
+            .collection("admins")
+            .where("email", "==", String(userEmail).trim().toLowerCase())
+            .limit(1)
+            .get();
+          if (!snap.empty) userCollege = snap.docs[0].data()?.college || "";
+        } catch (e) {
+          console.error("[adminAuth] DEV college lookup failed:", e.message);
+        }
+      }
+
       console.log("[adminAuth] DEV MODE - Using headers. Role:", userRole);
       req.admin = {
         id: userId,
@@ -71,15 +85,41 @@ export const adminAuth = async (req, res, next) => {
       if (userDoc.exists) userDocData = userDoc.data() || null;
     } catch (docError) {}
 
+    // College lives in "admins" collection, not "users"
+    let adminCollege =
+      decodedFirebase.college ||
+      decodedFirebase.claims?.college ||
+      userDocData?.college ||
+      "";
+
+    if (!adminCollege) {
+      try {
+        const adminDoc = await db
+          .collection("admins")
+          .doc(decodedFirebase.uid)
+          .get();
+        if (adminDoc.exists) {
+          adminCollege = adminDoc.data()?.college || "";
+        }
+        if (!adminCollege && decodedFirebase.email) {
+          const snap = await db
+            .collection("admins")
+            .where("email", "==", String(decodedFirebase.email).trim().toLowerCase())
+            .limit(1)
+            .get();
+          if (!snap.empty) adminCollege = snap.docs[0].data()?.college || "";
+        }
+      } catch (e) {
+        console.error("[adminAuth] PROD college lookup failed:", e.message);
+      }
+    }
+
     req.admin = {
       id: decodedFirebase.uid,
       uid: decodedFirebase.uid,
       email: decodedFirebase.email,
       role: "principle",
-      college:
-        decodedFirebase.college ||
-        decodedFirebase.claims?.college ||
-        userDocData?.college,
+      college: adminCollege,
       department:
         decodedFirebase.department ||
         decodedFirebase.claims?.department ||

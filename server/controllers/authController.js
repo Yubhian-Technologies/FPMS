@@ -995,14 +995,34 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
   }
 
   if (decodedToken?.role) {
+    const resolvedRole = String(decodedToken.role);
+    let college = decodedToken?.college || "";
+    const department = decodedToken?.department || "";
+
+    // Principle/admin college lives in the "admins" collection, not in token claims
+    if (!college && (resolvedRole === "principle" || resolvedRole === "principal" || resolvedRole === "admin")) {
+      try {
+        const adminSnap = await db
+          .collection("admins")
+          .where("email", "==", String(email || "").trim().toLowerCase())
+          .limit(1)
+          .get();
+        if (!adminSnap.empty) {
+          college = adminSnap.docs[0].data()?.college || "";
+        }
+      } catch (e) {
+        console.error("resolveRoleFromFirebase: failed to fetch admin college", e);
+      }
+    }
+
     return {
-      role: String(decodedToken.role),
+      role: resolvedRole,
       level:
         decodedToken?.level !== undefined
           ? Number(decodedToken.level)
           : undefined,
-      college: decodedToken?.college || "",
-      department: decodedToken?.department || "",
+      college,
+      department,
     };
   }
 
@@ -1059,11 +1079,34 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
     }
   }
 
+  // Last resort: check admins collection by email
+  const normalizedEmailFinal = String(email || "").trim().toLowerCase();
+  if (normalizedEmailFinal) {
+    try {
+      const adminSnap = await db
+        .collection("admins")
+        .where("email", "==", normalizedEmailFinal)
+        .limit(1)
+        .get();
+      if (!adminSnap.empty) {
+        const adminData = adminSnap.docs[0].data() || {};
+        return {
+          role: "principle",
+          level: undefined,
+          college: adminData.college || "",
+          department: "",
+        };
+      }
+    } catch (e) {
+      console.error("resolveRoleFromFirebase: admins fallback failed", e);
+    }
+  }
+
   return {
     role: inferRoleFromEmail(email),
     level: undefined,
-    college: "",       // ← add this
-    department: "", 
+    college: "",
+    department: "",
   };
 };
 
