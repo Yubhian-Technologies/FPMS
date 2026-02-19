@@ -989,7 +989,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
         decodedToken?.level !== undefined
           ? Number(decodedToken.level)
           : undefined,
-      college: decodedToken?.college || "",      // ← add this
+      college: decodedToken?.college || "", // ← add this
       department: decodedToken?.department || "",
     };
   }
@@ -1000,18 +1000,32 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
     const department = decodedToken?.department || "";
 
     // Principle/admin college lives in the "admins" collection, not in token claims
-    if (!college && (resolvedRole === "principle" || resolvedRole === "principal" || resolvedRole === "admin")) {
+    if (
+      !college &&
+      (resolvedRole === "principle" ||
+        resolvedRole === "principal" ||
+        resolvedRole === "admin")
+    ) {
       try {
         const adminSnap = await db
           .collection("admins")
-          .where("email", "==", String(email || "").trim().toLowerCase())
+          .where(
+            "email",
+            "==",
+            String(email || "")
+              .trim()
+              .toLowerCase(),
+          )
           .limit(1)
           .get();
         if (!adminSnap.empty) {
           college = adminSnap.docs[0].data()?.college || "";
         }
       } catch (e) {
-        console.error("resolveRoleFromFirebase: failed to fetch admin college", e);
+        console.error(
+          "resolveRoleFromFirebase: failed to fetch admin college",
+          e,
+        );
       }
     }
 
@@ -1037,7 +1051,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
         role: "committee",
         level:
           userData.level !== undefined ? Number(userData.level) : undefined,
-        college: userData.college || "",       // ← add this
+        college: userData.college || "", // ← add this
         department: userData.department || "",
       };
     }
@@ -1045,7 +1059,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
     return {
       role: String(userData.role || inferRoleFromEmail(email)),
       level: userData.level !== undefined ? Number(userData.level) : undefined,
-      college: userData.college || "",       // ← add this
+      college: userData.college || "", // ← add this
       department: userData.department || "",
     };
   }
@@ -1072,7 +1086,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
             committeeData.level !== undefined
               ? Number(committeeData.level)
               : undefined,
-          college: committeeData.college || "",       // ← add this
+          college: committeeData.college || "", // ← add this
           department: committeeData.department || "",
         };
       }
@@ -1080,7 +1094,9 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
   }
 
   // Last resort: check admins collection by email
-  const normalizedEmailFinal = String(email || "").trim().toLowerCase();
+  const normalizedEmailFinal = String(email || "")
+    .trim()
+    .toLowerCase();
   if (normalizedEmailFinal) {
     try {
       const adminSnap = await db
@@ -1167,7 +1183,7 @@ export const unifiedLogin = async (req, res) => {
         email: decodedToken.email || normalizedEmail,
         role: resolved.role,
         level: resolved.level,
-        college: resolved.college || "", 
+        college: resolved.college || "",
         department: resolved.department || "",
       },
     });

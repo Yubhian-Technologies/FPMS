@@ -652,7 +652,9 @@ export const getPrincipalCollegeDetails = async (req, res) => {
         adminData = adminsDoc.data() || {};
       } else {
         // Try by email as last resort
-        const adminEmail = String(req.admin?.email || "").trim().toLowerCase();
+        const adminEmail = String(req.admin?.email || "")
+          .trim()
+          .toLowerCase();
         if (adminEmail) {
           const snap = await db
             .collection("admins")

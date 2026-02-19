@@ -93,8 +93,12 @@ export default function Faculty() {
 
   const lockedCollegeName = collegeDetails?.name || "";
   const lockedDepartment = user?.department || "";
-  const normalizedLockedCollege = String(lockedCollegeName).trim().toLowerCase();
-  const normalizedLockedDepartment = String(lockedDepartment).trim().toLowerCase();
+  const normalizedLockedCollege = String(lockedCollegeName)
+    .trim()
+    .toLowerCase();
+  const normalizedLockedDepartment = String(lockedDepartment)
+    .trim()
+    .toLowerCase();
 
   const branchOptions = useMemo(
     () =>
@@ -337,10 +341,18 @@ export default function Faculty() {
   };
 
   const collegeDeptFaculty = faculty.filter((member) => {
-    const memberCollege = String(member.college || "").trim().toLowerCase();
-    const memberDept = String(member.department || "").trim().toLowerCase();
-    const collegeMatch = normalizedLockedCollege ? memberCollege === normalizedLockedCollege : true;
-    const deptMatch = normalizedLockedDepartment ? memberDept === normalizedLockedDepartment : true;
+    const memberCollege = String(member.college || "")
+      .trim()
+      .toLowerCase();
+    const memberDept = String(member.department || "")
+      .trim()
+      .toLowerCase();
+    const collegeMatch = normalizedLockedCollege
+      ? memberCollege === normalizedLockedCollege
+      : true;
+    const deptMatch = normalizedLockedDepartment
+      ? memberDept === normalizedLockedDepartment
+      : true;
     return collegeMatch && deptMatch;
   });
 
@@ -379,8 +391,14 @@ export default function Faculty() {
   useEffect(() => {
     if (!isAddingFaculty) return;
 
-    if (!formData.department && (lockedDepartment || branchOptions.length > 0)) {
-      setFormData((prev) => ({ ...prev, department: lockedDepartment || branchOptions[0] }));
+    if (
+      !formData.department &&
+      (lockedDepartment || branchOptions.length > 0)
+    ) {
+      setFormData((prev) => ({
+        ...prev,
+        department: lockedDepartment || branchOptions[0],
+      }));
     }
 
     if (!formData.designation && designations.length > 0) {
@@ -630,13 +648,13 @@ export default function Faculty() {
         <Card>
           <CardHeader>
             <CardTitle>
-                Faculty List
-                {collegeDeptFaculty.length > 0 && (
-                  <span className="ml-2 text-sm font-normal text-muted-foreground">
-                    ({collegeDeptFaculty.length} total)
-                  </span>
-                )}
-              </CardTitle>
+              Faculty List
+              {collegeDeptFaculty.length > 0 && (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  ({collegeDeptFaculty.length} total)
+                </span>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-col gap-3 md:flex-row">

@@ -104,7 +104,11 @@ export const adminAuth = async (req, res, next) => {
         if (!adminCollege && decodedFirebase.email) {
           const snap = await db
             .collection("admins")
-            .where("email", "==", String(decodedFirebase.email).trim().toLowerCase())
+            .where(
+              "email",
+              "==",
+              String(decodedFirebase.email).trim().toLowerCase(),
+            )
             .limit(1)
             .get();
           if (!snap.empty) adminCollege = snap.docs[0].data()?.college || "";

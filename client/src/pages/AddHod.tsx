@@ -345,7 +345,11 @@ export default function AddHod() {
 
   const collegeHods = hods.filter((hod) => {
     if (!normalizedLockedCollege) return true;
-    return String(hod.college || "").trim().toLowerCase() === normalizedLockedCollege;
+    return (
+      String(hod.college || "")
+        .trim()
+        .toLowerCase() === normalizedLockedCollege
+    );
   });
 
   const filteredHods = collegeHods.filter((hod) => {

@@ -337,7 +337,11 @@ export default function AddDean() {
 
   const collegeDeans = deans.filter((dean) => {
     if (!normalizedLockedCollege) return true;
-    return String(dean.college || "").trim().toLowerCase() === normalizedLockedCollege;
+    return (
+      String(dean.college || "")
+        .trim()
+        .toLowerCase() === normalizedLockedCollege
+    );
   });
 
   const filteredDeans = collegeDeans.filter((dean) => {
