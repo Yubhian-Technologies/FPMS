@@ -24,6 +24,7 @@ import { Loader2 } from "lucide-react";
 import { api } from "@/api/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { Clock } from "lucide-react";
 
 interface TaskItem {
   id: string;
@@ -144,6 +145,11 @@ export default function DynamicCriteriaForm() {
     reason: "",
   });
 
+  // Deadline state
+  const [deadline, setDeadline] = useState<string | null>(null);
+  const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
+  const [isDeadlinePassed, setIsDeadlinePassed] = useState(false);
+
   const storageKey = useMemo(() => {
     const userId = user?.id || "anonymous";
     return `fpms-dynamic-progress-${userId}-${formId || ""}-${criteriaId || ""}`;
@@ -181,6 +187,9 @@ export default function DynamicCriteriaForm() {
 
       // Sync workflow statuses after initializing progress
       await syncWorkflowStatuses();
+      
+      // Fetch deadline
+      await fetchDeadline();
     } catch (error: any) {
       toast({
         title: "Failed to load criteria",
@@ -190,6 +199,33 @@ export default function DynamicCriteriaForm() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchDeadline = async () => {
+    if (!user) return;
+    try {
+      const res = await api.get("/api/colleges/user-deadline", {
+        headers: {
+          "x-user-id": user.id || user.uid,
+          "x-user-role": user.role,
+          "x-college": user.college,
+        },
+      });
+      if (res.data.success && res.data.data.deadline) {
+        const deadlineStr = res.data.data.deadline;
+        setDeadline(deadlineStr);
+        
+        const due = new Date(deadlineStr);
+        const now = new Date();
+        const diffTime = due.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        setDaysRemaining(diffDays);
+        setIsDeadlinePassed(diffDays < 0);
+      }
+    } catch (err) {
+      console.error("Deadline fetch error:", err);
     }
   };
 
@@ -815,6 +851,36 @@ const submitRes = await api.post(
       subtitle={`${payload.formTitle} • Maximum ${payload.criteria.totalMarks || totalMaxMarks} Points`}
     >
       <div className="space-y-6">
+        {deadline && (
+          <Card className={`border-l-4 ${isDeadlinePassed ? 'border-l-red-500 bg-red-50' : 'border-l-amber-500 bg-amber-50'}`}>
+            <CardContent className="p-4 flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-4">
+                <Clock className={`h-5 w-5 ${isDeadlinePassed ? 'text-red-600' : 'text-amber-600'}`} />
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Submission Deadline</p>
+                  <p className="text-sm font-semibold">
+                    {new Date(deadline).toLocaleDateString("en-IN", {
+                      weekday: "long",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric"
+                    })}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                {daysRemaining !== null && (
+                  <div className={`text-sm font-bold ${isDeadlinePassed ? 'text-red-600' : 'text-amber-700'}`}>
+                    {isDeadlinePassed
+                      ? `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) !== 1 ? 's' : ''} overdue - Submission Locked`
+                      : `${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining`}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Overall Progress</CardTitle>
@@ -1219,14 +1285,16 @@ const submitRes = await api.post(
                             ) : taskStatus === "pending" ? (
                               <Button
                                 onClick={() => submitTask(moduleItem, task)}
-                                disabled={submittingTaskId === task.id}
+                                disabled={submittingTaskId === task.id || isDeadlinePassed}
                               >
                                 {submittingTaskId === task.id ? (
                                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                                 ) : null}
                                 {submittingTaskId === task.id
                                   ? "Submitting..."
-                                  : "Submit Task"}
+                                  : isDeadlinePassed 
+                                    ? "Deadline Passed"
+                                    : "Submit Task"}
                               </Button>
                             ) : (
                               <Badge className="bg-gray-600 text-white px-4 py-2">
@@ -1251,7 +1319,8 @@ const submitRes = await api.post(
                     onClick={() => submitModuleSection(moduleItem)}
                     disabled={
                       submittingModuleId === moduleItem.id ||
-                      isModuleFrozen(moduleItem)
+                      isModuleFrozen(moduleItem) ||
+                      isDeadlinePassed
                     }
                   >
                     {submittingModuleId === moduleItem.id ? (
@@ -1261,7 +1330,9 @@ const submitRes = await api.post(
                       ? "Section Submitted"
                       : submittingModuleId === moduleItem.id
                         ? "Submitting..."
-                        : "Submit Section"}
+                        : isDeadlinePassed
+                          ? "Deadline Passed"
+                          : "Submit Section"}
                   </Button>
                 </div>
               </AccordionContent>
@@ -1320,7 +1391,7 @@ const submitRes = await api.post(
             <Button
               onClick={handleAppealSubmit}
               disabled={
-                appealingTaskId !== null || !appealFormData.reason.trim()
+                appealingTaskId !== null || !appealFormData.reason.trim() || isDeadlinePassed
               }
             >
               {appealingTaskId ? (
@@ -1328,6 +1399,8 @@ const submitRes = await api.post(
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Submitting...
                 </>
+              ) : isDeadlinePassed ? (
+                "Deadline Passed"
               ) : (
                 "Submit Appeal"
               )}
