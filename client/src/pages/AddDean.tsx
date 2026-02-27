@@ -69,12 +69,14 @@ export default function AddDean() {
   const [deanToDelete, setDeanToDelete] = useState<Dean | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [designations, setDesignations] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     pass: "",
     confirm_pass: "",
+    designation: "",
     college: "",
     role: "",
     level: 0,
@@ -105,6 +107,25 @@ export default function AddDean() {
       .filter(Boolean),
   );
 
+  const fetchDesignations = async () => {
+  try {
+    const res = await api.get("/api/admin/designations");
+    const payload = Array.isArray(res.data?.data)
+      ? res.data.data
+      : Array.isArray(res.data?.data?.designations)
+        ? res.data.data.designations
+        : [];
+
+    const designationList = payload
+      .map((item: any) => String(item.name || item || "").trim())
+      .filter(Boolean);
+
+    setDesignations(designationList);
+  } catch (err) {
+    console.error("Failed to fetch designations:", err);
+    setDesignations([]);
+  }
+};
   const availableRoleOptions = roleOptions.filter((role) => {
     const normalizedRoleName = String(role.name || "")
       .trim()
@@ -177,7 +198,7 @@ export default function AddDean() {
     const load = async () => {
       try {
         setIsLoading(true);
-        await Promise.all([fetchDeans(), fetchCollegeDetails(), fetchRoles()]);
+        await Promise.all([fetchDeans(), fetchCollegeDetails(), fetchRoles(), fetchDesignations()]);
       } finally {
         setIsLoading(false);
       }
@@ -194,6 +215,7 @@ export default function AddDean() {
       pass: "",
       confirm_pass: "",
       college: lockedCollegeName,
+      designation:"",
       role: defaultRole?.name || "",
       level: Number(defaultRole?.level ?? 0),
       hasPhd: false,
@@ -221,6 +243,7 @@ export default function AddDean() {
       pass: "",
       confirm_pass: "",
       college: lockedCollegeName || dean.college,
+       designation: dean.designation || "",
       role: dean.role || availableRoleOptions[0]?.name || "",
       level: Number(dean.level ?? matchingRole?.level ?? 0),
       hasPhd: !!dean.hasPhd,
@@ -297,6 +320,7 @@ export default function AddDean() {
         college: resolvedCollege,
         role: formData.role,
         level: Number(formData.level),
+        designation: formData.designation,
         hasPhd: formData.hasPhd,
       };
 
@@ -481,6 +505,26 @@ export default function AddDean() {
                   </Select>
                 </div>
                 <div className="space-y-2">
+  <Label>Designation *</Label>
+  <Select
+    value={formData.designation}
+    onValueChange={(value) =>
+      setFormData({ ...formData, designation: value })
+    }
+  >
+    <SelectTrigger>
+      <SelectValue placeholder="Select designation" />
+    </SelectTrigger>
+    <SelectContent>
+      {designations.map((desig) => (
+        <SelectItem key={desig} value={desig}>
+          {desig}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+</div>
+                <div className="space-y-2">
                   <Label>Level *</Label>
                   <Input value={String(formData.level)} disabled />
                 </div>
@@ -630,6 +674,7 @@ export default function AddDean() {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>College</TableHead>
+                    <TableHead>Designation</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Level</TableHead>
                     <TableHead>PhD</TableHead>
@@ -642,6 +687,7 @@ export default function AddDean() {
                       <TableCell>{dean.name}</TableCell>
                       <TableCell>{dean.email}</TableCell>
                       <TableCell>{dean.college}</TableCell>
+                      <TableCell>{dean.designation || "-"}</TableCell>
                       <TableCell>{dean.role}</TableCell>
                       <TableCell>{dean.level ?? "-"}</TableCell>
                       <TableCell>{dean.hasPhd ? "Yes" : "No"}</TableCell>

@@ -991,13 +991,17 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
           : undefined,
       college: decodedToken?.college || "", // ← add this
       department: decodedToken?.department || "",
+      designation: decodedToken?.designation || ""
     };
   }
 
   if (decodedToken?.role) {
     const resolvedRole = String(decodedToken.role);
+    const userSnap = await db.collection("users").doc(decodedToken.uid).get();
+    const userData = userSnap.exists ? userSnap.data() : {};
     let college = decodedToken?.college || "";
     const department = decodedToken?.department || "";
+    const designation = userData?.designation || "";
 
     // Principle/admin college lives in the "admins" collection, not in token claims
     if (
@@ -1037,6 +1041,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
           : undefined,
       college,
       department,
+      designation 
     };
   }
 
@@ -1053,6 +1058,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
           userData.level !== undefined ? Number(userData.level) : undefined,
         college: userData.college || "", // ← add this
         department: userData.department || "",
+        designation: userData.designation || ""
       };
     }
 
@@ -1061,6 +1067,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
       level: userData.level !== undefined ? Number(userData.level) : undefined,
       college: userData.college || "", // ← add this
       department: userData.department || "",
+      designation: userData.designation || ""
     };
   }
 
@@ -1088,6 +1095,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
               : undefined,
           college: committeeData.college || "", // ← add this
           department: committeeData.department || "",
+          designation: userData.designation || ""
         };
       }
     }
@@ -1111,6 +1119,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
           level: undefined,
           college: adminData.college || "",
           department: "",
+          designation: userData.designation || ""
         };
       }
     } catch (e) {
@@ -1123,6 +1132,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
     level: undefined,
     college: "",
     department: "",
+    designation: ""
   };
 };
 
@@ -1185,6 +1195,7 @@ export const unifiedLogin = async (req, res) => {
         level: resolved.level,
         college: resolved.college || "",
         department: resolved.department || "",
+        designation: resolved.designation || ""
       },
     });
   } catch (error) {

@@ -17,49 +17,49 @@ import { toast } from "@/hooks/use-toast";
 import { api } from "@/api/api";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 
+interface Designation {
+  name: string;
+  target: string;
+}
+
 interface DesignationPayload {
   college: string;
-  designations: string[];
+  designations: Designation[];
 }
 
 export default function Designations() {
   const [collegeName, setCollegeName] = useState("");
-  const [designations, setDesignations] = useState<string[]>([]);
+  const [designations, setDesignations] = useState<Designation[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddingDesignation, setIsAddingDesignation] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [editingDesignation, setEditingDesignation] = useState<string | null>(
-    null,
-  );
-  const [designationToDelete, setDesignationToDelete] = useState<string | null>(
-    null,
-  );
+  const [editingDesignation, setEditingDesignation] = useState<Designation | null>(null);
+  const [designationToDelete, setDesignationToDelete] = useState<Designation | null>(null);
   const [formDesignationName, setFormDesignationName] = useState("");
+  const [formDesignationTarget, setFormDesignationTarget] = useState("");
 
   const filteredDesignations = useMemo(
     () =>
       designations.filter((item) =>
-        item.toLowerCase().includes(searchQuery.toLowerCase()),
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()),
       ),
     [designations, searchQuery],
   );
 
   const fetchDesignations = async () => {
     try {
-      const res = await api.get("/api/hod/designations");
-      const data: DesignationPayload = res.data?.data || {
-        college: "",
-        designations: [],
-      };
+      const res = await api.get("/api/admin/designations");
+      const data: DesignationPayload = res.data?.data || { college: "", designations: [] };
 
       setCollegeName(String(data.college || "").trim());
       setDesignations(
         Array.isArray(data.designations)
-          ? data.designations
-              .map((item) => String(item || "").trim())
-              .filter(Boolean)
+          ? data.designations.map((d) => ({
+              name: String(d.name || "").trim(),
+              target: String(d.target || "").trim(),
+            }))
           : [],
       );
     } catch {
@@ -76,12 +76,12 @@ export default function Designations() {
         setIsLoading(false);
       }
     };
-
     load();
   }, []);
 
   const resetForm = () => {
     setFormDesignationName("");
+    setFormDesignationTarget("");
     setEditingDesignation(null);
   };
 
@@ -95,49 +95,43 @@ export default function Designations() {
     resetForm();
   };
 
-  const openEdit = (designation: string) => {
-    setFormDesignationName(designation);
+  const openEdit = (designation: Designation) => {
+    setFormDesignationName(designation.name);
+    setFormDesignationTarget(designation.target);
     setEditingDesignation(designation);
     setIsAddingDesignation(true);
   };
 
-  const persistDesignations = async (nextDesignations: string[]) => {
-    await api.put("/api/hod/designations", {
-      designations: nextDesignations,
-    });
+  const persistDesignations = async (nextDesignations: Designation[]) => {
+    await api.put("/api/admin/designations", { designations: nextDesignations });
   };
 
   const handleSave = async () => {
-    const normalizedDesignationName = String(formDesignationName || "").trim();
+    const normalizedName = String(formDesignationName || "").trim();
+    const normalizedTarget = String(formDesignationTarget || "").trim();
 
-    if (!normalizedDesignationName) {
+    if (!normalizedName) {
       toast({ title: "Designation name is required", variant: "destructive" });
       return;
     }
 
     const existingMap = new Map(
-      designations.map((item) => [item.toLowerCase(), item]),
+      designations.map((d) => [d.name.toLowerCase(), d]),
     );
-    const currentEditingKey = String(editingDesignation || "").toLowerCase();
+    const currentEditingKey = editingDesignation?.name.toLowerCase() || "";
 
-    if (
-      existingMap.has(normalizedDesignationName.toLowerCase()) &&
-      normalizedDesignationName.toLowerCase() !== currentEditingKey
-    ) {
-      toast({
-        title: "Designation already exists",
-        variant: "destructive",
-      });
+    if (existingMap.has(normalizedName.toLowerCase()) && normalizedName.toLowerCase() !== currentEditingKey) {
+      toast({ title: "Designation already exists", variant: "destructive" });
       return;
     }
 
     const nextDesignations = editingDesignation
-      ? designations.map((item) =>
-          item.toLowerCase() === currentEditingKey
-            ? normalizedDesignationName
-            : item,
+      ? designations.map((d) =>
+          d.name.toLowerCase() === currentEditingKey
+            ? { name: normalizedName, target: normalizedTarget }
+            : d,
         )
-      : [...designations, normalizedDesignationName];
+      : [...designations, { name: normalizedName, target: normalizedTarget }];
 
     setIsSaving(true);
     try {
@@ -160,11 +154,8 @@ export default function Designations() {
     }
   };
 
-  const handleDelete = async (designation: string) => {
-    const nextDesignations = designations.filter(
-      (item) => item !== designation,
-    );
-
+  const handleDelete = async (designation: Designation) => {
+    const nextDesignations = designations.filter((d) => d.name !== designation.name);
     try {
       setIsDeleting(true);
       await persistDesignations(nextDesignations);
@@ -183,10 +174,7 @@ export default function Designations() {
   };
 
   return (
-    <DashboardLayout
-      title="Designations"
-      subtitle="Manage faculty designations for your college"
-    >
+    <DashboardLayout title="Designations" subtitle="Manage faculty designations for your college">
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -207,12 +195,10 @@ export default function Designations() {
         {isAddingDesignation && (
           <Card className="border-2 border-primary">
             <CardHeader>
-              <CardTitle>
-                {editingDesignation ? "Edit Designation" : "Add Designation"}
-              </CardTitle>
+              <CardTitle>{editingDesignation ? "Edit Designation" : "Add Designation"}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label>College</Label>
                   <Input value={collegeName} disabled />
@@ -225,20 +211,20 @@ export default function Designations() {
                     onChange={(e) => setFormDesignationName(e.target.value)}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label>Target</Label>
+                  <Input
+                    placeholder="Enter target"
+                    value={formDesignationTarget}
+                    onChange={(e) => setFormDesignationTarget(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={cancelForm}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="gap-2"
-                >
-                  {isSaving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : null}
+                <Button variant="outline" onClick={cancelForm}>Cancel</Button>
+                <Button onClick={handleSave} disabled={isSaving} className="gap-2">
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   {isSaving ? "Saving..." : "Save Designation"}
                 </Button>
               </div>
@@ -261,9 +247,7 @@ export default function Designations() {
               <Briefcase className="h-5 w-5" />
               <div>
                 <p>Visible Results</p>
-                <p className="text-2xl font-bold">
-                  {filteredDesignations.length}
-                </p>
+                <p className="text-2xl font-bold">{filteredDesignations.length}</p>
               </div>
             </CardContent>
           </Card>
@@ -289,26 +273,24 @@ export default function Designations() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Designation</TableHead>
+                    <TableHead>Target</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredDesignations.map((designation) => (
-                    <TableRow key={designation}>
-                      <TableCell>{designation}</TableCell>
+                  {filteredDesignations.map((d) => (
+                    <TableRow key={d.name}>
+                      <TableCell>{d.name}</TableCell>
+                      <TableCell>{d.target}</TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => openEdit(designation)}
-                        >
+                        <Button size="icon" variant="ghost" onClick={() => openEdit(d)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
                           size="icon"
                           variant="ghost"
                           className="text-destructive"
-                          onClick={() => setDesignationToDelete(designation)}
+                          onClick={() => setDesignationToDelete(d)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -317,10 +299,7 @@ export default function Designations() {
                   ))}
                   {filteredDesignations.length === 0 && (
                     <TableRow>
-                      <TableCell
-                        colSpan={2}
-                        className="text-center text-muted-foreground py-8"
-                      >
+                      <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
                         No designation data available.
                       </TableCell>
                     </TableRow>
@@ -333,11 +312,9 @@ export default function Designations() {
 
         <DeleteConfirmationDialog
           open={!!designationToDelete}
-          onOpenChange={(open) => {
-            if (!open && !isDeleting) setDesignationToDelete(null);
-          }}
+          onOpenChange={(open) => { if (!open && !isDeleting) setDesignationToDelete(null); }}
           title="Delete designation?"
-          description={`This will permanently delete ${designationToDelete || "this designation"}.`}
+          description={`This will permanently delete ${designationToDelete?.name || "this designation"}.`}
           confirmText="Delete"
           isLoading={isDeleting}
           onConfirm={() => {

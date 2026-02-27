@@ -140,7 +140,7 @@ export default function Faculty() {
 
   const fetchDesignations = async () => {
     try {
-      const res = await api.get("/api/hod/designations");
+      const res = await api.get("/api/admin/designations");
       console.log("[Faculty] Designations response:", res.data);
 
       const payload = res.data?.data;
@@ -152,10 +152,10 @@ export default function Faculty() {
 
       console.log("[Faculty] Parsed designations:", designationList);
       setDesignations(
-        designationList
-          .map((item: string) => String(item || "").trim())
-          .filter(Boolean),
-      );
+  designationList
+    .map((item: any) => String(item.name || item || "").trim()) // <- use item.name
+    .filter(Boolean),
+);
     } catch (error) {
       console.error("[Faculty] Failed to fetch designations:", error);
       setDesignations([]);

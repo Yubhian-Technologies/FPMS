@@ -5,8 +5,7 @@ import {
   getAllFaculty,
   getFacultyRoleOption,
   getHodCollegeDetails,
-  getHodCollegeDesignations,
-  updateHodCollegeDesignations,
+  
   updateFaculty,
   deleteFaculty,
   getHodDashboard,
@@ -22,8 +21,7 @@ hodRouter.post("/add-faculty", hodAuth, addFaculty);
 hodRouter.get("/all-faculty", hodAuth, getAllFaculty);
 hodRouter.get("/college-details", hodAuth, getHodCollegeDetails);
 hodRouter.get("/faculty-role", hodAuth, getFacultyRoleOption);
-hodRouter.get("/designations", hodAuth, getHodCollegeDesignations);
-hodRouter.put("/designations", hodAuth, updateHodCollegeDesignations);
+
 
 hodRouter.put("/update-faculty/:id", hodAuth, updateFaculty);
 hodRouter.get('/hod-dashboard',hodAuth,getHodDashboard);

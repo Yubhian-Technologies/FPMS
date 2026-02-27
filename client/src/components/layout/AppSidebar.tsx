@@ -162,7 +162,7 @@ const getNavItems = (
       icon: Briefcase,
       label: "Designations",
       href: "/designations",
-      roles: ["hod"],
+      roles: ["principle"],
     },
     { icon: Users, label: "Faculty List", href: "/faculty", roles: ["hod"] },
     {

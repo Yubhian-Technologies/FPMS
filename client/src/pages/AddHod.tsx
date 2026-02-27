@@ -37,6 +37,7 @@ interface Hod {
   name: string;
   email: string;
   department: string;
+  designation?: string;
   college: string;
   role?: string;
   level?: number;
@@ -65,6 +66,36 @@ export default function AddHod() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [hodRoleLevel, setHodRoleLevel] = useState(0);
+  const [designations, setDesignations] = useState<string[]>([]);
+
+const fetchDesignations = async () => {
+  try {
+    const res = await api.get("/api/admin/designations");
+    const payload = res.data?.data;
+
+    const list: any[] = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.designations)
+        ? payload.designations
+        : [];
+
+    // Convert objects to strings (use name or title)
+    const normalized = list
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (typeof item === "object" && item !== null)
+          return String(item.name || item.title || "").trim();
+        return "";
+      })
+      .filter(Boolean);
+
+    setDesignations(normalized);
+    console.log("Designations fetched:", normalized);
+  } catch (err) {
+    console.error("Failed to fetch designations", err);
+    setDesignations([]);
+  }
+};
 
   const [formData, setFormData] = useState({
     name: "",
@@ -72,6 +103,7 @@ export default function AddHod() {
     pass: "",
     confirm_pass: "",
     college: "",
+    designation: "",
     department: "",
     role: "hod",
     level: 0,
@@ -133,14 +165,18 @@ export default function AddHod() {
     try {
       const res = await api.get("/api/admin/all-hods");
       const data = Array.isArray(res.data?.data) ? res.data.data : [];
-      const normalized = data.map((item: any) => ({
-        ...item,
-        level:
-          item.level !== undefined && Number.isFinite(Number(item.level))
-            ? Number(item.level)
-            : undefined,
-        hasPhd: item.hasPhd ?? item.hasPhD ?? false,
-      }));
+     const normalized = data.map((item: any) => ({
+  ...item,
+  level:
+    item.level !== undefined && Number.isFinite(Number(item.level))
+      ? Number(item.level)
+      : undefined,
+  hasPhd: item.hasPhd ?? item.hasPhD ?? false,
+  designation:
+    item.designation && typeof item.designation === "object"
+      ? item.designation.name || item.designation.title || ""
+      : item.designation || "",
+}));
       setHods(normalized);
     } catch {
       toast({ title: "Failed to load HODs", variant: "destructive" });
@@ -181,6 +217,7 @@ export default function AddHod() {
           fetchHods(),
           fetchCollegeDetails(),
           fetchHodRoleOption(),
+          fetchDesignations(),
         ]);
       } finally {
         setIsLoading(false);
@@ -197,6 +234,7 @@ export default function AddHod() {
       pass: "",
       confirm_pass: "",
       college: lockedCollegeName,
+      designation: designations[0] || "",
       department: availableBranchOptions[0] || "",
       role: "hod",
       level: hodRoleLevel,
@@ -218,23 +256,27 @@ export default function AddHod() {
   };
 
   const openEdit = (hod: Hod) => {
-    setFormData({
-      name: hod.name,
-      email: hod.email,
-      pass: "",
-      confirm_pass: "",
-      college: lockedCollegeName || hod.college,
-      department: hod.department || "",
-      role: "hod",
-      level:
-        hod.level !== undefined && Number.isFinite(Number(hod.level))
-          ? Number(hod.level)
-          : hodRoleLevel,
-      hasPhd: !!hod.hasPhd,
-    });
-    setEditingId(hod.id);
-    setIsAddingHod(true);
-  };
+  setFormData({
+    name: hod.name,
+    email: hod.email,
+    pass: "",
+    confirm_pass: "",
+    college: lockedCollegeName || hod.college,
+    department: hod.department || "",
+    designation:
+  typeof hod.designation === "string"
+    ? hod.designation
+    : hod.designation?.name || hod.designation?.title || designations[0] || "",
+    role: "hod",
+    level:
+      hod.level !== undefined && Number.isFinite(Number(hod.level))
+        ? Number(hod.level)
+        : hodRoleLevel,
+    hasPhd: !!hod.hasPhd,
+  });
+  setEditingId(hod.id);
+  setIsAddingHod(true);
+};
 
   const handleSave = async () => {
     const resolvedCollege = lockedCollegeName || formData.college;
@@ -302,6 +344,7 @@ export default function AddHod() {
         pass: formData.pass || undefined,
         confirm_pass: formData.confirm_pass || undefined,
         college: resolvedCollege,
+        designation: formData.designation,
         department: formData.department,
         role: "hod",
         level: Number(formData.level),
@@ -487,6 +530,27 @@ export default function AddHod() {
                   </Select>
                 </div>
                 <div className="space-y-2">
+  <Label>Designation *</Label>
+  <Select
+    value={formData.designation}
+    onValueChange={(value) =>
+      setFormData({ ...formData, designation: value })
+    }
+    disabled={designations.length === 0}
+  >
+    <SelectTrigger>
+      <SelectValue placeholder="Select designation" />
+    </SelectTrigger>
+    <SelectContent>
+  {designations.map((desig) => (
+    <SelectItem key={desig} value={desig}>
+      {desig}
+    </SelectItem>
+  ))}
+</SelectContent>
+  </Select>
+</div>
+                <div className="space-y-2">
                   <Label>Role *</Label>
                   <Input value="hod" disabled />
                 </div>
@@ -526,6 +590,7 @@ export default function AddHod() {
                     </Button>
                   </div>
                 </div>
+
                 <div className="space-y-2">
                   <Label>Confirm Password {!editingId && "*"}</Label>
                   <div className="relative">
@@ -641,6 +706,7 @@ export default function AddHod() {
                     <TableHead>Email</TableHead>
                     <TableHead>Dept / Branch</TableHead>
                     <TableHead>College</TableHead>
+                    <TableHead>Designation</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Level</TableHead>
                     <TableHead>PhD</TableHead>
@@ -654,6 +720,7 @@ export default function AddHod() {
                       <TableCell>{hod.email}</TableCell>
                       <TableCell>{hod.department || "-"}</TableCell>
                       <TableCell>{hod.college}</TableCell>
+                      <TableCell>{hod.designation || "-"}</TableCell>
                       <TableCell>{hod.role || "hod"}</TableCell>
                       <TableCell>{hod.level ?? "-"}</TableCell>
                       <TableCell>{hod.hasPhd ? "Yes" : "No"}</TableCell>

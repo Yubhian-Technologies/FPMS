@@ -175,7 +175,7 @@ function AppRoutes() {
       <Route
         path="/designations"
         element={
-          <ProtectedRoute allowedRoles={["hod"]}>
+          <ProtectedRoute allowedRoles={["principle"]}>
             <Designations />
           </ProtectedRoute>
         }
