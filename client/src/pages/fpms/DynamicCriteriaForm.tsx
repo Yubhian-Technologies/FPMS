@@ -531,6 +531,8 @@ formData.append(
 );
 formData.append("moduleId", moduleItem.id);
 formData.append("moduleName", moduleItem.moduleName);
+formData.append("criteriaTotalMarks", String(payload?.criteria?.totalMarks || 0));
+formData.append("moduleTotalMarks",   String(moduleItem.totalMarks || 0));
 formData.append("taskId", task.id);
 formData.append("taskName", task.title);
 formData.append("maxMarks", String(task.marks || 0));

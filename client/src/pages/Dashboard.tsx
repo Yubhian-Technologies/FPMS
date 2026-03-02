@@ -15,14 +15,19 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Clock, Folder, File, Award, User, Building, BookOpen, Users, School, CheckCircle, AlertCircle, BarChart2, Star } from "lucide-react";
+import { FileText,Filter, Clock, Folder, File, Award, User,Briefcase, Building, BookOpen, Users, School, CheckCircle, AlertCircle, BarChart2 } from "lucide-react";
 import { api } from "@/api/api";
 import jsPDF from "jspdf";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
-import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
-import "react-circular-progressbar/dist/styles.css";
+import { DeadlineAlert } from "@/components/dashboard/DeadlineAlert";
+import { StatusCards } from "@/components/dashboard/StatusCards";
+import { ScoreOverview } from "@/components/dashboard/ScoreOverview";
+import { RecentActivity } from "@/components/dashboard/RecentActivity";
+import { UserProfile } from "@/components/dashboard/UserProfile";
+import { FPMSFormOverview } from "@/components/fpms/FPMSFormOverview";
+import { QuickActions } from "@/components/dashboard/QuickActions";
 
 /* ---------------- STATUS CONFIG ---------------- */
 const statusConfig: Record<string, { label: string; variant: "outline" | "secondary" | "default" | "success" | "warning" | "destructive" }> = {
@@ -40,116 +45,134 @@ export default function Dashboard() {
   const [deadline, setDeadline] = useState<string | null>(null);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [committeeData, setCommitteeData] = useState<any>(null);
+  const [designations, setDesignations] = useState<any[]>([]);
+  // ─── FILTER STATES ───
+const [selectedCollege, setSelectedCollege] = useState<string>("All");
+const [selectedRole, setSelectedRole] = useState<string>("All");
+const [selectedStaff, setSelectedStaff] = useState<string>("All");
+const [selectedCriteria, setSelectedCriteria] = useState<string>("All");
+const [selectedModule, setSelectedModule] = useState<string>("All");
+const [staffList, setStaffList] = useState<any[]>([]);
+
+const [filteredData, setFilteredData] = useState<any[]>([]);
 
   const displayName = user?.name || user?.email || "User";
-
-  /* ---------------- FETCH DEADLINE ---------------- */
-  const fetchDeadline = async () => {
-    if (!user) return;
-    try {
-      const res = await api.get("/api/colleges/user-deadline", {
-        headers: {
-          "x-user-id": user.uid,
-          "x-user-role": user.role,
-          "x-college": user.college,
-        },
-      });
-      if (res.data.success) {
-        setDeadline(res.data.data.deadline);
-      }
-    } catch (err) {
-      console.error("Deadline fetch error:", err);
-    }
-  };
-
-  /* ---------------- FETCH DATA ---------------- */
+  
+const userTarget = designations.find(
+  d => d.name.trim().toLowerCase() === user?.designation?.trim().toLowerCase()
+)?.target || "Not assigned";
+  
   useEffect(() => {
-    if (!user) return;
+  if (!user) return;
 
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        if (user.role === "committee") {
-          const res = await api.get("/api/auth/dashboard-data", {
-            headers: { "x-user-id": user.uid, "x-user-role": user.role },
-          });
-          if (res.data.success) setCommitteeData(res.data.data);
-        } else if (user.role === "principle" || user.role === "vice principle") {
-          const res = await api.get("/api/admin/college-dashboard", {
-            headers: { "x-user-id": user.uid, "x-user-role": user.role },
-          });
-          if (res.data.success) setCommitteeData(res.data.data);
-        } else if (user.role === "hod") {
-          const res = await api.get("/api/hod/hod-dashboard", {
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // ─── COMMON: PERSONAL SUBMISSIONS (for faculty + HOD) ───
+      const personalFetch = async () => {
+        const res = await api.get("/api/submissions/my-submissions", {
+          headers: {
+            "x-user-id": user.uid,
+            "x-user-email": user.email || "",
+            "x-user-name": user.name || "",
+            "x-user-role": user.role,
+            "x-college": user.college || "",
+            "x-department": user.department || "",
+          },
+        });
+        console.log(res.data);
+        if (res.data.success) {
+          const sorted = [...(res.data.data || [])].sort(
+            (a, b) => (b.createdAt?.seconds || 0) * 1000 - (a.createdAt?.seconds || 0) * 1000
+          );
+          setSubmissions(sorted);
+        }
+      };
+
+      // ─── ROLE-SPECIFIC ───
+      if (user.role === "committee") {
+        const res = await api.get("/api/auth/dashboard-data", {
+          headers: { "x-user-id": user.uid, "x-user-role": user.role },
+        });
+        if (res.data.success) setCommitteeData(res.data.data);
+         setStaffList(res.data.data.staff || []); 
+      } 
+      else if (user.role === "principle" || user.role === "vice principle") {
+        const res = await api.get("/api/admin/college-dashboard", {
+          headers: { "x-user-id": user.uid, "x-user-role": user.role },
+        });
+        if (res.data.success) setCommitteeData(res.data.data);
+         setStaffList(res.data.data.staff || []);
+      } 
+      else if (user.role === "hod") {
+        const deptRes = await api.get("/api/hod/hod-dashboard", {
+          headers: {
+            "x-user-id": user.uid,
+            "x-user-role": user.role,
+            "x-college": user.college,
+            "x-department": user.department,
+          },
+        });
+        if (deptRes.data.success) setCommitteeData(deptRes.data.data);
+         setStaffList(deptRes.data.data.staff || []);
+
+        await personalFetch();
+      } 
+      else {
+        await personalFetch();
+      }
+
+      // ─── FETCH DESIGNATIONS ─── (add this here, inside try)
+      const fetchDesignations = async () => {
+        try {
+          const res = await api.get("/api/admin/designations", {
             headers: {
               "x-user-id": user.uid,
-              "x-user-role": user.role,
-              "x-college": user.college,
-              "x-department": user.department,
-            },
-          });
-          if (res.data.success) setCommitteeData(res.data.data);
-        } else {
-          // Faculty / other roles
-          const res = await api.get("/api/submissions/my-submissions", {
-            headers: {
-              "x-user-id": user.uid,
-              "x-user-email": user.email || "",
-              "x-user-name": user.name || "",
               "x-user-role": user.role,
               "x-college": user.college || "",
-              "x-department": user.department || "",
             },
           });
-          if (res.data.success) {
-            const sorted = [...(res.data.data || [])].sort(
-              (a, b) => (b.createdAt?.seconds || 0) * 1000 - (a.createdAt?.seconds || 0) * 1000
-            );
-            setSubmissions(sorted);
+          console.log("Designations",res.data);
+          if (res.data?.success) {
+            setDesignations(res.data.data?.designations || []);
           }
+        } catch (err) {
+          console.error("Failed to fetch designations:", err);
         }
-      } catch (err) {
-        console.error("Dashboard fetch error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+      };
 
-    fetchData();
-    fetchDeadline();
-  }, [user]);
+      await fetchDesignations(); 
 
-  /* ---------------- PDF DOWNLOAD ---------------- */
-  const downloadReport = () => {
-    const doc = new jsPDF();
-    doc.text("FPMS Dashboard Report", 20, 20);
-
-    let allSubs: any[] = [];
-    if (
-      user?.role === "committee" ||
-      user?.role === "principle" ||
-      user?.role === "vice principle" ||
-      user?.role === "hod"
-    ) {
-      let staffList: any[] = [];
-      if (user?.role === "committee") {
-        staffList = committeeData?.colleges?.flatMap((college: any) => college.staff || []) || [];
-      } else {
-        staffList = committeeData?.staff || [];
-      }
-      staffList.forEach((staff: any) => {
-        allSubs.push(...(staff.submissions || []));
-      });
-    } else {
-      allSubs = submissions;
+    } catch (err) {
+      console.error("Dashboard fetch error:", err);
+    } finally {
+      setLoading(false);
     }
-
-    const totalFinal = allSubs.reduce((sum, x) => sum + (x.finalScore ?? 0), 0);
-    const totalMax   = allSubs.reduce((sum, x) => sum + (x.maxMarks ?? 0),   0);
-
-    doc.text(`Total Final: ${totalFinal}/${totalMax}`, 20, 40);
-    doc.save("fpms-dashboard-report.pdf");
   };
+
+  fetchData();
+}, [user]);
+
+const applyFilter = () => {
+  if (!committeeData) return;
+
+  let filteredStaff: any[] = staffList;
+
+  // Skip college filter for principal/vice principal
+  if (user?.role === "committee" && selectedCollege !== "All") {
+    filteredStaff = filteredStaff.filter(s => s.college === selectedCollege);
+  }
+
+  if (selectedRole !== "All") filteredStaff = filteredStaff.filter(s => s.role === selectedRole);
+  if (selectedStaff !== "All") filteredStaff = filteredStaff.filter(s => s.name === selectedStaff);
+
+  let subs: any[] = filteredStaff.flatMap(s => s.submissions || []);
+
+  if (selectedCriteria !== "All") subs = subs.filter(s => s.criteriaName === selectedCriteria);
+  if (selectedModule !== "All") subs = subs.filter(s => s.moduleName === selectedModule);
+
+  setFilteredData(subs);
+};
 
   if (loading) {
     return (
@@ -162,468 +185,662 @@ export default function Dashboard() {
     );
   }
 
-  // Helper to calculate days remaining
-  const getDaysRemaining = (deadlineStr: string | null) => {
-    if (!deadlineStr) return null;
-    const due = new Date(deadlineStr);
-    const now = new Date();
-    const diffTime = due.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
+  if (["committee", "principle", "vice principle", "hod"].includes(user?.role || "")) {
+  const isHod = user?.role === "hod";
+  const isDean = user?.role === "principle" || user?.role === "vice principle";
+  
+  const groupedData = staffList.reduce((acc: any, staff: any) => {
+    const collegeName = staff.college || "Unknown College";
+    const roleName = staff.role || "Unknown Role";
 
-  const daysRemaining = getDaysRemaining(deadline);
-  const isOverdue = daysRemaining !== null && daysRemaining < 0;
-
-  const DeadlineBanner = () => (
-    <Card className={`mb-6 border-l-4 ${isOverdue ? 'border-l-destructive bg-destructive/5' : 'border-l-warning bg-warning/5'}`}>
-      <CardContent className="p-6 flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-4">
-          <Clock className={`h-6 w-6 ${isOverdue ? 'text-destructive' : 'text-warning'}`} />
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Submission Deadline</p>
-            <p className="text-lg font-semibold">
-              {deadline ? new Date(deadline).toLocaleDateString("en-IN", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric"
-              }) : "—"}
-            </p>
-          </div>
-        </div>
-        <div className="text-right">
-          {daysRemaining !== null && (
-            <div className={`text-lg font-bold ${isOverdue ? 'text-destructive' : 'text-warning-foreground'}`}>
-              {isOverdue
-                ? `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) !== 1 ? 's' : ''} overdue`
-                : `${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining`}
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-
-  /* ────────────────────────────────────────────────
-     COMMITTEE / PRINCIPAL / VICE PRINCIPAL / HOD VIEW
-  ──────────────────────────────────────────────── */
-  if (
-    user?.role === "committee" ||
-    user?.role === "principle" ||
-    user?.role === "vice principle" ||
-    user?.role === "hod"
-  ) {
-    let staffList: any[] = [];
-    if (user?.role === "committee") {
-      staffList = committeeData?.colleges?.flatMap((college: any) => college.staff || []) || [];
-    } else {
-      staffList = committeeData?.staff || [];
-    }
-
-    const groupedData = staffList.reduce((acc: any, staff: any) => {
-      const collegeName = staff.college || "Unknown College";
-      const roleName    = staff.role    || "Unknown Role";
-
-      if (!acc[collegeName]) acc[collegeName] = {};
-      if (!acc[collegeName][roleName]) acc[collegeName][roleName] = [];
-      acc[collegeName][roleName].push(staff);
-      return acc;
-    }, {});
-
-    // Calculate summary stats
-    const totalColleges = Object.keys(groupedData).length;
-    const totalRoles = [...new Set(staffList.map((s: any) => s.role))].length;
-    const totalStaff = staffList.length;
-    let totalSubmissions = 0;
-    let totalFinalScore = 0;
-    let totalMaxMarks = 0;
-    let totalAppealed = 0;
-    let totalCompleted = 0;
-    staffList.forEach((staff: any) => {
-      staff.submissions?.forEach((sub: any) => {
-        totalSubmissions++;
-        totalFinalScore += sub.finalScore ?? 0;
-        totalMaxMarks += sub.maxMarks ?? 0;
-        if (sub.status === "appealed") totalAppealed++;
-        if (sub.status === "accepted" || sub.status === "appeal-resolved") totalCompleted++;
-      });
-    });
-    const overallProgress = totalMaxMarks > 0 ? (totalFinalScore / totalMaxMarks) * 100 : 0;
-    const completionRate = totalSubmissions > 0 ? (totalCompleted / totalSubmissions) * 100 : 0;
-
-    return (
-      <DashboardLayout
-        title={`${displayName}'s Dashboard`}
-        subtitle={
-          user.role === "principle" ? "Principal View" :
-          user.role === "vice principle" ? "Vice Principal View" :
-          user.role === "hod" ? "HOD View" : "Committee View"
-        }
-      >
-        {/* Deadline shown only for non-committee roles */}
-        {deadline && user?.role !== "committee" && <DeadlineBanner />}
-
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          <Card className="shadow-sm overflow-hidden">
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <School className="h-4 w-4 text-primary" />
-                Total Colleges
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalColleges}</div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm overflow-hidden">
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-primary" />
-                Total Roles
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalRoles}</div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm overflow-hidden">
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <User className="h-4 w-4 text-primary" />
-                Total Staff
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalStaff}</div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm overflow-hidden">
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <Award className="h-4 w-4 text-primary" />
-                Total Submissions
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalSubmissions}</div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm overflow-hidden">
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-warning" />
-                Appealed
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalAppealed}</div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Overall Score Card */}
-        <Card className="mb-8 shadow-sm overflow-hidden">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart2 className="h-5 w-5 text-primary" />
-              Overall Performance
-            </CardTitle>
-            <CardDescription>Total final scores across all submissions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Total Score: {totalFinalScore} / {totalMaxMarks}</span>
-                <Badge variant="secondary">{overallProgress.toFixed(1)}%</Badge>
-              </div>
-              <Progress value={overallProgress} className="h-2" />
-              <Separator className="my-4" />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                <div><span className="font-medium">Completion Rate:</span> {completionRate.toFixed(1)}%</div>
-                <div><span className="font-medium">Appealed Submissions:</span> {totalAppealed}</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Main Content Card */}
-        <Card className="shadow-sm overflow-hidden">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building className="h-5 w-5 text-primary" />
-              College → Role → Staff Overview
-            </CardTitle>
-            <CardDescription>Browse institutions, roles, staff, and their detailed submissions with counts</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Accordion type="multiple" className="space-y-4">
-              {Object.entries(groupedData).map(([collegeName, roles]: any) => {
-                const collegeStaffCount = Object.values(roles).reduce((sum: number, staffArray: any) => sum + staffArray.length, 0);
-                const collegeRolesCount = Object.keys(roles).length;
-                return (
-                  <AccordionItem key={collegeName} value={collegeName} className="border rounded-lg overflow-hidden shadow-sm">
-                    <AccordionTrigger className="bg-muted/30 px-6 py-4 text-xl font-bold hover:bg-muted/50 transition-colors">
-                      <div className="flex justify-between w-full pr-4">
-                        <span>{collegeName}</span>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1"><Users className="h-4 w-4" /> {collegeRolesCount} Roles</span>
-                          <span className="flex items-center gap-1"><User className="h-4 w-4" /> {collegeStaffCount} Staff</span>
-                        </div>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-6 pb-6 pt-4 bg-background">
-                      <Accordion type="multiple" className="space-y-3">
-                        {Object.entries(roles).map(([roleName, staffArray]: any) => {
-                          const roleStaffCount = staffArray.length;
-                          return (
-                            <AccordionItem key={roleName} value={`${collegeName}-${roleName}`} className="border rounded-md shadow-inner">
-                              <AccordionTrigger className="px-5 py-3 text-lg font-semibold capitalize bg-secondary/10 hover:bg-secondary/20 transition-colors">
-                                <div className="flex justify-between w-full pr-4">
-                                  <span>{roleName}</span>
-                                  <Badge variant="outline" className="text-sm">{roleStaffCount} Staff</Badge>
-                                </div>
-                              </AccordionTrigger>
-                              <AccordionContent className="px-5 pb-4 bg-background">
-                                <Accordion type="multiple">
-                                  {staffArray.map((staff: any) => {
-                                    const staffSubmissionsCount = staff.submissions?.length || 0;
-                                    let staffTotalFinal = 0;
-                                    let staffTotalMax = 0;
-                                    let staffTotalClaimed = 0;
-                                    let staffTotalReviewer = 0;
-                                    let staffAppealedCount = 0;
-                                    let staffCompletedCount = 0;
-                                    staff.submissions?.forEach((sub: any) => {
-                                      staffTotalFinal += sub.finalScore ?? 0;
-                                      staffTotalMax += sub.maxMarks ?? 0;
-                                      staffTotalClaimed += sub.claimedScore ?? 0;
-                                      staffTotalReviewer += sub.reviewerScore ?? 0;
-                                      if (sub.status === "appealed") staffAppealedCount++;
-                                      if (sub.status === "accepted" || sub.status === "appeal-resolved") staffCompletedCount++;
-                                    });
-                                    const staffProgress = staffTotalMax > 0 ? (staffTotalFinal / staffTotalMax) * 100 : 0;
-                                    const staffCompletionRate = staffSubmissionsCount > 0 ? (staffCompletedCount / staffSubmissionsCount) * 100 : 0;
-
-                                    // Group submissions by criteria > module
-                                    const groupedSubmissions = (staff.submissions || []).reduce((acc: any, sub: any) => {
-                                      const crit = sub.criteriaName || "Other Criteria";
-                                      const mod = sub.moduleName || "General";
-
-                                      if (!acc[crit]) acc[crit] = {};
-                                      if (!acc[crit][mod]) acc[crit][mod] = [];
-                                      acc[crit][mod].push(sub);
-                                      return acc;
-                                    }, {});
-
-                                    return (
-                                      <AccordionItem key={staff.id} value={staff.id} className="my-2 border rounded-md shadow-sm">
-                                        <AccordionTrigger className="px-4 py-3 bg-muted/20 hover:bg-muted/30 rounded-md transition-colors">
-                                          <div className="flex justify-between w-full pr-4">
-                                            <div className="flex items-center gap-3">
-                                              <User className="h-4 w-4 text-muted-foreground" />
-                                              {staff.name}
-                                            </div>
-                                            <Badge variant="outline" className="text-xs">{staffSubmissionsCount} Submissions</Badge>
-                                          </div>
-                                        </AccordionTrigger>
-                                        <AccordionContent className="px-4 pt-4 pb-6 bg-background">
-                                          <div className="space-y-6">
-                                            {/* STAFF DETAILS */}
-                                            <Card className="border shadow-sm overflow-hidden">
-                                              <CardHeader className="pb-2">
-                                                <CardTitle className="text-lg flex items-center gap-2">
-                                                  <User className="h-5 w-5 text-primary" /> Staff Details
-                                                </CardTitle>
-                                              </CardHeader>
-                                              <CardContent>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                                  <div><span className="font-medium">Name:</span> {staff.name}</div>
-                                                  <div><span className="font-medium">Email:</span> {staff.email}</div>
-                                                  <div><span className="font-medium">Department:</span> {staff.department || "N/A"}</div>
-                                                  <div><span className="font-medium">College:</span> {staff.college}</div>
-                                                  <div><span className="font-medium">Level:</span> {staff.level || "N/A"}</div>
-                                                  <div><span className="font-medium">Role:</span> {staff.role || "N/A"}</div>
-                                                </div>
-                                              </CardContent>
-                                            </Card>
-
-                                            {/* STAFF PERFORMANCE SUMMARY */}
-                                            <Card className="border shadow-sm overflow-hidden">
-                                              <CardHeader className="pb-2">
-                                                <CardTitle className="text-lg flex items-center gap-2">
-                                                  <BarChart2 className="h-5 w-5 text-primary" /> Performance Summary
-                                                </CardTitle>
-                                              </CardHeader>
-                                              <CardContent>
-                                                <div className="space-y-4">
-                                                  <div className="flex justify-between items-center">
-                                                    <span className="text-sm font-medium">Overall Score: {staffTotalFinal} / {staffTotalMax}</span>
-                                                    <Badge variant="secondary">{staffProgress.toFixed(1)}%</Badge>
-                                                  </div>
-                                                  <Progress value={staffProgress} className="h-2" />
-                                                  <Separator className="my-4" />
-                                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                                                    <div><span className="font-medium">Claimed Total:</span> {staffTotalClaimed}</div>
-                                                    <div><span className="font-medium">Reviewer Total:</span> {staffTotalReviewer}</div>
-                                                    <div><span className="font-medium">Final Total:</span> {staffTotalFinal}</div>
-                                                    <div><span className="font-medium">Completion Rate:</span> {staffCompletionRate.toFixed(1)}%</div>
-                                                    <div><span className="font-medium">Appealed:</span> {staffAppealedCount}</div>
-                                                    <div><span className="font-medium">Completed:</span> {staffCompletedCount}</div>
-                                                  </div>
-                                                </div>
-                                              </CardContent>
-                                            </Card>
-
-                                            {/* SUBMISSIONS */}
-                                            <Card className="border shadow-sm overflow-hidden">
-                                              <CardHeader className="pb-2">
-                                                <CardTitle className="text-lg flex items-center gap-2">
-                                                  <Award className="h-5 w-5 text-primary" /> Submissions ({staffSubmissionsCount})
-                                                </CardTitle>
-                                                <CardDescription>Grouped by Criteria and Module with detailed views</CardDescription>
-                                              </CardHeader>
-                                              <CardContent>
-                                                {Object.keys(groupedSubmissions).length === 0 ? (
-                                                  <div className="py-12 text-center text-muted-foreground border border-dashed rounded-lg">
-                                                    No submissions found
-                                                  </div>
-                                                ) : (
-                                                  <Accordion type="multiple" className="space-y-4">
-                                                    {Object.entries(groupedSubmissions).map(([criteria, modules]: any) => {
-                                                      const criteriaModulesCount = Object.keys(modules).length;
-                                                      const criteriaSubsCount = Object.values(modules).reduce((sum: number, subs: any) => sum + subs.length, 0);
-                                                      return (
-                                                        <AccordionItem key={criteria} value={criteria} className="border rounded-lg overflow-hidden shadow-sm">
-                                                          <AccordionTrigger className="bg-muted/30 px-6 py-4 text-lg font-semibold hover:bg-muted/50 transition-colors">
-                                                            <div className="flex justify-between w-full pr-4">
-                                                              <span>{criteria}</span>
-                                                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                                                <span className="flex items-center gap-1"><BookOpen className="h-4 w-4" /> {criteriaModulesCount} Modules</span>
-                                                                <span className="flex items-center gap-1"><File className="h-4 w-4" /> {criteriaSubsCount} Submissions</span>
-                                                              </div>
-                                                            </div>
-                                                          </AccordionTrigger>
-                                                          <AccordionContent className="px-6 pb-6 pt-2 bg-background">
-                                                            <Accordion type="multiple" className="space-y-3">
-                                                              {Object.entries(modules).map(([moduleName, subs]: any) => {
-                                                                const moduleSubsCount = subs.length;
-                                                                return (
-                                                                  <AccordionItem key={moduleName} value={`${criteria}-${moduleName}`} className="border rounded-md shadow-inner">
-                                                                    <AccordionTrigger className="px-5 py-3 bg-secondary/10 hover:bg-secondary/20 transition-colors">
-                                                                      <div className="flex justify-between w-full pr-4">
-                                                                        <div className="flex items-center gap-2">
-                                                                          <BookOpen className="h-4 w-4 text-primary" />
-                                                                          {moduleName}
-                                                                        </div>
-                                                                        <Badge variant="outline" className="ml-2 text-xs">
-                                                                          {moduleSubsCount} item{moduleSubsCount !== 1 ? "s" : ""}
-                                                                        </Badge>
-                                                                      </div>
-                                                                    </AccordionTrigger>
-                                                                    <AccordionContent className="px-5 pb-5 pt-3 bg-background">
-                                                                      <div className="space-y-4">
-                                                                        {subs.map((sub: any) => {
-                                                                          const subProgress = sub.maxMarks > 0 ? ((sub.finalScore ?? 0) / sub.maxMarks) * 100 : 0;
-                                                                          return (
-                                                                            <Card
-                                                                              key={sub.id}
-                                                                              className="border shadow-sm hover:shadow-md transition-shadow overflow-hidden"
-                                                                            >
-                                                                              <CardHeader className="pb-2">
-                                                                                <div className="flex justify-between items-start">
-                                                                                  <CardTitle className="text-base">{sub.taskName}</CardTitle>
-                                                                                  <Badge
-                                                                                    variant={statusConfig[sub.status]?.variant || "outline"}
-                                                                                    className="text-xs px-3 py-0.5"
-                                                                                  >
-                                                                                    {statusConfig[sub.status]?.label || sub.status}
-                                                                                  </Badge>
-                                                                                </div>
-                                                                              </CardHeader>
-                                                                              <CardContent>
-                                                                                <div className="space-y-4">
-                                                                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                                                                                    <p><span className="font-medium">Form:</span> {sub.formTitle}</p>
-                                                                                    <p><span className="font-medium">Claimed:</span> {sub.claimedScore}</p>
-                                                                                    <p><span className="font-medium">Reviewer:</span> {sub.reviewerScore ?? "—"}</p>
-                                                                                    <p><span className="font-medium">Final:</span> {sub.finalScore ?? "Pending"}</p>
-                                                                                    <p><span className="font-medium">Max Marks:</span> {sub.maxMarks}</p>
-                                                                                    {sub.createdAt && (
-                                                                                      <p><span className="font-medium">Submitted:</span> {new Date(sub.createdAt.seconds * 1000).toLocaleDateString()}</p>
-                                                                                    )}
-                                                                                  </div>
-                                                                                  <div className="space-y-2">
-                                                                                    <div className="flex justify-between text-sm">
-                                                                                      <span>Progress</span>
-                                                                                      <span>{subProgress.toFixed(1)}%</span>
-                                                                                    </div>
-                                                                                    <Progress value={subProgress} className="h-2" />
-                                                                                  </div>
-                                                                                </div>
-                                                                              </CardContent>
-                                                                            </Card>
-                                                                          );
-                                                                        })}
-                                                                      </div>
-                                                                    </AccordionContent>
-                                                                  </AccordionItem>
-                                                                );
-                                                              })}
-                                                            </Accordion>
-                                                          </AccordionContent>
-                                                        </AccordionItem>
-                                                      );
-                                                    })}
-                                                  </Accordion>
-                                                )}
-                                              </CardContent>
-                                            </Card>
-                                          </div>
-                                        </AccordionContent>
-                                      </AccordionItem>
-                                    );
-                                  })}
-                                </Accordion>
-                              </AccordionContent>
-                            </AccordionItem>
-                          );
-                        })}
-                      </Accordion>
-                    </AccordionContent>
-                  </AccordionItem>
-                );
-              })}
-            </Accordion>
-          </CardContent>
-        </Card>
-
-        {/* Download Button */}
-        <div className="flex justify-end mt-6">
-          <Button variant="outline" onClick={downloadReport} className="gap-2">
-            <FileText className="h-4 w-4" />
-            Download Report (PDF)
-          </Button>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  /* ────────────────────────────────────────────────
-     FACULTY / NORMAL USER VIEW
-  ──────────────────────────────────────────────── */
-  const groupedSubmissions = submissions.reduce((acc: any, sub: any) => {
-    const crit = sub.criteriaName || "Other Criteria";
-    const mod  = sub.moduleName    || "General";
-
-    if (!acc[crit]) acc[crit] = {};
-    if (!acc[crit][mod]) acc[crit][mod] = [];
-    acc[crit][mod].push(sub);
+    if (!acc[collegeName]) acc[collegeName] = {};
+    if (!acc[collegeName][roleName]) acc[collegeName][roleName] = [];
+    acc[collegeName][roleName].push(staff);
     return acc;
   }, {});
 
-  // Calculate summary stats for faculty
+  // Aggregate stats for department/college view
+  let totalSubmissions = 0;
+  let totalFinalScore = 0;
+  let totalMaxMarks = 0;
+  let totalAppealed = 0;
+  let totalCompleted = 0;
+  staffList.forEach((staff: any) => {
+    staff.submissions?.forEach((sub: any) => {
+      totalSubmissions++;
+      totalFinalScore += sub.finalScore ?? 0;
+      totalMaxMarks += sub.maxMarks ?? 0;
+      if (sub.status === "appealed") totalAppealed++;
+      if (sub.status === "accepted" || sub.status === "appeal-resolved") totalCompleted++;
+    });
+  });
+
+  // ─── PERSONAL STATS (only used when isHod === true) ───
+  let personalClaimed = 0, personalReviewer = 0, personalFinal = 0, personalMax = 0;
+  let personalCompleted = 0, personalAppealed = 0;
+  submissions.forEach((sub: any) => {
+    personalClaimed += sub.claimedScore ?? 0;
+    personalReviewer += sub.reviewerScore ?? 0;
+    personalFinal += sub.finalScore ?? 0;
+    personalMax += sub.maxMarks ?? 0;
+    if (sub.status === "accepted" || sub.status === "appeal-resolved") personalCompleted++;
+    if (sub.status === "appealed") personalAppealed++;
+  });
+
+  return (
+    <DashboardLayout
+      title={`${displayName}'s Dashboard`}
+      subtitle={
+        user.role === "principle" ? "Principal View" :
+        user.role === "vice principle" ? "Vice Principal View" :
+        user.role === "hod" ? "HOD View" : "Committee View"
+      }
+    >
+      {user?.role !== "committee" && (
+  <div className="mb-6">
+    <DeadlineAlert
+      
+    />
+  </div>
+)}
+
+      <StatusCards
+  role={user?.role || "committee"}
+  submissions={isHod || user.role === "faculty" ? submissions : undefined}
+  committeeData={!(isHod || user.role === "faculty") ? committeeData : undefined}
+/>
+     
+{isHod && (
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+    
+    {/* Score Overview */}
+    <ScoreOverview 
+      submissions={submissions}
+      userTarget={userTarget}
+    />
+
+    {/* Right Column */}
+    <div className="space-y-6">
+      
+      {/* User Profile */}
+      {user && <UserProfile user={user} />}
+
+      {/* Target Card */}
+      <Card className="shadow-sm border">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Briefcase className="h-5 w-5 text-primary" />
+            Your Target
+          </CardTitle>
+          <CardDescription>
+            {user?.designation || "Designation"}
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="text-center py-4">
+          <p className="text-4xl font-bold text-primary">
+            {userTarget}
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {userTarget === "Not assigned" || userTarget === "Not found"
+              ? "Contact admin"
+              : "Target points"}
+          </p>
+        </CardContent>
+      </Card>
+
+    </div>
+
+    {/* Quick Actions */}
+    <QuickActions />
+
+  </div>
+)}
+
+{isHod && (
+  <>
+    {/* Recent Activity */}
+    <div className="mt-8 mb-8">
+      <RecentActivity 
+        submissions={
+          isHod
+            ? submissions
+            : staffList.flatMap(s => s.submissions || [])
+        } 
+      />
+    </div>
+
+    {/* FPMS Section */}
+    <div className="mt-8 mb-8 space-y-4">
+      <div>
+        <h2 className="text-xl font-semibold text-foreground">
+          FPMS Categories
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Complete all sections to submit your annual performance report
+        </p>
+      </div>
+
+      <FPMSFormOverview 
+        submissions={
+          isHod
+            ? submissions
+            : staffList.flatMap(s => s.submissions || [])
+        } 
+      />
+    </div>
+  </>
+)}
+     
+
+
+
+<Card className="shadow-sm rounded-xl overflow-hidden mt-6 mb-6">
+  <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10">
+    <CardTitle className="flex items-center gap-2 text-xl font-bold">
+      <Building className="h-5 w-5 text-primary" />
+      {isHod ? "Department Staff Overview" : "College → Role → Staff Overview"}
+    </CardTitle>
+    <CardDescription className="text-muted-foreground">
+      {isHod ? "Browse staff members in your department and their submissions" : "Browse institutions, roles, staff, and their detailed submissions with counts"}
+    </CardDescription>
+  </CardHeader>
+  <CardContent className="p-0">
+    <Accordion type="single" collapsible className="divide-y">
+      {Object.entries(groupedData).map(([collegeName, roles]: any) => {
+        const collegeStaffCount = Object.values(roles).reduce((sum: number, staffArray: any) => sum + staffArray.length, 0);
+        const collegeRolesCount = Object.keys(roles).length;
+        return (
+          <AccordionItem key={collegeName} value={collegeName}>
+            <AccordionTrigger className="px-6 py-4 text-xl font-bold hover:bg-muted/50 transition-colors data-[state=open]:bg-muted/30">
+              <div className="flex justify-between w-full pr-4">
+                <span>{collegeName}</span>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1"><Users className="h-4 w-4" /> {collegeRolesCount} Roles</span>
+                  <span className="flex items-center gap-1"><User className="h-4 w-4" /> {collegeStaffCount} Staff</span>
+                </div>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="px-6 pb-6 pt-4 bg-background">
+              
+              <Accordion type="single" collapsible className="divide-y">
+                {Object.entries(roles).map(([roleName, staffArray]: any) => {
+                  const roleStaffCount = staffArray.length;
+                  return (
+                    <AccordionItem key={roleName} value={`${collegeName}-${roleName}`}>
+                      <AccordionTrigger className="px-5 py-3 text-lg font-semibold capitalize hover:bg-secondary/20 transition-colors data-[state=open]:bg-secondary/10">
+                        <div className="flex justify-between w-full pr-4">
+                          <span>{roleName}</span>
+                          <Badge variant="outline" className="text-sm">{roleStaffCount} Staff</Badge>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-5 pb-4 bg-background">
+                        <Accordion type="single" collapsible>
+                          {staffArray.map((staff: any) => {
+                            const staffSubmissionsCount = staff.submissions?.length || 0;
+                            let staffTotalFinal = 0;
+                            let staffTotalMax = 0;
+                            let staffTotalClaimed = 0;
+                            let staffTotalReviewer = 0;
+                            let staffAppealedCount = 0;
+                            let staffCompletedCount = 0;
+
+                            staff.submissions?.forEach((sub: any) => {
+                              const effectiveFinal = sub.finalScore ?? sub.reviewerScore ?? sub.claimedScore ?? 0;
+                              staffTotalFinal += effectiveFinal;
+                              staffTotalMax += sub.maxMarks ?? 0;
+                              staffTotalClaimed += sub.claimedScore ?? 0;
+                              staffTotalReviewer += sub.reviewerScore ?? 0;
+                              if (sub.status === "appealed") staffAppealedCount++;
+                              if (sub.status === "accepted" || sub.status === "appeal-resolved") staffCompletedCount++;
+                            });
+
+                            const staffProgress = staffTotalMax > 0 ? (staffTotalFinal / staffTotalMax) * 100 : 0;
+                            const staffCompletionRate = staffSubmissionsCount > 0 ? (staffCompletedCount / staffSubmissionsCount) * 100 : 0;
+
+                            // Group submissions by criteria > module
+                            const groupedSubmissions = (staff.submissions || []).reduce((acc: any, sub: any) => {
+                              const crit = sub.criteriaName || "Other Criteria";
+                              const mod = sub.moduleName || "General";
+
+                              if (!acc[crit]) acc[crit] = {};
+                              if (!acc[crit][mod]) acc[crit][mod] = [];
+                              acc[crit][mod].push(sub);
+                              return acc;
+                            }, {});
+
+                            return (
+                              <AccordionItem key={staff.id} value={staff.id} className="my-2">
+                                <AccordionTrigger className="px-4 py-3 hover:bg-muted/30 rounded-md transition-colors data-[state=open]:bg-muted/20">
+                                  <div className="flex justify-between w-full pr-4">
+                                    <div className="flex items-center gap-3">
+                                      <User className="h-4 w-4 text-muted-foreground" />
+                                      {staff.name}
+                                    </div>
+                                    <Badge variant="outline" className="text-xs">{staffSubmissionsCount} Submissions</Badge>
+                                  </div>
+                                </AccordionTrigger>
+                                <AccordionContent className="px-4 pt-4 pb-6 bg-background">
+                                  <Accordion type="single" collapsible className="space-y-4">
+                                    <AccordionItem value="details">
+                                      <AccordionTrigger className="text-lg font-semibold flex items-center gap-2">
+                                        <User className="h-5 w-5 text-primary" /> Staff Details
+                                      </AccordionTrigger>
+                                      <AccordionContent>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm p-4 border rounded-lg shadow-sm bg-card">
+                                          <div><span className="font-medium">Name:</span> {staff.name}</div>
+                                          <div><span className="font-medium">Email:</span> {staff.email}</div>
+                                          <div><span className="font-medium">Department:</span> {staff.department || "N/A"}</div>
+                                          <div><span className="font-medium">College:</span> {staff.college}</div>
+                                          <div><span className="font-medium">Level:</span> {staff.level || "N/A"}</div>
+                                          <div><span className="font-medium">Role:</span> {staff.role || "N/A"}</div>
+                                        </div>
+                                      </AccordionContent>
+                                    </AccordionItem>
+
+                                    {/* ─── Replaced Performance Summary with ScoreOverview ─── */}
+                                    <AccordionItem value="performance">
+                                      <AccordionTrigger className="text-lg font-semibold flex items-center gap-2">
+                                        <BarChart2 className="h-5 w-5 text-primary" /> Score Overview
+                                      </AccordionTrigger>
+                                      <AccordionContent>
+                                        <div className="p-4 border rounded-lg shadow-sm bg-card">
+                                          <ScoreOverview 
+  submissions={staff.submissions || []} 
+  userTarget={
+    designations.find(
+      d => d.name.trim().toLowerCase() === ( staff.designation || "").trim().toLowerCase()
+    )?.target ?? undefined
+  }
+/>
+                                        </div>
+                                      </AccordionContent>
+                                    </AccordionItem>
+
+                                    <AccordionItem value="submissions">
+                                      <AccordionTrigger className="text-lg font-semibold flex items-center gap-2">
+                                        <Award className="h-5 w-5 text-primary" /> Submissions ({staffSubmissionsCount})
+                                      </AccordionTrigger>
+                                      <AccordionContent>
+                                        <div className="p-4 border rounded-lg shadow-sm bg-card">
+                                          <p className="text-sm text-muted-foreground mb-4">Grouped by Criteria and Module with detailed views</p>
+                                          {Object.keys(groupedSubmissions).length === 0 ? (
+                                            <div className="py-12 text-center text-muted-foreground border border-dashed rounded-lg">
+                                              No submissions found
+                                            </div>
+                                          ) : (
+                                            <Accordion type="single" collapsible className="space-y-4">
+                                              {Object.entries(groupedSubmissions).map(([criteria, modules]: any) => {
+                                                const criteriaModulesCount = Object.keys(modules).length;
+                                                const criteriaSubsCount = Object.values(modules).reduce((sum: number, subs: any) => sum + subs.length, 0);
+                                                return (
+                                                  <AccordionItem key={criteria} value={criteria}>
+                                                    <AccordionTrigger className="px-6 py-4 text-lg font-semibold hover:bg-muted/50 transition-colors data-[state=open]:bg-muted/30">
+                                                      <div className="flex justify-between w-full pr-4">
+                                                        <span>{criteria}</span>
+                                                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                                          <span className="flex items-center gap-1"><BookOpen className="h-4 w-4" /> {criteriaModulesCount} Modules</span>
+                                                          <span className="flex items-center gap-1"><File className="h-4 w-4" /> {criteriaSubsCount} Submissions</span>
+                                                        </div>
+                                                      </div>
+                                                    </AccordionTrigger>
+                                                    <AccordionContent className="px-6 pb-6 pt-2 bg-background">
+                                                      <Accordion type="single" collapsible className="space-y-3">
+                                                        {Object.entries(modules).map(([moduleName, subs]: any) => {
+                                                          const moduleSubsCount = subs.length;
+                                                          return (
+                                                            <AccordionItem key={moduleName} value={`${criteria}-${moduleName}`}>
+                                                              <AccordionTrigger className="px-5 py-3 hover:bg-secondary/20 transition-colors data-[state=open]:bg-secondary/10">
+                                                                <div className="flex justify-between w-full pr-4">
+                                                                  <div className="flex items-center gap-2">
+                                                                    <BookOpen className="h-4 w-4 text-primary" />
+                                                                    {moduleName}
+                                                                  </div>
+                                                                  <Badge variant="outline" className="ml-2 text-xs">
+                                                                    {moduleSubsCount} item{moduleSubsCount !== 1 ? "s" : ""}
+                                                                  </Badge>
+                                                                </div>
+                                                              </AccordionTrigger>
+                                                              <AccordionContent className="px-5 pb-5 pt-3 bg-background">
+                                                                <div className="space-y-4">
+                                                                  {subs.map((sub: any) => {
+                                                                    const effectiveFinal = sub.finalScore ?? sub.reviewerScore ?? sub.claimedScore ?? 0;
+                                                                    const subProgress = sub.maxMarks > 0 ? (effectiveFinal / sub.maxMarks) * 100 : 0;
+                                                                    return (
+                                                                      <Card
+                                                                        key={sub.id}
+                                                                        className="border shadow-sm hover:shadow-md transition-shadow rounded-lg overflow-hidden"
+                                                                      >
+                                                                        <CardHeader className="pb-2 bg-muted/10 px-4 py-3">
+                                                                          <div className="flex justify-between items-start">
+                                                                            <CardTitle className="text-base font-semibold">{sub.taskName}</CardTitle>
+                                                                            <Badge
+                                                                              variant={statusConfig[sub.status]?.variant || "outline"}
+                                                                              className="text-xs px-3 py-0.5"
+                                                                            >
+                                                                              {statusConfig[sub.status]?.label || sub.status}
+                                                                            </Badge>
+                                                                          </div>
+                                                                        </CardHeader>
+                                                                        <CardContent className="px-4 py-3">
+                                                                          <div className="space-y-4">
+                                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                                                                              <p><span className="font-medium">Form:</span> {sub.formTitle}</p>
+                                                                              <p><span className="font-medium">Claimed:</span> {sub.claimedScore}</p>
+                                                                              <p><span className="font-medium">Reviewer:</span> {sub.reviewerScore ?? "—"}</p>
+                                                                              <p><span className="font-medium">Final:</span> {sub.finalScore ?? sub.reviewerScore ?? sub.claimedScore ?? "Pending"}</p>
+                                                                              <p><span className="font-medium">Max Marks:</span> {sub.maxMarks}</p>
+                                                                              {sub.createdAt && (
+                                                                                <p><span className="font-medium">Submitted:</span> {new Date(sub.createdAt.seconds * 1000).toLocaleDateString()}</p>
+                                                                              )}
+                                                                            </div>
+                                                                            <div className="space-y-2">
+                                                                              <div className="flex justify-between text-sm">
+                                                                                <span>Progress</span>
+                                                                                <span>{subProgress.toFixed(1)}%</span>
+                                                                              </div>
+                                                                              <Progress value={subProgress} className="h-2" />
+                                                                            </div>
+                                                                          </div>
+                                                                        </CardContent>
+                                                                      </Card>
+                                                                    );
+                                                                  })}
+                                                                </div>
+                                                              </AccordionContent>
+                                                            </AccordionItem>
+                                                          );
+                                                        })}
+                                                      </Accordion>
+                                                    </AccordionContent>
+                                                  </AccordionItem>
+                                                );
+                                              })}
+                                            </Accordion>
+                                          )}
+                                        </div>
+                                      </AccordionContent>
+                                    </AccordionItem>
+                                  </Accordion>
+                                </AccordionContent>
+                              </AccordionItem>
+                            );
+                          })}
+                        </Accordion>
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
+              </Accordion>
+            </AccordionContent>
+          </AccordionItem>
+        );
+      })}
+    </Accordion>
+  </CardContent>
+</Card>
+
+{["committee", "principle", "vice principle"].includes(user?.role || "") && (
+  <div className="mt-8 mb-6 bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden">
+    {/* Header */}
+    <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-100">
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-blue-100 rounded-lg">
+          <svg 
+            className="w-5 h-5 text-blue-600" 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Filter Submissions</h3>
+          <p className="text-sm text-gray-600 mt-0.5">
+            Refine the list using the options below
+          </p>
+        </div>
+      </div>
+    </div>
+
+    {/* Filters */}
+    <div className="p-6 space-y-5">
+      {/* College - only for committee */}
+      {user?.role === "committee" && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            College
+          </label>
+          <select
+            className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
+            value={selectedCollege}
+            onChange={e => {
+              setSelectedCollege(e.target.value);
+              setSelectedStaff("All");
+            }}
+          >
+            <option value="All">All Colleges</option>
+            {staffList
+              .map(s => s.college)
+              .filter((v, i, a) => a.indexOf(v) === i)
+              .sort()
+              .map(college => (
+                <option key={college} value={college}>
+                  {college}
+                </option>
+              ))}
+          </select>
+        </div>
+      )}
+
+      {/* Role */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          Role
+        </label>
+        <select
+          className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
+          value={selectedRole}
+          onChange={e => {
+            setSelectedRole(e.target.value);
+            setSelectedStaff("All");
+            setSelectedCriteria("All");
+            setSelectedModule("All");
+          }}
+        >
+          <option value="All">All Roles</option>
+          {staffList
+            .filter(s => selectedCollege === "All" || s.college === selectedCollege)
+            .map(s => s.role)
+            .filter((v,i,a)=>a.indexOf(v)===i)
+            .sort()
+            .map(role => (
+              <option key={role} value={role}>
+                {role}
+              </option>
+            ))}
+        </select>
+      </div>
+
+      {/* Staff */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          Staff Member
+        </label>
+        <select
+          className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
+          value={selectedStaff}
+          onChange={e => {
+            setSelectedStaff(e.target.value);
+            setSelectedCriteria("All");
+            setSelectedModule("All");
+          }}
+        >
+          <option value="All">All Staff</option>
+          {staffList
+            .filter(s => 
+              (selectedCollege === "All" || s.college === selectedCollege) &&
+              (selectedRole === "All" || s.role === selectedRole)
+            )
+            .map(s => s.name)
+            .filter((v,i,a)=>a.indexOf(v)===i)
+            .sort()
+            .map(name => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+        </select>
+      </div>
+
+      {/* Criteria */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          Criteria
+        </label>
+        <select
+          className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
+          value={selectedCriteria}
+          onChange={e => {
+            setSelectedCriteria(e.target.value);
+            setSelectedModule("All");
+          }}
+        >
+          <option value="All">All Criteria</option>
+          {staffList
+            .filter(s => 
+              (selectedCollege === "All" || s.college === selectedCollege) &&
+              (selectedRole === "All" || s.role === selectedRole) &&
+              (selectedStaff === "All" || s.name === selectedStaff)
+            )
+            .flatMap(s => s.submissions || [])
+            .map(s => s.criteriaName)
+            .filter((v,i,a)=>a.indexOf(v)===i)
+            .sort()
+            .map(name => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+        </select>
+      </div>
+
+      {/* Module */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          Module
+        </label>
+        <select
+          className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
+          value={selectedModule}
+          onChange={e => setSelectedModule(e.target.value)}
+        >
+          <option value="All">All Modules</option>
+          {staffList
+            .filter(s => 
+              (selectedCollege === "All" || s.college === selectedCollege) &&
+              (selectedRole === "All" || s.role === selectedRole) &&
+              (selectedStaff === "All" || s.name === selectedStaff)
+            )
+            .flatMap(s => s.submissions || [])
+            .filter(sub => selectedCriteria === "All" || sub.criteriaName === selectedCriteria)
+            .map(sub => sub.moduleName)
+            .filter((v,i,a)=>a.indexOf(v)===i)
+            .sort()
+            .map(name => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+        </select>
+      </div>
+
+      {/* Apply Button */}
+      <button
+        onClick={applyFilter}
+        className="w-full mt-3 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-1"
+      >
+        Apply Filters
+      </button>
+    </div>
+  </div>
+)}
+
+{filteredData.length > 0 && (
+  <div className="mt-6 mb-6 bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden">
+    {/* Header */}
+    <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-indigo-100 rounded-lg">
+          <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-semibold text-gray-900">Filtered Submissions</h3>
+      </div>
+    </div>
+
+    {/* Content */}
+    <div className="p-6 space-y-5">
+      {filteredData.map(sub => (
+        <div 
+          key={sub.id} 
+          className="border border-gray-200 rounded-lg overflow-hidden bg-white hover:shadow-md transition-shadow"
+        >
+          <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+            <h4 className="font-medium text-gray-900">{sub.taskName}</h4>
+            <span 
+              className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                statusConfig[sub.status]?.variant === "success" ? "bg-green-100 text-green-800" :
+                statusConfig[sub.status]?.variant === "warning" ? "bg-yellow-100 text-yellow-800" :
+                statusConfig[sub.status]?.variant === "destructive" ? "bg-red-100 text-red-800" :
+                "bg-gray-100 text-gray-800"
+              }`}
+            >
+              {statusConfig[sub.status]?.label || sub.status}
+            </span>
+          </div>
+
+          <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+            <div>
+              <span className="font-medium text-gray-700">Staff:</span>{' '}
+              {staffList.find(staff => 
+                (staff.submissions || []).some(s => s.id === sub.id)
+              )?.name ?? "Unknown"}
+            </div>
+            <div>
+              <span className="font-medium text-gray-700">Form:</span> {sub.formTitle}
+            </div>
+            <div>
+              <span className="font-medium text-gray-700">Claimed:</span> {sub.claimedScore}
+            </div>
+            <div>
+              <span className="font-medium text-gray-700">Reviewer:</span> {sub.reviewerScore ?? "—"}
+            </div>
+            <div>
+              <span className="font-medium text-gray-700">Final:</span>{' '}
+              {sub.finalScore ?? sub.reviewerScore ?? sub.claimedScore ?? "Pending"}
+            </div>
+            <div>
+              <span className="font-medium text-gray-700">Max Marks:</span> {sub.maxMarks}
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {filteredData.length === 0 && (
+        <div className="py-12 text-center text-gray-500">
+          No submissions match the selected filters
+        </div>
+      )}
+    </div>
+  </div>
+)}
+    </DashboardLayout>
+  );
+}
+
   const totalSubmissions = submissions.length;
   let totalClaimed = 0;
   let totalReviewer = 0;
@@ -631,10 +848,6 @@ export default function Dashboard() {
   let totalMax = 0;
   let completedCount = 0;
   let appealedCount = 0;
-  let pendingCount = 0;
-  let underReviewCount = 0;
-  let acceptedCount = 0;
-  let appealResolvedCount = 0;
   submissions.forEach((sub: any) => {
     totalClaimed += sub.claimedScore ?? 0;
     totalReviewer += sub.reviewerScore ?? 0;
@@ -642,507 +855,86 @@ export default function Dashboard() {
     totalMax += sub.maxMarks ?? 0;
     if (sub.status === "accepted" || sub.status === "appeal-resolved") completedCount++;
     if (sub.status === "appealed") appealedCount++;
-    switch (sub.status) {
-      case "pending":
-      case "submitted":
-        pendingCount++;
-        break;
-      case "reviewed":
-        underReviewCount++;
-        break;
-      case "accepted":
-        acceptedCount++;
-        break;
-      case "appeal-resolved":
-        appealResolvedCount++;
-        break;
-    }
-  });
-  const overallProgress = totalMax > 0 ? (totalFinal / totalMax) * 100 : 0;
-  const completionRate = totalSubmissions > 0 ? (completedCount / totalSubmissions) * 100 : 0;
-
-  // Calculate per criteria stats
-  const criteriaStats: { [key: string]: { final: number; max: number; progress: number } } = {};
-  Object.entries(groupedSubmissions).forEach(([crit, modules]: any) => {
-    let critFinal = 0;
-    let critMax = 0;
-    Object.values(modules).forEach((subs: any[]) => {
-      subs.forEach((sub) => {
-        critFinal += sub.finalScore ?? 0;
-        critMax += sub.maxMarks ?? 0;
-      });
-    });
-    criteriaStats[crit] = {
-      final: critFinal,
-      max: critMax,
-      progress: critMax > 0 ? (critFinal / critMax) * 100 : 0,
-    };
   });
 
-  // Top performing criteria
-  const topCriteria = Object.entries(criteriaStats)
-    .sort(([, a], [, b]) => b.progress - a.progress)
-    .slice(0, 3);
-
-  // Smart insights
-  const smartInsights: string[] = [];
-  if (overallProgress < 50) {
-    smartInsights.push("Your overall performance is below average. Focus on submitting high-quality work in low-scoring areas.");
-  }
-  if (appealedCount > 0) {
-    smartInsights.push(`You have ${appealedCount} appealed submissions. Monitor their resolution closely.`);
-  }
-  if (pendingCount > 0) {
-    smartInsights.push(`Complete your ${pendingCount} pending submissions before the deadline.`);
-  }
-  if (completionRate > 80) {
-    smartInsights.push("Great job! Your completion rate is excellent. Keep up the momentum.");
-  }
-  if (smartInsights.length === 0) {
-    smartInsights.push("You're on track. Continue maintaining your performance.");
-  }
-
-  // Heat indicator color
-  const heatColor = overallProgress > 80 ? "bg-success" : overallProgress > 50 ? "bg-warning" : "bg-destructive";
-
-  // Recent activity
-  const recentActivity = submissions.slice(0, 5);
 
   return (
     <DashboardLayout
       title={`${displayName}'s Dashboard`}
       subtitle={`Welcome back, ${displayName.split(" ")[0]}!`}
     >
-      {/* Deadline shown only for non-committee roles */}
-      {deadline && user?.role !== "committee" && <DeadlineBanner />}
+     {user?.role !== "committee" && (
+  <div className="mb-6">
+    <DeadlineAlert
+      onCompleteClick={() => {
+        window.location.href = "/submit-performance"; 
+      }}
+    />
+  </div>
+)}
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left Sidebar: Profile and Smart Insights */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Profile Summary Card */}
-          <Card className="shadow-sm overflow-hidden">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5 text-primary" />
-                Profile Summary
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">Name:</span>
-                <span>{user?.name || "N/A"}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-medium">Department:</span>
-                <span>{user?.department || "N/A"}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-medium">Designation:</span>
-                <span className="capitalize">{user?.role || "N/A"}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-medium">College:</span>
-                <span>{user?.college || "N/A"}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-medium">Level:</span>
-                <span>{user?.level || "N/A"}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-medium">Email:</span>
-                <span>{user?.email || "N/A"}</span>
-              </div>
-              <div className="flex items-center justify-between mt-4">
-                <span className="font-medium">Heat Indicator:</span>
-                <div className={`w-4 h-4 rounded-full ${heatColor}`}></div>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="space-y-8">
+        <StatusCards 
+  role={user?.role || "faculty"} 
+  submissions={submissions} 
+/>
 
-          {/* Smart Insights Card */}
-          <Card className="shadow-sm overflow-hidden">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-primary" />
-                Smart Insights
-              </CardTitle>
-              <CardDescription>Based on your performance scores</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2 text-sm">
-                {smartInsights.map((insight, index) => (
-                  <li key={index} className="flex items-start gap-2">
-                    <CheckCircle className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-                    {insight}
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+  <ScoreOverview 
+  submissions={submissions} 
+  userTarget={userTarget} 
+/>
+
+  {user && (
+  <div className="space-y-6">
+    
+    {/* User Profile */}
+    <UserProfile user={user} />
+
+    {/* Target Card */}
+    <Card className="shadow-sm border">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Briefcase className="h-5 w-5 text-primary" />
+          Your Target
+        </CardTitle>
+        <CardDescription>
+          {user.designation || "Designation"}
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="text-center py-4">
+        <p className="text-4xl font-bold text-primary">
+          {userTarget}
+        </p>
+        <p className="text-sm text-muted-foreground mt-1">
+          {userTarget === "Not assigned" || userTarget === "Not found"
+            ? "Contact admin"
+            : "Target points"}
+        </p>
+      </CardContent>
+    </Card>
+
+  </div>
+)}
+
+  <QuickActions />
+</div>
+
+<RecentActivity submissions={submissions} ></RecentActivity>
+
+
+<div className="space-y-4">
+          <div>
+            <h2 className="text-xl font-semibold text-foreground">FPMS Categories</h2>
+            <p className="text-sm text-muted-foreground">
+              Complete all sections to submit your annual performance report
+            </p>
+          </div>
+           <FPMSFormOverview submissions={submissions}></FPMSFormOverview>
         </div>
 
-        {/* Main Content */}
-        <div className="lg:col-span-3 space-y-6">
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <Card className="shadow-sm overflow-hidden">
-              <CardHeader className="pb-2">
-                <CardDescription className="flex items-center gap-2">
-                  <Award className="h-4 w-4 text-primary" />
-                  Total Submissions
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{totalSubmissions}</div>
-              </CardContent>
-            </Card>
-            <Card className="shadow-sm overflow-hidden">
-              <CardHeader className="pb-2">
-                <CardDescription className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-success" />
-                  Completed
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{completedCount}</div>
-              </CardContent>
-            </Card>
-            <Card className="shadow-sm overflow-hidden">
-              <CardHeader className="pb-2">
-                <CardDescription className="flex items-center gap-2">
-                  <BarChart2 className="h-4 w-4 text-primary" />
-                  Completion Rate
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{completionRate.toFixed(1)}%</div>
-              </CardContent>
-            </Card>
-            <Card className="shadow-sm overflow-hidden">
-              <CardHeader className="pb-2">
-                <CardDescription className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-warning" />
-                  Overall Score
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{totalFinal} / {totalMax}</div>
-              </CardContent>
-            </Card>
-            <Card className="shadow-sm overflow-hidden">
-              <CardHeader className="pb-2">
-                <CardDescription className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-warning" />
-                  Appealed
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{appealedCount}</div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Quick Stats Row */}
-          <Card className="shadow-sm overflow-hidden">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart2 className="h-5 w-5 text-primary" />
-                Quick Stats
-              </CardTitle>
-              <CardDescription>Submission status overview</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-4">
-                <Badge variant="outline" className="text-sm">Pending Submissions: {pendingCount}</Badge>
-                <Badge variant="outline" className="text-sm">Under Review: {underReviewCount}</Badge>
-                <Badge variant="outline" className="text-sm">Accepted: {acceptedCount}</Badge>
-                <Badge variant="outline" className="text-sm">Appeal Resolved: {appealResolvedCount}</Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Overall Progress with Circular */}
-          <Card className="shadow-sm overflow-hidden">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart2 className="h-5 w-5 text-primary" />
-                Performance Overview
-              </CardTitle>
-              <CardDescription>Your total scores and progress</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-center">
-                  <div style={{ width: 120, height: 120 }}>
-                    <CircularProgressbar
-                      value={overallProgress}
-                      text={`${overallProgress.toFixed(0)}%`}
-                      styles={buildStyles({
-                        pathColor: overallProgress > 80 ? "#22c55e" : overallProgress > 50 ? "#eab308" : "#ef4444",
-                        textColor: "#333",
-                        trailColor: "#d6d6d6",
-                      })}
-                    />
-                  </div>
-                </div>
-                <Separator className="my-4" />
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-                  <div><span className="font-medium">Claimed Total:</span> {totalClaimed}</div>
-                  <div><span className="font-medium">Reviewer Total:</span> {totalReviewer}</div>
-                  <div><span className="font-medium">Final Total:</span> {totalFinal}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* All Criteria Scores Card */}
-          <Card className="shadow-sm overflow-hidden">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart2 className="h-5 w-5 text-primary" />
-                Criteria Scores
-              </CardTitle>
-              <CardDescription>Total scores by criteria</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {Object.entries(criteriaStats).map(([crit, stats]: any) => (
-                  <div key={crit} className="flex items-center justify-between">
-                    <span className="font-medium">{crit}</span>
-                    <div className="flex items-center gap-4">
-                      <span>{stats.final} / {stats.max}</span>
-                      <div style={{ width: 40, height: 40 }}>
-                        <CircularProgressbar
-                          value={stats.progress}
-                          styles={buildStyles({
-                            pathColor: stats.progress > 80 ? "#22c55e" : stats.progress > 50 ? "#eab308" : "#ef4444",
-                            trailColor: "#d6d6d6",
-                          })}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Top Performing Criteria */}
-          <Card className="shadow-sm overflow-hidden">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Star className="h-5 w-5 text-primary" />
-                Top Performing Criteria
-              </CardTitle>
-              <CardDescription>Your best performing areas</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {topCriteria.length === 0 ? (
-                <p className="text-center text-muted-foreground">No data available</p>
-              ) : (
-                <div className="space-y-4">
-                  {topCriteria.map(([crit, stats]: any, index) => (
-                    <div key={crit} className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{index + 1}</Badge>
-                        <span className="font-medium">{crit}</span>
-                      </div>
-                      <Badge variant="success">{stats.progress.toFixed(1)}%</Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Recent Activity Section */}
-          <Card className="shadow-sm overflow-hidden">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-primary" />
-                Recent Activity
-              </CardTitle>
-              <CardDescription>Your latest submissions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {recentActivity.length === 0 ? (
-                <p className="text-center text-muted-foreground">No recent activity</p>
-              ) : (
-                <ul className="space-y-4">
-                  {recentActivity.map((sub) => (
-                    <li key={sub.id} className="flex items-center justify-between p-3 border rounded-md shadow-inner">
-                      <div className="flex items-center gap-2">
-                        <File className="h-4 w-4 text-primary" />
-                        <span>{sub.taskName}</span>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <Badge variant={statusConfig[sub.status]?.variant || "outline"}>
-                          {statusConfig[sub.status]?.label || sub.status}
-                        </Badge>
-                        {sub.createdAt && (
-                          <span>{new Date(sub.createdAt.seconds * 1000).toLocaleDateString()}</span>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Submissions Section with Nested Accordions for Criteria */}
-          <Card className="shadow-sm overflow-hidden">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Award className="h-5 w-5 text-primary" />
-                My Submissions ({totalSubmissions})
-              </CardTitle>
-              <CardDescription>Browse your submissions grouped by criteria and module</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {Object.keys(groupedSubmissions).length === 0 ? (
-                <div className="py-12 text-center text-muted-foreground border border-dashed rounded-lg">
-                  No submissions found
-                </div>
-              ) : (
-                <Accordion type="multiple" className="space-y-4">
-                  {Object.entries(groupedSubmissions).map(([criteria, modules]: any) => {
-                    const criteriaModulesCount = Object.keys(modules).length;
-                    const criteriaSubsCount = Object.values(modules).reduce((sum: number, subs: any) => sum + subs.length, 0);
-                    const critStats = criteriaStats[criteria] || { progress: 0 };
-                    const critProgress = critStats.progress;
-                    return (
-                      <AccordionItem key={criteria} value={criteria} className="border rounded-lg overflow-hidden shadow-sm">
-                        <AccordionTrigger className="bg-muted/30 px-6 py-4 hover:bg-muted/50 transition-colors">
-                          <div className="flex justify-between w-full pr-4">
-                            <span className="text-lg font-semibold">{criteria}</span>
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                              <span className="flex items-center gap-1"><BookOpen className="h-4 w-4" /> {criteriaModulesCount} Modules</span>
-                              <span className="flex items-center gap-1"><File className="h-4 w-4" /> {criteriaSubsCount} Submissions</span>
-                              <div style={{ width: 30, height: 30 }}>
-                                <CircularProgressbar
-                                  value={critProgress}
-                                  styles={buildStyles({
-                                    pathColor: critProgress > 80 ? "#22c55e" : critProgress > 50 ? "#eab308" : "#ef4444",
-                                    trailColor: "#d6d6d6",
-                                  })}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="px-6 pb-6 pt-4 bg-background">
-                          <Accordion type="multiple" className="space-y-3">
-                            {Object.entries(modules).map(([moduleName, subs]: any) => {
-                              const moduleSubsCount = subs.length;
-                              let moduleFinal = 0;
-                              let moduleMax = 0;
-                              subs.forEach((sub: any) => {
-                                moduleFinal += sub.finalScore ?? 0;
-                                moduleMax += sub.maxMarks ?? 0;
-                              });
-                              const moduleProgress = moduleMax > 0 ? (moduleFinal / moduleMax) * 100 : 0;
-                              return (
-                                <AccordionItem key={moduleName} value={`${criteria}-${moduleName}`} className="border rounded-md shadow-inner">
-                                  <AccordionTrigger className="px-5 py-3 bg-secondary/10 hover:bg-secondary/20 transition-colors">
-                                    <div className="flex justify-between w-full pr-4">
-                                      <div className="flex items-center gap-2">
-                                        <BookOpen className="h-4 w-4 text-primary" />
-                                        {moduleName}
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className="text-xs">
-                                          {moduleSubsCount} item{moduleSubsCount !== 1 ? "s" : ""}
-                                        </Badge>
-                                        <div style={{ width: 30, height: 30 }}>
-                                          <CircularProgressbar
-                                            value={moduleProgress}
-                                            styles={buildStyles({
-                                              pathColor: moduleProgress > 80 ? "#22c55e" : moduleProgress > 50 ? "#eab308" : "#ef4444",
-                                              trailColor: "#d6d6d6",
-                                            })}
-                                          />
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </AccordionTrigger>
-                                  <AccordionContent className="px-5 pb-5 pt-3 bg-background">
-                                    <div className="space-y-4">
-                                      {subs.map((sub: any) => {
-                                        const subProgress = sub.maxMarks > 0 ? ((sub.finalScore ?? 0) / sub.maxMarks) * 100 : 0;
-                                        return (
-                                          <Card
-                                            key={sub.id}
-                                            className="border shadow-sm hover:shadow-md transition-shadow overflow-hidden"
-                                          >
-                                            <CardHeader className="pb-2">
-                                              <div className="flex justify-between items-start">
-                                                <CardTitle className="text-base">{sub.taskName}</CardTitle>
-                                                <Badge
-                                                  variant={statusConfig[sub.status]?.variant || "outline"}
-                                                  className="text-xs px-3 py-0.5"
-                                                >
-                                                  {statusConfig[sub.status]?.label || sub.status}
-                                                </Badge>
-                                              </div>
-                                            </CardHeader>
-                                            <CardContent>
-                                              <div className="space-y-4">
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                                                  <p><span className="font-medium">Form:</span> {sub.formTitle}</p>
-                                                  <p><span className="font-medium">Claimed:</span> {sub.claimedScore}</p>
-                                                  <p><span className="font-medium">Reviewer:</span> {sub.reviewerScore ?? "—"}</p>
-                                                  <p><span className="font-medium">Final:</span> {sub.finalScore ?? "Pending"}</p>
-                                                  <p><span className="font-medium">Max Marks:</span> {sub.maxMarks}</p>
-                                                  {sub.createdAt && (
-                                                    <p><span className="font-medium">Submitted:</span> {new Date(sub.createdAt.seconds * 1000).toLocaleDateString()}</p>
-                                                  )}
-                                                </div>
-                                                <div className="space-y-2">
-                                                  <div className="flex justify-between text-sm">
-                                                    <span>Progress</span>
-                                                    <span>{subProgress.toFixed(1)}%</span>
-                                                  </div>
-                                                  <div className="flex justify-center">
-                                                    <div style={{ width: 50, height: 50 }}>
-                                                      <CircularProgressbar
-                                                        value={subProgress}
-                                                        styles={buildStyles({
-                                                          pathColor: subProgress > 80 ? "#22c55e" : subProgress > 50 ? "#eab308" : "#ef4444",
-                                                          trailColor: "#d6d6d6",
-                                                        })}
-                                                      />
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            </CardContent>
-                                          </Card>
-                                        );
-                                      })}
-                                    </div>
-                                  </AccordionContent>
-                                </AccordionItem>
-                              );
-                            })}
-                          </Accordion>
-                        </AccordionContent>
-                      </AccordionItem>
-                    );
-                  })}
-                </Accordion>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Download Button */}
-          <div className="flex justify-end">
-            <Button variant="outline" onClick={downloadReport} className="gap-2">
-              <FileText className="h-4 w-4" />
-              Download Report (PDF)
-            </Button>
-          </div>
-        </div>
+ 
       </div>
     </DashboardLayout>
   );

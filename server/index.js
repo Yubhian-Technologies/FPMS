@@ -21,6 +21,7 @@ import deanRouter from "./routes/deanRoutes.js";
 import superadminRouter from "./routes/superadminRoutes.js";
 import submissionRouter from "./routes/submissionRoutes.js";
 import collegeRouter from "./routes/collegeRoutes.js";
+import formRouter from "./routes/formsRoutes.js";
 
 
 
@@ -50,6 +51,7 @@ app.use("/api/module4", module4Router);
 app.use("/api/superadmin", superadminRouter);
 app.use("/api/submissions", submissionRouter);
 app.use('/api/colleges',collegeRouter);
+app.use('/api/forms',formRouter);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

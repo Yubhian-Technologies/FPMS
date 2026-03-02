@@ -11,13 +11,7 @@ interface QuickAction {
 }
 
 const actions: QuickAction[] = [
-  {
-    title: "Start/Resume FPMS",
-    description: "Continue your current submission",
-    icon: FileEdit,
-    variant: "default",
-    href: "/fpms-form",
-  },
+  
   {
     title: "My Submissions",
     description: "Track your review progress",
@@ -25,19 +19,13 @@ const actions: QuickAction[] = [
     variant: "outline",
     href: "/submissions",
   },
+  
   {
-    title: "Reports & Analytics",
-    description: "Generate performance reports",
-    icon: FileText,
-    variant: "outline",
-    href: "/reports",
-  },
-  {
-    title: "Profile Settings",
-    description: "Manage your information",
+    title: "My Appeals",
+    description: "View your Appeal",
     icon: Edit,
     variant: "outline",
-    href: "/settings",
+    href: "/appeals",
   },
 ];
 

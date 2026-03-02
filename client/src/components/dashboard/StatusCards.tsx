@@ -1,35 +1,52 @@
+// src/components/dashboard/StatusCards.tsx
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { FileCheck, Clock, AlertCircle, CheckCircle2, FileText } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  Award,
+  CheckCircle,
+  BarChart2,
+  AlertCircle,
+  School,
+  Users,
+  User,
+} from "lucide-react";
 
 interface StatusCardProps {
   title: string;
   value: string | number;
-  subtitle: string;
+  subtitle?: string;
   icon: React.ElementType;
-  variant: "stat" | "accent" | "success" | "warning";
-  badge?: { text: string; variant: "pending" | "approved" | "draft" };
 }
 
-function StatusCard({ title, value, subtitle, icon: Icon, variant, badge }: StatusCardProps) {
+function StatusCard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+}: StatusCardProps) {
   return (
-    <Card  className="animate-slide-up">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
+    <Card
+      className={cn(
+        "overflow-hidden shadow-sm transition-all py-1.5 hover:shadow-md hover:scale-[1.02]",
+        "border-l-4 border-l-primary"  
+      )}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-3">
           <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            <p className="text-3xl font-bold text-foreground">{value}</p>
-            <p className="text-xs text-muted-foreground">{subtitle}</p>
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Icon className="h-5 w-5 text-foreground" />
-            </div>
-            {badge && (
-              <Badge className="text-xs">
-                {badge.text}
-              </Badge>
+            <p className="text-xs font-medium text-muted-foreground tracking-tight">
+              {title}
+            </p>
+            <p className="text-2xl font-bold tracking-tight text-foreground">
+              {value}
+            </p>
+            {subtitle && (
+              <p className="text-xs text-muted-foreground">{subtitle}</p>
             )}
+          </div>
+
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/5">
+            <Icon className="h-5 w-5 text-primary/80" />
           </div>
         </div>
       </CardContent>
@@ -38,57 +55,109 @@ function StatusCard({ title, value, subtitle, icon: Icon, variant, badge }: Stat
 }
 
 interface StatusCardsProps {
-  submissions: any[];
+  role: string;
+  submissions?: any[];
+  committeeData?: any;
 }
 
-export function StatusCards({ submissions }: StatusCardsProps) {
-  const pendingReviews = submissions.filter(s => s.status === "submitted" || s.status === "reviewed").length;
-  const evidenceUploaded = submissions.filter(s => s.evidence).length;
-  const appealsOpen = submissions.filter(s => s.status === "appealed").length;
+export function StatusCards({
+  role,
+  submissions = [],
+  committeeData,
+}: StatusCardsProps) {
   
-  // Get latest submission for "Current Submission"
-  const latestSubmission = submissions.length > 0 ? submissions[0] : null;
+  if (
+    role !== "committee" &&
+    role !== "principle" &&
+    role !== "vice principle" 
+    
+  ) {
+    const totalSubmissions = submissions.length;
+    let overallScore = 0;
+let completedCount = 0;
+let appealedCount = 0;
+
+submissions.forEach((sub: any) => {
+  const claimed = Number(sub.claimedScore ?? 0);
+const reviewer = sub.reviewerScore != null ? Number(sub.reviewerScore) : null;
+const final = sub.finalScore != null ? Number(sub.finalScore) : null;
+const appeal = sub.appealScore != null ? Number(sub.appealScore) : null;
+
+const effectiveScore =
+  appeal ?? final ?? reviewer ?? claimed;
+
+overallScore += effectiveScore;
+
+  if (sub.status === "accepted" || sub.status === "appeal-resolved") {
+    completedCount++;
+  }
+
+  if (
+  sub.status === "appealed" ||
+  sub.status === "appeal-resolved"
+) {
+  appealedCount++;
+}
+});
+
+ 
+    const completionRate =
+  overallScore > 0 ? (overallScore / 300) * 100 : 0;
+
+    return (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <StatusCard title="Total Submissions" value={totalSubmissions} icon={Award} />
+        <StatusCard title="Completed" value={completedCount} icon={CheckCircle} />
+        <StatusCard title="Completion Rate" value={`${completionRate.toFixed(1)}%`} icon={BarChart2} />
+        <StatusCard
+  title="Overall Score"
+  value={`${overallScore} / 300`}
+  subtitle={`${completionRate.toFixed(1)}% achieved`}
+  icon={AlertCircle}
+/>
+        <StatusCard title="Appealed" value={appealedCount} icon={AlertCircle} />
+      </div>
+    );
+  }
+
+  const staffList = committeeData?.staff || [];
+
+  const groupedData = staffList.reduce((acc: any, staff: any) => {
+    const collegeName = staff.college || "Unknown College";
+    const roleName = staff.role || "Unknown Role";
+
+    if (!acc[collegeName]) acc[collegeName] = {};
+    if (!acc[collegeName][roleName]) acc[collegeName][roleName] = [];
+    acc[collegeName][roleName].push(staff);
+    return acc;
+  }, {});
+
+  const totalColleges = Object.keys(groupedData).length;
+  const totalRoles = [...new Set(staffList.map((s: any) => s.role))].length;
+  const totalStaff = staffList.length;
+
+  let totalSubmissions = 0;
+  let totalAppealed = 0;
+
+  staffList.forEach((staff: any) => {
+    staff.submissions?.forEach(() => totalSubmissions++);
+    staff.submissions?.forEach((sub: any) => {
+      if (
+  sub.status === "appealed" ||
+  sub.status === "appeal-resolved"
+) {
+  totalAppealed++;
+}
+    });
+  });
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <div className="cursor-pointer" onClick={() => window.location.href = '/fpms-form'}>
-        <StatusCard
-          title="Current Submission"
-          value={latestSubmission ? latestSubmission.status.charAt(0).toUpperCase() + latestSubmission.status.slice(1) : "None"}
-          subtitle={latestSubmission ? `Last updated: ${new Date(latestSubmission.createdAt?.seconds * 1000).toLocaleDateString()}` : "No submissions yet"}
-          icon={FileText}
-          variant="stat"
-          badge={latestSubmission ? { text: latestSubmission.status, variant: "draft" } : undefined}
-        />
-      </div>
-      <div className="cursor-pointer" onClick={() => window.location.href = '/submissions'}>
-        <StatusCard
-          title="Pending Reviews"
-          value={pendingReviews}
-          subtitle="Awaiting approval"
-          icon={Clock}
-          variant="warning"
-          badge={{ text: "Pending", variant: "pending" }}
-        />
-      </div>
-      <div className="cursor-pointer" onClick={() => window.location.href = '/submissions'}>
-        <StatusCard
-          title="Evidence Uploaded"
-          value={evidenceUploaded}
-          subtitle="Across all categories"
-          icon={CheckCircle2}
-          variant="success"
-        />
-      </div>
-      <div className="cursor-pointer" onClick={() => window.location.href = '/submissions'}>
-        <StatusCard
-          title="Appeals Open"
-          value={appealsOpen}
-          subtitle="Active appeals"
-          icon={AlertCircle}
-          variant="accent"
-        />
-      </div>
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <StatusCard title="Total Colleges" value={totalColleges} icon={School} />
+      <StatusCard title="Total Roles" value={totalRoles} icon={Users} />
+      <StatusCard title="Total Staff" value={totalStaff} icon={User} />
+      <StatusCard title="Total Submissions" value={totalSubmissions} icon={Award} />
+      <StatusCard title="Appealed" value={totalAppealed} icon={AlertCircle} />
     </div>
   );
 }

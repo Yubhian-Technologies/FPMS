@@ -45,6 +45,7 @@ import ManageColleges from "./pages/ManageColleges";
 import CreateFormScreen from "./pages/CreateFormScreen";
 import FormPreviewScreen from "./pages/FormPreviewScreen";
 import WorkflowRules from "./pages/WorkflowRules";
+import MyAppeals from "./pages/MyAppeals";
 
 const queryClient = new QueryClient();
 
@@ -259,6 +260,8 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route path="/my-appeals" 
+      element={<MyAppeals></MyAppeals>}></Route>
       <Route
         path="/superadmin/roles"
         element={

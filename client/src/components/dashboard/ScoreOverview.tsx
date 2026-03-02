@@ -1,55 +1,122 @@
+// src/components/dashboard/ScoreOverview.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
+import { AlertCircle } from "lucide-react";
 
 interface ScoreCategory {
   name: string;
-  shortName: string;
   score: number;
   maxScore: number;
   color: string;
+  usingClaimed?: boolean;
 }
 
 interface ScoreOverviewProps {
   submissions: any[];
+  userTarget?: string | number; // from designation target
 }
 
-export function ScoreOverview({ submissions }: ScoreOverviewProps) {
-  const categoriesMap: Record<string, { score: number; maxScore: number; color: string }> = {
-    "Teaching & Learning": { score: 0, maxScore: 100, color: "bg-primary" },
-    "Research & Consultancy": { score: 0, maxScore: 80, color: "bg-accent" },
-    "Professional Development": { score: 0, maxScore: 40, color: "bg-info" },
-    "Student Development": { score: 0, maxScore: 40, color: "bg-success" },
-    "Institutional Development": { score: 0, maxScore: 40, color: "bg-warning" },
-  };
+export function ScoreOverview({ submissions, userTarget }: ScoreOverviewProps) {
+  console.log("ScoreOverview received submissions:", submissions);
+  console.log("User Target:", userTarget);
 
-  submissions.forEach(sub => {
-    const crit = sub.criteriaName;
-    if (categoriesMap[crit]) {
-      categoriesMap[crit].score += (sub.finalScore ?? 0);
+  const categoriesMap: Record<string, ScoreCategory> = {};
+
+  submissions.forEach((sub: any) => {
+    const critName = sub.criteriaName?.trim();
+    if (!critName) return;
+
+    const claimed = Number(sub.claimedScore ?? 0);
+const reviewer = sub.reviewerScore != null ? Number(sub.reviewerScore) : null;
+const appeal = sub.appealScore != null ? Number(sub.appealScore) : null;
+const final = sub.finalScore != null ? Number(sub.finalScore) : null;
+
+// Correct unified priority logic
+let displayScore =
+  appeal != null
+    ? appeal
+    : final != null
+    ? final
+    : reviewer != null
+    ? reviewer
+    : claimed;
+    const isUsingClaimed = sub.finalScore == null && sub.claimedScore != null;
+
+    const criteriaTotal = Number(sub.criteriaTotalMarks ?? sub.maxMarks ?? 0);
+
+    if (!categoriesMap[critName]) {
+      categoriesMap[critName] = {
+        name: critName,
+        score: 0,
+        maxScore: criteriaTotal,
+        color: getColorForCriteria(critName),
+        usingClaimed: false,
+      };
+    }
+
+    categoriesMap[critName].score += displayScore;
+    if (isUsingClaimed) {
+      categoriesMap[critName].usingClaimed = true;
+    }
+
+    if (criteriaTotal > categoriesMap[critName].maxScore) {
+      categoriesMap[critName].maxScore = criteriaTotal;
     }
   });
 
-  const displayCategories = Object.entries(categoriesMap).map(([name, data]) => ({
-    name,
-    ...data
-  }));
+  const displayCategories = Object.values(categoriesMap);
 
   const totalScore = displayCategories.reduce((sum, cat) => sum + cat.score, 0);
   const maxTotalScore = displayCategories.reduce((sum, cat) => sum + cat.maxScore, 0);
   const percentComplete = maxTotalScore > 0 ? Math.round((totalScore / maxTotalScore) * 100) : 0;
 
+  // ─── TARGET LOGIC ───
+  const targetNum = typeof userTarget === "string" && userTarget !== "Not assigned"
+    ? Number(userTarget.trim())
+    : typeof userTarget === "number"
+    ? userTarget
+    : null;
+
+  const targetStatus = targetNum !== null
+    ? totalScore >= targetNum
+      ? "achieved"   // green
+      : totalScore >= targetNum * 0.8
+      ? "near"      
+      : "below"    
+    : "no-target";
+
+  const targetColor = {
+    achieved: "text-green-600 dark:text-green-400",
+    near: "text-amber-600 dark:text-amber-400",
+    below: "text-red-600 dark:text-red-400",
+    "no-target": "text-muted-foreground",
+  }[targetStatus];
+
+  const anyUsingClaimed = displayCategories.some((c) => c.usingClaimed);
+
+  if (displayCategories.length === 0) {
+    return (
+      <Card className="overflow-hidden min-h-[500px] flex flex-col justify-center">
+        <CardContent className="text-center text-muted-foreground py-12">
+          No submissions with scores yet
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden min-h-[80%]">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Score Overview</CardTitle>
           <span className="text-sm text-muted-foreground">Live Data</span>
         </div>
       </CardHeader>
+
       <CardContent className="space-y-6">
-        {/* Total Score Circle */}
-        <div className="flex items-center justify-center py-4">
-          <div className="relative flex h-40 w-40 items-center justify-center">
+        {/* Circular Total with Target Status */}
+        <div className="flex items-center justify-center py-6">
+          <div className="relative flex h-48 w-48 items-center justify-center">
             <svg className="absolute h-full w-full -rotate-90" viewBox="0 0 100 100">
               <circle
                 cx="50"
@@ -64,36 +131,70 @@ export function ScoreOverview({ submissions }: ScoreOverviewProps) {
                 cy="50"
                 r="45"
                 fill="none"
-                stroke="hsl(var(--primary))"
-                strokeWidth="8"
+                stroke={
+                  targetStatus === "achieved"
+                    ? "hsl(var(--success))"
+                    : targetStatus === "near"
+                    ? "hsl(var(--warning))"
+                    : targetStatus === "below"
+                    ? "hsl(var(--destructive))"
+                    : "hsl(var(--primary))"
+                }
+                strokeWidth="6"
                 strokeLinecap="round"
                 strokeDasharray={`${percentComplete * 2.83} 283`}
                 className="transition-all duration-1000 ease-out"
               />
             </svg>
+
             <div className="text-center">
               <span className="text-4xl font-bold text-foreground">{totalScore}</span>
-              <span className="text-lg text-muted-foreground">/{maxTotalScore}</span>
-              <p className="mt-1 text-sm font-medium text-muted-foreground">Total Score</p>
+              <span className="text-xl text-muted-foreground"> / 300</span>
+              <p className=" text-sm font-medium text-muted-foreground">Total Score</p>
+
+              {/* Target Display */}
+              {targetNum !== null ? (
+                <div className="">
+                  <p className={`text-base  font-semibold ${targetColor}`}>
+                    Target: {targetNum}
+                  </p>
+                  <p className={`text-xs mt-1 ${targetColor}`}>
+                    {targetStatus === "achieved" && "Goal Achieved ✓"}
+                    {targetStatus === "near" && "Close to Target"}
+                    {targetStatus === "below" && "Needs Improvement"}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  No target assigned
+                </p>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Category Breakdown */}
+        {/* Bars */}
         <div className="space-y-4">
           {displayCategories.map((category) => {
-            const percent = category.maxScore > 0 ? Math.round((category.score / category.maxScore) * 100) : 0;
+            const percent = category.maxScore > 0
+              ? Math.round((category.score / category.maxScore) * 100)
+              : 0;
+
             return (
-              <div key={category.name} className="space-y-2">
+              <div key={category.name} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-foreground">{category.name}</span>
+                  <span className="font-medium">{category.name}</span>
                   <span className="text-muted-foreground">
-                    {category.score}/{category.maxScore}
+                    {category.score} / {category.maxScore}
+                    {category.usingClaimed}
                   </span>
                 </div>
                 <div className="relative h-2 overflow-hidden rounded-full bg-muted">
-                  <div 
-                    className={`absolute inset-y-0 left-0 rounded-full ${category.color} transition-all duration-700 ease-out`}
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all duration-700 ease-out",
+                      category.color
+                    )}
                     style={{ width: `${percent}%` }}
                   />
                 </div>
@@ -104,4 +205,18 @@ export function ScoreOverview({ submissions }: ScoreOverviewProps) {
       </CardContent>
     </Card>
   );
+}
+
+// Your getColorForCriteria function (unchanged)
+function getColorForCriteria(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.includes("teach")) return "bg-primary";
+  if (lower.includes("research") ) return "bg-red-500";
+  if (lower.includes("professional")) return "bg-yellow-500";
+  if (lower.includes("student") ) return "bg-green-500";
+  if (lower.includes("instit") ) return "bg-blue-500";
+
+  const colors = ["bg-primary", "bg-accent", "bg-blue-500", "bg-green-500", "bg-amber-500", "bg-purple-500"];
+  const index = Math.abs(name.split("").reduce((a, c) => a + c.charCodeAt(0), 0)) % colors.length;
+  return colors[index];
 }

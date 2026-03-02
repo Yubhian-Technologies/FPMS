@@ -201,6 +201,12 @@ const getNavItems = (
       href: "/workflow-rules",
       roles: ["committee"],
     },
+    {
+      icon: ClipboardCheck,
+      label: "My Appeals",
+      href: "/my-appeals",
+      roles: ["faculty","dean","hod"],
+    },
   ];
 
   return items.filter(

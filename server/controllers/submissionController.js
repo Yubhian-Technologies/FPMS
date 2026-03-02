@@ -17,6 +17,8 @@ export const submitTask = async (req, res) => {
       claimedScore,
       evidence,
       description,
+      criteriaTotalMarks,   
+      moduleTotalMarks,
     } = req.body;
 
     const userId = req.user?.uid || req.user?.id || req.headers["x-user-id"];
@@ -183,6 +185,8 @@ if (req.file) {
       evidence: finalEvidence,
       description: description || "",
       maxMarks: Number(maxMarks || 0),
+      criteriaTotalMarks: Number(criteriaTotalMarks || 0),
+      moduleTotalMarks:   Number(moduleTotalMarks   || 0),
       reviewerScore: null,
       reviewerReason: null,
       isAppealed: false,
@@ -258,6 +262,8 @@ export const getMySubmissions = async (req, res) => {
         college: data.college || null,
         department: data.department || null,
         claimedScore: data.claimedScore || null,
+        criteriaTotalMarks: data.criteriaTotalMarks || null,
+  moduleTotalMarks: data.moduleTotalMarks || null,
         evidence: data.evidence || null,
         description: data.description || null,
         maxMarks: data.maxMarks || null,
