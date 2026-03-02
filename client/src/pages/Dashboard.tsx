@@ -134,8 +134,18 @@ const userTarget = designations.find(
           });
           console.log("Designations",res.data);
           if (res.data?.success) {
-            setDesignations(res.data.data?.designations || []);
-          }
+
+  if (user.role === "committee") {
+    // Flatten all colleges' designations into single array
+    const allDesignations = (res.data.data || []).flatMap(
+      (college: any) => college.designations || []
+    );
+    setDesignations(allDesignations);
+  } else {
+    setDesignations(res.data.data?.designations || []);
+  }
+
+}
         } catch (err) {
           console.error("Failed to fetch designations:", err);
         }
@@ -514,12 +524,12 @@ const applyFilter = () => {
                                                                         <CardHeader className="pb-2 bg-muted/10 px-4 py-3">
                                                                           <div className="flex justify-between items-start">
                                                                             <CardTitle className="text-base font-semibold">{sub.taskName}</CardTitle>
-                                                                            <Badge
+                                                                            {/* <Badge
                                                                               variant={statusConfig[sub.status]?.variant || "outline"}
                                                                               className="text-xs px-3 py-0.5"
                                                                             >
                                                                               {statusConfig[sub.status]?.label || sub.status}
-                                                                            </Badge>
+                                                                            </Badge> */}
                                                                           </div>
                                                                         </CardHeader>
                                                                         <CardContent className="px-4 py-3">
@@ -530,17 +540,17 @@ const applyFilter = () => {
                                                                               <p><span className="font-medium">Reviewer:</span> {sub.reviewerScore ?? "—"}</p>
                                                                               <p><span className="font-medium">Final:</span> {sub.finalScore ?? sub.reviewerScore ?? sub.claimedScore ?? "Pending"}</p>
                                                                               <p><span className="font-medium">Max Marks:</span> {sub.maxMarks}</p>
-                                                                              {sub.createdAt && (
+                                                                              {/* {sub.createdAt && (
                                                                                 <p><span className="font-medium">Submitted:</span> {new Date(sub.createdAt.seconds * 1000).toLocaleDateString()}</p>
-                                                                              )}
+                                                                              )} */}
                                                                             </div>
-                                                                            <div className="space-y-2">
+                                                                            {/* <div className="space-y-2">
                                                                               <div className="flex justify-between text-sm">
                                                                                 <span>Progress</span>
                                                                                 <span>{subProgress.toFixed(1)}%</span>
                                                                               </div>
                                                                               <Progress value={subProgress} className="h-2" />
-                                                                            </div>
+                                                                            </div> */}
                                                                           </div>
                                                                         </CardContent>
                                                                       </Card>
@@ -790,7 +800,7 @@ const applyFilter = () => {
         >
           <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
             <h4 className="font-medium text-gray-900">{sub.taskName}</h4>
-            <span 
+            {/* <span 
               className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
                 statusConfig[sub.status]?.variant === "success" ? "bg-green-100 text-green-800" :
                 statusConfig[sub.status]?.variant === "warning" ? "bg-yellow-100 text-yellow-800" :
@@ -799,7 +809,7 @@ const applyFilter = () => {
               }`}
             >
               {statusConfig[sub.status]?.label || sub.status}
-            </span>
+            </span> */}
           </div>
 
           <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">

@@ -1334,6 +1334,7 @@ export const getCollegeDashboard = async (req, res) => {
 
 export const getCollegeDesignations = async (req, res) => {
   try {
+    const role = String(req.admin?.role || "").toLowerCase();
     // Use principal/admin access instead of HOD
     let college = String(req.admin?.college || "").trim();
 
@@ -1356,13 +1357,7 @@ export const getCollegeDesignations = async (req, res) => {
 
     console.log("[getCollegeDesignations] START - College:", college);
 
-    if (!college) {
-      console.log("[getCollegeDesignations] No college specified, returning empty array");
-      return res.status(200).json({
-        success: true,
-        data: { college: "", designations: [] },
-      });
-    }
+    
 
     const superadminDoc = await db.collection("superadmin").doc(SUPERADMIN_DOC_ID).get();
 
@@ -1376,6 +1371,30 @@ export const getCollegeDesignations = async (req, res) => {
 
     const superadminData = superadminDoc.data();
     const colleges = superadminData?.colleges || [];
+
+    
+if (role === "committee") {
+
+  const result = colleges.map(c => ({
+    college: c.name,
+    designations: Array.isArray(c.designations)
+      ? c.designations.filter(d => d && d.name && String(d.name).trim())
+      : []
+  }));
+
+  return res.status(200).json({
+    success: true,
+    data: result
+  });
+}
+
+// ✅ THEN: handle other roles
+if (!college) {
+  return res.status(200).json({
+    success: true,
+    data: { college: "", designations: [] },
+  });
+}
 
     const matchedCollege = colleges.find(c => String(c?.name || "").trim().toLowerCase() === college.toLowerCase());
 
