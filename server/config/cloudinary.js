@@ -1,9 +1,11 @@
-import dotenv from "dotenv";
-dotenv.config();
-
 import { v2 as cloudinary } from "cloudinary";
 
-console.log("Cloudinary API KEY:", process.env.CLOUDINARY_API_KEY);
+const requiredEnvVars = ['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+  throw new Error(`Missing required Cloudinary environment variables: ${missingVars.join(', ')}`);
+}
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,

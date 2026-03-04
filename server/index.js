@@ -1,9 +1,11 @@
+import "dotenv/config";  
+
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-dotenv.config();
 
 import "./config/firebase.js";
+import "./config/cloudinary.js";
+
 import authRouter from "./routes/authRoutes.js";
 import adminRouter from "./routes/adminRoutes.js";
 import hodRouter from "./routes/hodRoutes.js";
