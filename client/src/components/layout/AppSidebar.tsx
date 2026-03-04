@@ -205,7 +205,7 @@ const getNavItems = (
       icon: ClipboardCheck,
       label: "My Appeals",
       href: "/my-appeals",
-      roles: ["faculty","dean","hod"],
+      roles: ["faculty", "dean", "hod"],
     },
   ];
 
@@ -288,7 +288,8 @@ export function AppSidebar() {
       )}
 
       <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border">
-        <div className="flex h-full flex-col">
+        <div className="flex h-full flex-col overflow-y-auto">
+          {" "}
           <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary">
               <GraduationCap className="h-5 w-5 text-sidebar-primary-foreground" />
@@ -302,9 +303,9 @@ export function AppSidebar() {
               </p>
             </div>
           </div>
-
           {/* Navigation */}
-          <nav className="flex-1 space-y-1 px-3 py-4">
+          <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto hide-scrollbar">
+            {" "}
             {navItems.map((item) => {
               const dropdownId = item.dropdownId || item.label;
 
@@ -391,7 +392,6 @@ export function AppSidebar() {
               );
             })}
           </nav>
-
           {/* User Info & Logout */}
           <div className="border-t border-sidebar-border p-4">
             <div className="flex items-center gap-3 rounded-lg bg-sidebar-accent/50 p-3">
