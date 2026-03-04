@@ -11,6 +11,7 @@ import {
   reviewAppeal,
   getResolvedAppeals,
   getUserTotal,
+  updateSubmission,
 } from "../controllers/submissionController.js";
 import optionalAuth from "../middleware/optionalAuth.js";
 import upload from "../middleware/upload.js";
@@ -22,6 +23,7 @@ router.use(optionalAuth);
 
 // Faculty endpoints
 router.post("/submit",upload.single("evidence"), submitTask);
+router.put("/:id/update", upload.single("evidence"), updateSubmission);
 router.get("/my-submissions", getMySubmissions);
 router.post("/:id/accept", acceptReview);
 router.post("/:id/appeal", raiseAppeal);

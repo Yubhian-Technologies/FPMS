@@ -117,6 +117,7 @@ export default function DynamicCriteriaForm() {
     null,
   );
   const [payload, setPayload] = useState<CriteriaPayload | null>(null);
+  const [editingTasks, setEditingTasks] = useState<Record<string, boolean>>({});
   const [taskProgress, setTaskProgress] = useState<
     Record<string, TaskProgress>
   >({});
@@ -435,7 +436,25 @@ export default function DynamicCriteriaForm() {
     return taskStatuses[taskId] || "pending";
   };
 
-  const isTaskFrozen = (taskId: string) => getTaskStatus(taskId) !== "pending";
+  const isTaskFrozen = (taskId: string) => {
+  const status = getTaskStatus(taskId);
+
+  // Fully locked after reviewer action
+  if (
+    status === "reviewed" ||
+    status === "accepted" ||
+    status === "appealed" ||
+    status === "appeal-resolved"
+  ) {
+    return true;
+  }
+
+  if (status === "submitted" && !editingTasks[taskId]) {
+    return true;
+  }
+
+  return false;
+};
 
   const isModuleFrozen = (moduleItem: ModuleItem) =>
     moduleItem.tasks.every((task) => isTaskFrozen(task.id));
@@ -494,14 +513,14 @@ export default function DynamicCriteriaForm() {
 
   const submitTask = async (moduleItem: ModuleItem, task: TaskItem) => {
     try {
-      const taskStatus = getTaskStatus(task.id);
-      if (taskStatus !== "pending") {
-        toast({
-          title: "Task already submitted",
-          description: "This task has already been submitted to the workflow.",
-        });
-        return;
-      }
+      // const taskStatus = getTaskStatus(task.id);
+      // if (taskStatus !== "pending") {
+      //   toast({
+      //     title: "Task already submitted",
+      //     description: "This task has already been submitted to the workflow.",
+      //   });
+      //   return;
+      // }
 
       const progress = taskProgress[task.id] || {
         claimedScore: 0,
@@ -546,15 +565,38 @@ if (progress.evidenceUrl instanceof File) {
   formData.append("evidence", progress.evidenceUrl || "");
 }
 
-const submitRes = await api.post(
-  "/api/submissions/submit",
-  formData,
-  {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  }
-);
+let submitRes;
+
+const existingSubmissionId = taskSubmissionIds[task.id];
+
+if (existingSubmissionId) {
+  // 🔄 UPDATE existing submission
+  submitRes = await api.put(
+    `/api/submissions/${existingSubmissionId}/update`,
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+    }
+  );
+
+  toast({
+    title: "Task updated successfully",
+  });
+
+} else {
+  // 🆕 FIRST TIME SUBMIT
+  submitRes = await api.post(
+    "/api/submissions/submit",
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+    }
+  );
+
+  toast({
+    title: "Task submitted successfully",
+  });
+}
 
       const submissionData = submitRes.data?.data;
       const submitToRoleIds = Array.isArray(submissionData?.submitToRoleIds)
@@ -1285,20 +1327,49 @@ const submitRes = await api.post(
                                 </Button>
                               </>
                             ) : taskStatus === "pending" ? (
-                              <Button
-                                onClick={() => submitTask(moduleItem, task)}
-                                disabled={submittingTaskId === task.id || isDeadlinePassed}
-                              >
-                                {submittingTaskId === task.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                ) : null}
-                                {submittingTaskId === task.id
-                                  ? "Submitting..."
-                                  : isDeadlinePassed 
-                                    ? "Deadline Passed"
-                                    : "Submit Task"}
-                              </Button>
-                            ) : (
+  <Button
+    onClick={() => submitTask(moduleItem, task)}
+    disabled={submittingTaskId === task.id || isDeadlinePassed}
+  >
+    {submittingTaskId === task.id ? (
+      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+    ) : null}
+    {submittingTaskId === task.id
+      ? "Submitting..."
+      : isDeadlinePassed
+      ? "Deadline Passed"
+      : "Submit Task"}
+  </Button>
+) : taskStatus === "submitted" ? (
+  editingTasks[task.id] ? (
+    <Button
+      onClick={() => {
+        submitTask(moduleItem, task);
+        setEditingTasks((prev) => ({ ...prev, [task.id]: false }));
+      }}
+      disabled={submittingTaskId === task.id || isDeadlinePassed}
+    >
+      {submittingTaskId === task.id ? (
+        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+      ) : null}
+      {submittingTaskId === task.id
+        ? "Updating..."
+        : isDeadlinePassed
+        ? "Deadline Passed"
+        : "Update Task"}
+    </Button>
+  ) : (
+    <Button
+      variant="outline"
+      onClick={() =>
+        setEditingTasks((prev) => ({ ...prev, [task.id]: true }))
+      }
+      disabled={isDeadlinePassed}
+    >
+      {isDeadlinePassed ? "Deadline Passed" : "Edit"}
+    </Button>
+  )
+) : (
                               <Badge className="bg-gray-600 text-white px-4 py-2">
                                 {taskStatus === "accepted"
                                   ? "Accepted"

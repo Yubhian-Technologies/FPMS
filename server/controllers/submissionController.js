@@ -219,6 +219,80 @@ if (req.file) {
   }
 };
 
+export const updateSubmission = async (req, res) => {
+  try {
+    const { id } = req.params;   // submission ID from URL
+    const { description, claimedScore } = req.body;
+
+    const userId =
+      req.user?.uid ||
+      req.user?.id ||
+      req.headers["x-user-id"];
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Submission ID is required",
+      });
+    }
+
+    const docRef = db.collection("submissions").doc(id);
+    const docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Submission not found",
+      });
+    }
+
+    const data = docSnap.data();
+
+    // 🔐 Allow only owner to edit
+    if (data.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    // 🔒 LOCK if reviewer has given score
+    if (data.reviewerScore !== null) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot edit after review",
+      });
+    }
+
+    // If new file uploaded
+    let finalEvidence = data.evidence;
+    if (req.file) {
+      finalEvidence = req.file.path;
+    }
+
+    await docRef.update({
+      description: description ?? data.description,
+      claimedScore:
+        claimedScore !== undefined
+          ? Number(claimedScore)
+          : data.claimedScore,
+      evidence: finalEvidence,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Submission updated successfully",
+    });
+
+  } catch (error) {
+    console.error("updateSubmission error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 // Get my submissions
 export const getMySubmissions = async (req, res) => {
   try {
