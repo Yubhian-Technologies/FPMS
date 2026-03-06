@@ -25,7 +25,7 @@ import {
   deleteCollege,
   getColleges,
   updateCollege,
-} from "../controllers/superadminController.js";
+} from "../controllers/superAdminController.js";
 import { committeeAuth } from "../middleware/authMiddleware.js";
 import {
   fetchAllHodAppeals,

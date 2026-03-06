@@ -18,7 +18,7 @@ import {
   updateCollege,
   updateCommitteeMember,
   updateRole,
-} from "../controllers/superadminController.js";
+} from "../controllers/superAdminController.js";
 import { superadminAuth } from "../middleware/superAdminAuth.js";
 
 const superadminRouter = express.Router();
