@@ -7,14 +7,6 @@ const superadminDocRef = () =>
   db.collection("superadmin").doc(SUPERADMIN_DOC_ID);
 const usersCollectionRef = () => db.collection("users");
 
-/*************  ✨ Windsurf Command ⭐  *************/
-/**
- * Generates a unique id based on the given prefix and the current timestamp.
- * The generated id will be in the format of: <prefix>-<timestamp>-<random-string>
- * @param {string} prefix - The prefix to be used in the generated id.
- * @returns {string} The generated unique id.
- */
-/*******  43b2ab43-57e7-4b30-89c4-79e564f31a0a  *******/
 const generateId = (prefix) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 

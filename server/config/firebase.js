@@ -1,18 +1,13 @@
-
 import admin from 'firebase-admin';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
 
 try {
-  const serviceAccount = JSON.parse(
-    fs.readFileSync(serviceAccountPath, 'utf8')
-  );
+  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
+    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+    : {
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      };
 
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -24,6 +19,5 @@ try {
   console.error(error);
 }
 
-
-export const auth = admin.auth();         
+export const auth = admin.auth();
 export const db = admin.firestore();      
