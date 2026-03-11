@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { api } from "@/api/api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -63,6 +62,83 @@ interface SubmissionItem {
   updatedAt: any;
 }
 
+// Minimal Evidence viewer - keeps old card layout
+function EvidenceViewer({ evidence }: { evidence: string | null }) {
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  if (!evidence?.trim()) {
+    return <p className="text-muted-foreground line-clamp-3 break-words">—</p>;
+  }
+
+  const url = evidence.trim();
+  const lower = url.toLowerCase();
+
+  const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(lower);
+  const isPdf = /\.(pdf)$/i.test(lower) || lower.includes("drive.google.com") || lower.includes("docs.google.com");
+
+  let embedUrl = url;
+  if (url.includes("drive.google.com/file/d/")) {
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match?.[1]) embedUrl = `https://drive.google.com/file/d/${match[1]}/preview`;
+  } else if (isPdf && !url.includes("docs.google.com")) {
+    embedUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}`;
+  }
+
+  return (
+    <>
+      <p className="text-muted-foreground line-clamp-2 break-all mb-2">
+        {url}
+      </p>
+
+      {isImage && (
+        <div className="mt-2">
+          <img
+            src={url}
+            alt="Evidence"
+            className="max-h-32 object-contain cursor-pointer hover:opacity-90"
+            onClick={() => setPreviewOpen(true)}
+            loading="lazy"
+          />
+        </div>
+      )}
+
+      {isPdf && (
+        <div className="mt-2 border rounded h-64 overflow-hidden">
+          <iframe
+            src={embedUrl}
+            title="Document Preview"
+            width="100%"
+            height="100%"
+            className="border-0"
+            loading="lazy"
+          />
+        </div>
+      )}
+
+      <div className="mt-3">
+        <Button
+          size="sm"
+          onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+          className="bg-[#001f3f] hover:bg-[#0a3d6e] text-white border-none"
+        >
+          Open in new tab
+        </Button>
+      </div>
+
+      {/* Full view dialog - only for images */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Evidence View</DialogTitle>
+          </DialogHeader>
+          <div className="mt-2 flex justify-center bg-muted/40 p-2 rounded">
+            <img src={url} alt="Full evidence" className="max-w-full max-h-[70vh] object-contain" />
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 export default function Review() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -342,9 +418,7 @@ export default function Review() {
           <div className="grid gap-4 sm:grid-cols-2 text-sm">
             <div>
               <div className="font-medium mb-1">Evidence</div>
-              <p className="text-muted-foreground line-clamp-3 break-words">
-                {item.evidence || "—"}
-              </p>
+              <EvidenceViewer evidence={item.evidence} />
             </div>
             <div>
               <div className="font-medium mb-1">Description</div>
@@ -413,7 +487,7 @@ export default function Review() {
 
   return (
     <DashboardLayout title="Review Submissions" subtitle="Faculty Performance Review">
-      {/* Summary Cards */}
+      {/* Summary Cards - unchanged */}
       <div className="grid gap-4 md:grid-cols-3 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -509,7 +583,7 @@ export default function Review() {
         </>
       )}
 
-      {/* Faculty Detail Dialog */}
+      {/* Faculty Detail Dialog - unchanged structure */}
       <Dialog open={!!selectedFacultyEmail} onOpenChange={() => setSelectedFacultyEmail(null)}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto p-6">
           <DialogHeader className="pb-5 border-b">
