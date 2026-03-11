@@ -91,7 +91,7 @@ export const addHod = async (req, res) => {
       college,
       level,
       hasPhd,
-      designation, 
+      designation,
     } = req.body;
 
     const normalizedName = String(name || "").trim();
@@ -114,7 +114,7 @@ export const addHod = async (req, res) => {
       !normalizedEmail ||
       !resolvedPassword ||
       !normalizedDepartment ||
-      !normalizedDesignation||
+      !normalizedDesignation ||
       !resolvedCollege
     ) {
       return res.status(400).json({
@@ -891,7 +891,7 @@ export const updateHod = async (req, res) => {
       college,
       level,
       hasPhd,
-      designation, 
+      designation,
     } = req.body;
 
     const hodRef = db.collection(USERS_COLLECTION).doc(id);
@@ -925,8 +925,8 @@ export const updateHod = async (req, res) => {
     if (name) updateData.name = String(name).trim();
     if (email) updateData.email = String(email).trim().toLowerCase();
     if (department) updateData.department = String(department).trim();
-    if (designation !== undefined){
-  updateData.designation = String(designation).trim();
+    if (designation !== undefined) {
+      updateData.designation = String(designation).trim();
     }
     if (college)
       updateData.college = String(req.admin?.college || college).trim();
@@ -976,8 +976,8 @@ export const updateHod = async (req, res) => {
       updateData.department || currentData.department || "",
     ).trim();
     const nextDesignation = String(
-  updateData.designation || currentData.designation || ""
-).trim();
+      updateData.designation || currentData.designation || "",
+    ).trim();
     const nextCollege = String(
       updateData.college || currentData.college || "",
     ).trim();
@@ -1070,7 +1070,8 @@ export const updateDean = async (req, res) => {
     if (email) updateData.email = String(email).trim().toLowerCase();
     if (department !== undefined)
       updateData.department = String(department || "").trim();
-    const normalizedDesignation = designation !== undefined ? String(designation).trim() : undefined;
+    const normalizedDesignation =
+      designation !== undefined ? String(designation).trim() : undefined;
     if (college) updateData.college = String(college).trim();
     if (role !== undefined) {
       const normalizedRole = normalizeDeanRole(role);
@@ -1083,8 +1084,8 @@ export const updateDean = async (req, res) => {
       updateData.role = normalizedRole;
     }
     if (normalizedDesignation !== undefined) {
-  updateData.designation = normalizedDesignation;
-}
+      updateData.designation = normalizedDesignation;
+    }
     if (level !== undefined) {
       const normalizedLevel = Number(level);
       if (!Number.isFinite(normalizedLevel)) {
@@ -1279,12 +1280,19 @@ export const deleteDean = async (req, res) => {
   }
 };
 
+const normDesigAdmin = (s) =>
+  String(s || "")
+    .trim()
+    .toLowerCase();
+
 export const getCollegeDashboard = async (req, res) => {
   try {
     const adminDoc = await db.collection("users").doc(req.admin.uid).get();
 
     if (!adminDoc.exists) {
-      return res.status(404).json({ success: false, message: "Admin not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Admin not found" });
     }
 
     const adminData = adminDoc.data();
@@ -1293,17 +1301,35 @@ export const getCollegeDashboard = async (req, res) => {
     /* -------- FETCH SUBMISSIONS -------- */
     const submissionsSnap = await db.collection("submissions").get();
 
-    const allSubmissions = submissionsSnap.docs.map(doc => ({
+    const allSubmissions = submissionsSnap.docs.map((doc) => ({
       ...doc.data(),
       id: doc.id,
     }));
 
     const submissionsMap = new Map();
-    allSubmissions.forEach(sub => {
+    allSubmissions.forEach((sub) => {
       if (!submissionsMap.has(sub.userId)) {
         submissionsMap.set(sub.userId, []);
       }
       submissionsMap.get(sub.userId).push(sub);
+    });
+
+    /* -------- BUILD DESIGNATION TARGET MAP FOR COLLEGE -------- */
+    const saDoc = await db
+      .collection("superadmin")
+      .doc(SUPERADMIN_DOC_ID)
+      .get();
+    const saColleges = saDoc.exists ? saDoc.data()?.colleges || [] : [];
+    const collegeDef = saColleges.find(
+      (c) =>
+        String(c?.name || "")
+          .trim()
+          .toLowerCase() === (college || "").toLowerCase(),
+    );
+    const designationTargetMap = {};
+    (collegeDef?.designations || []).forEach((d) => {
+      if (d?.name)
+        designationTargetMap[normDesigAdmin(d.name)] = d.target || "";
     });
 
     /* -------- FETCH STAFF OF SAME COLLEGE -------- */
@@ -1312,11 +1338,13 @@ export const getCollegeDashboard = async (req, res) => {
       .where("college", "==", college)
       .get();
 
-    const staff = staffSnap.docs.map(doc => {
+    const staff = staffSnap.docs.map((doc) => {
       const data = doc.data();
       return {
         ...data,
         id: doc.id,
+        designationTarget:
+          designationTargetMap[normDesigAdmin(data.designation || "")] || "",
         submissions: submissionsMap.get(data.uid) || [],
       };
     });
@@ -1325,7 +1353,6 @@ export const getCollegeDashboard = async (req, res) => {
       success: true,
       data: { staff },
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Internal server error" });
@@ -1343,23 +1370,33 @@ export const getCollegeDesignations = async (req, res) => {
       const userId = String(req.admin?.uid || req.admin?.id || "").trim();
       if (userId) {
         try {
-          const userDoc = await db.collection(USERS_COLLECTION).doc(userId).get();
+          const userDoc = await db
+            .collection(USERS_COLLECTION)
+            .doc(userId)
+            .get();
           if (userDoc.exists) {
             const userData = userDoc.data() || {};
             college = String(userData.college || "").trim();
-            console.log("[getCollegeDesignations] Fetched college from users collection:", college);
+            console.log(
+              "[getCollegeDesignations] Fetched college from users collection:",
+              college,
+            );
           }
         } catch (err) {
-          console.error("[getCollegeDesignations] Error fetching from users collection:", err);
+          console.error(
+            "[getCollegeDesignations] Error fetching from users collection:",
+            err,
+          );
         }
       }
     }
 
     console.log("[getCollegeDesignations] START - College:", college);
 
-    
-
-    const superadminDoc = await db.collection("superadmin").doc(SUPERADMIN_DOC_ID).get();
+    const superadminDoc = await db
+      .collection("superadmin")
+      .doc(SUPERADMIN_DOC_ID)
+      .get();
 
     if (!superadminDoc.exists) {
       console.log("[getCollegeDesignations] Superadmin doc does not exist");
@@ -1372,43 +1409,56 @@ export const getCollegeDesignations = async (req, res) => {
     const superadminData = superadminDoc.data();
     const colleges = superadminData?.colleges || [];
 
-    
-if (role === "committee") {
+    if (role === "committee") {
+      const result = colleges.map((c) => ({
+        college: c.name,
+        designations: Array.isArray(c.designations)
+          ? c.designations.filter((d) => d && d.name && String(d.name).trim())
+          : [],
+      }));
 
-  const result = colleges.map(c => ({
-    college: c.name,
-    designations: Array.isArray(c.designations)
-      ? c.designations.filter(d => d && d.name && String(d.name).trim())
-      : []
-  }));
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
+    }
 
-  return res.status(200).json({
-    success: true,
-    data: result
-  });
-}
+    // ✅ THEN: handle other roles
+    if (!college) {
+      return res.status(200).json({
+        success: true,
+        data: { college: "", designations: [] },
+      });
+    }
 
-// ✅ THEN: handle other roles
-if (!college) {
-  return res.status(200).json({
-    success: true,
-    data: { college: "", designations: [] },
-  });
-}
-
-    const matchedCollege = colleges.find(c => String(c?.name || "").trim().toLowerCase() === college.toLowerCase());
+    const matchedCollege = colleges.find(
+      (c) =>
+        String(c?.name || "")
+          .trim()
+          .toLowerCase() === college.toLowerCase(),
+    );
 
     if (matchedCollege) {
       const designations = Array.isArray(matchedCollege.designations)
-        ? matchedCollege.designations.filter(d => d && d.name && String(d.name).trim())
+        ? matchedCollege.designations.filter(
+            (d) => d && d.name && String(d.name).trim(),
+          )
         : [];
-      console.log("[getCollegeDesignations] SUCCESS - Found", designations.length, "designations:", designations);
+      console.log(
+        "[getCollegeDesignations] SUCCESS - Found",
+        designations.length,
+        "designations:",
+        designations,
+      );
       return res.status(200).json({
         success: true,
         data: { college, designations },
       });
     } else {
-      console.log("[getCollegeDesignations] No matching college found for:", college);
+      console.log(
+        "[getCollegeDesignations] No matching college found for:",
+        college,
+      );
       return res.status(200).json({
         success: true,
         data: { college, designations: [] },
@@ -1430,14 +1480,23 @@ export const updateCollegeDesignations = async (req, res) => {
       const userId = String(req.admin?.uid || req.admin?.id || "").trim();
       if (userId) {
         try {
-          const userDoc = await db.collection(USERS_COLLECTION).doc(userId).get();
+          const userDoc = await db
+            .collection(USERS_COLLECTION)
+            .doc(userId)
+            .get();
           if (userDoc.exists) {
             const userData = userDoc.data() || {};
             college = String(userData.college || "").trim();
-            console.log("[updateCollegeDesignations] Fetched college from users collection:", college);
+            console.log(
+              "[updateCollegeDesignations] Fetched college from users collection:",
+              college,
+            );
           }
         } catch (err) {
-          console.error("[updateCollegeDesignations] Error fetching from users collection:", err);
+          console.error(
+            "[updateCollegeDesignations] Error fetching from users collection:",
+            err,
+          );
         }
       }
     }
@@ -1452,7 +1511,7 @@ export const updateCollegeDesignations = async (req, res) => {
     }
 
     // Normalize designations with target
-    const nextDesignations = (req.body?.designations || []).map(d => ({
+    const nextDesignations = (req.body?.designations || []).map((d) => ({
       name: String(d.name || "").trim(),
       target: String(d.target || "").trim(), // <-- store target
     }));
@@ -1471,7 +1530,10 @@ export const updateCollegeDesignations = async (req, res) => {
     const colleges = Array.isArray(data.colleges) ? data.colleges : [];
 
     const collegeIndex = colleges.findIndex(
-      item => String(item?.name || "").trim().toLowerCase() === college.toLowerCase()
+      (item) =>
+        String(item?.name || "")
+          .trim()
+          .toLowerCase() === college.toLowerCase(),
     );
 
     if (collegeIndex === -1) {

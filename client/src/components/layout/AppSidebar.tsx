@@ -156,7 +156,7 @@ const getNavItems = (
       icon: BarChart3,
       label: "Reports",
       href: "/reports",
-      roles: ["committee"],
+      roles: [""],
     },
     {
       icon: Briefcase,

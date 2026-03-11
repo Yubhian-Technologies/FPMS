@@ -151,8 +151,9 @@ export default function AppealReview() {
   if (loading) {
     return (
       <DashboardLayout title="Review Appeals">
-        <div className="flex justify-start items-center h-64 pl-6">
-          <Loader2 className="animate-spin h-10 w-10 text-primary" />
+        <div className="flex flex-col justify-center items-center h-64 gap-3 text-muted-foreground">
+          <Loader2 className="animate-spin h-8 w-8 text-primary" />
+          <span className="text-sm">Loading appeals...</span>
         </div>
       </DashboardLayout>
     );
@@ -333,26 +334,25 @@ export default function AppealReview() {
     const status = (item.status || "appealed").toLowerCase();
 
     return (
-      <Card key={id} className="border shadow-md rounded-lg overflow-hidden">
-        <CardHeader className="bg-slate-50 pb-3">
+      <Card key={id} className="border shadow-sm rounded-lg overflow-hidden">
+        <CardHeader className="pb-3 border-b">
           <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <CardTitle className="text-base font-semibold">
-                {item.taskName || "Task"}
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
+            <div className="space-y-0.5">
+              <CardTitle className="text-sm font-semibold">{item.taskName || "Task"}</CardTitle>
+              <p className="text-xs text-muted-foreground">
                 {item.moduleName || "Module"} • {item.userName || item.userEmail}
               </p>
-              <p className="text-sm text-muted-foreground">
-                Form: {resolve(item.formTitle)} • {resolve(item.criteriaName)}
+              <p className="text-xs text-muted-foreground">
+                {resolve(item.formTitle)} • {resolve(item.criteriaName)}
               </p>
             </div>
-            <div className="flex flex-col items-end gap-1">
+            <div className="flex flex-col items-end gap-1 shrink-0">
               <Badge
                 variant={
                   status === "appealed" ? "destructive" :
                   status === "appeal-resolved" ? "default" : "secondary"
                 }
+                className="text-xs"
               >
                 {status}
               </Badge>
@@ -365,46 +365,47 @@ export default function AppealReview() {
           </div>
         </CardHeader>
 
-        <CardContent className="pt-4 space-y-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="border rounded-md p-4 bg-white shadow-sm">
-              <p className="font-medium mb-1">Claimed</p>
-              <p>{Number(item.claimedScore || 0)} / {max}</p>
-              <p className="mt-2 font-medium">Reviewer Score</p>
-              <p>{item.reviewerScore ?? "—"}</p>
-              <p className="mt-2 font-medium">Evidence</p>
-              <p className="break-all text-sm">{item.evidence || "—"}</p>
-            </div>
+        <CardContent className="pt-4 space-y-4">
+          {/* Score row */}
+          <div className="flex items-center gap-6 text-sm bg-muted/40 rounded px-3 py-2">
+            <span><span className="font-medium">Claimed:</span> {Number(item.claimedScore || 0)} / {max}</span>
+            {item.reviewerScore != null && (
+              <span><span className="font-medium">Reviewer:</span> {item.reviewerScore}</span>
+            )}
+          </div>
 
-            <div className="border rounded-md p-4 bg-white shadow-sm">
-              <p className="font-medium mb-1">Description</p>
-              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                {item.description || "—"}
-              </p>
+          <div className="grid gap-3 sm:grid-cols-2 text-sm">
+            <div>
+              <p className="font-medium text-xs text-muted-foreground uppercase tracking-wide mb-1">Evidence</p>
+              <p className="break-all text-muted-foreground">{item.evidence || "—"}</p>
+            </div>
+            <div>
+              <p className="font-medium text-xs text-muted-foreground uppercase tracking-wide mb-1">Description</p>
+              <p className="whitespace-pre-wrap text-muted-foreground line-clamp-3">{item.description || "—"}</p>
             </div>
           </div>
 
           {item.reviewerScore !== null && item.reviewerReason && (
-            <div className="border border-blue-200 bg-blue-50/40 p-4 rounded-md">
-              <p className="font-medium text-blue-900 mb-2">Reviewer's Evaluation</p>
-              <p><strong>Score:</strong> {item.reviewerScore} / {max}</p>
-              <p className="mt-1"><strong>Remarks:</strong> {item.reviewerReason}</p>
+            <div className="border border-blue-200 bg-blue-50/50 rounded p-3 text-sm">
+              <p className="font-medium text-blue-800 mb-1">Reviewer Evaluation</p>
+              <p className="text-blue-700"><strong>Score:</strong> {item.reviewerScore} / {max}</p>
+              <p className="text-blue-700 mt-0.5"><strong>Remarks:</strong> {item.reviewerReason}</p>
             </div>
           )}
 
           {item.isAppealed && item.appealReason && (
-            <div className="border border-amber-200 bg-amber-50/40 p-4 rounded-md">
-              <p className="font-medium text-amber-900 mb-2">Appeal Information</p>
-              <p><strong>Reason:</strong> {item.appealReason}</p>
+            <div className="border border-amber-200 bg-amber-50/50 rounded p-3 text-sm">
+              <p className="font-medium text-amber-800 mb-1">Appeal Reason</p>
+              <p className="text-amber-700">{item.appealReason}</p>
               {item.appealRequestedScore !== null && (
-                <p className="mt-1"><strong>Requested Score:</strong> {item.appealRequestedScore}</p>
+                <p className="text-amber-700 mt-0.5">Requested: <strong>{item.appealRequestedScore}</strong></p>
               )}
             </div>
           )}
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium mb-1.5">Final Score</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Final Score</label>
               <Input
                 type="number"
                 min={0}
@@ -412,32 +413,28 @@ export default function AppealReview() {
                 value={type === "pending" ? input.appealerScore : (item.appealerScore ?? "")}
                 onChange={(e) => updateAppealInput(id, "appealerScore", e.target.value, max)}
                 disabled={type === "resolved"}
-                className={type === "resolved" ? "bg-gray-100" : ""}
+                className={type === "resolved" ? "bg-muted" : ""}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">Remarks</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Remarks</label>
               <Textarea
                 value={type === "pending" ? input.appealerReason : (item.appealerReason ?? "")}
                 onChange={(e) => updateAppealInput(id, "appealerReason", e.target.value)}
-                placeholder="Enter your remarks..."
-                rows={3}
+                placeholder="Enter remarks..."
+                rows={2}
                 disabled={type === "resolved"}
-                className={type === "resolved" ? "bg-gray-100" : ""}
+                className={`min-h-[72px] ${type === "resolved" ? "bg-muted" : ""}`}
               />
             </div>
           </div>
 
-          <div className="flex justify-end pt-2">
+          <div className="flex justify-end">
             {type === "resolved" ? (
-              <Badge className="bg-green-600 text-white px-4 py-1.5">Resolved</Badge>
+              <Badge variant="secondary" className="bg-green-50 text-green-700 border border-green-200">Resolved</Badge>
             ) : (
-              <Button
-                onClick={() => handleAppealReview(item)}
-                disabled={isReviewing}
-                className="min-w-[140px]"
-              >
-                {isReviewing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button size="sm" onClick={() => handleAppealReview(item)} disabled={isReviewing}>
+                {isReviewing && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
                 {isReviewing ? "Saving..." : "Submit Review"}
               </Button>
             )}
@@ -450,29 +447,29 @@ export default function AppealReview() {
   return (
     <DashboardLayout title="Review Appeals" subtitle="Faculty Appeal Review Queue">
       {/* Summary Cards */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 mb-10">
-        <Card className="border-l-4 border-l-blue-500">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Total Appeals</CardTitle>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Appeals</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-4xl font-bold">{queue.length + resolvedItems.length}</p>
+            <p className="text-2xl font-bold">{queue.length + resolvedItems.length}</p>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-red-500">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Pending</CardTitle>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pending</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-4xl font-bold text-red-600">{queue.length}</p>
+            <p className="text-2xl font-bold text-destructive">{queue.length}</p>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-green-500">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Resolved</CardTitle>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Resolved</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-4xl font-bold text-green-600">{resolvedItems.length}</p>
+            <p className="text-2xl font-bold text-green-600">{resolvedItems.length}</p>
           </CardContent>
         </Card>
       </div>
@@ -499,32 +496,22 @@ export default function AppealReview() {
                   <Accordion type="single" collapsible value={openCollege === c.college ? c.college : ""}>
                     <AccordionItem value={c.college} className="border-none">
                       <AccordionTrigger
-                        className="px-6 py-5 hover:no-underline bg-slate-50"
+                        className="px-5 py-4 hover:no-underline hover:bg-muted/30 data-[state=open]:bg-muted/20"
                         onClick={() => {
                           setOpenCollege(openCollege === c.college ? null : c.college);
                           setOpenRole(null);
                           setOpenFaculty(null);
                         }}
                       >
-                        <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center gap-6">
-                            <div className="text-4xl font-bold text-primary min-w-[80px] text-left">
-                              {c.total}
-                            </div>
-                            <div className="text-left">
-                              <div className="text-2xl font-bold">{c.college}</div>
-                              <div className="text-base text-muted-foreground">College</div>
-                            </div>
+                        <div className="flex items-center justify-between w-full pr-4">
+                          <div className="text-left">
+                            <div className="font-semibold">{c.college}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">{c.total} appeals</div>
                           </div>
-
                           {c.pending > 0 ? (
-                            <Badge variant="destructive" className="text-base px-5 py-2">
-                              {c.pending} pending
-                            </Badge>
+                            <Badge variant="destructive" className="text-xs">{c.pending} pending</Badge>
                           ) : (
-                            <Badge variant="secondary" className="text-base px-5 py-2">
-                              Completed
-                            </Badge>
+                            <Badge variant="secondary" className="text-xs">Completed</Badge>
                           )}
                         </div>
                       </AccordionTrigger>
@@ -536,23 +523,22 @@ export default function AppealReview() {
                               <Accordion type="single" collapsible value={openRole === r.role ? r.role : ""}>
                                 <AccordionItem value={r.role} className="border-none">
                                   <AccordionTrigger
-                                    className="px-6 py-4 text-lg font-semibold hover:bg-slate-50"
+                                    className="px-5 py-3 hover:no-underline hover:bg-muted/20 data-[state=open]:bg-muted/10"
                                     onClick={() => {
                                       setOpenRole(openRole === r.role ? null : r.role);
                                       setOpenFaculty(null);
                                     }}
                                   >
-                                    <div className="flex justify-between w-full items-center">
-                                      <span>{r.role}</span>
-                                      {r.pending > 0 ? (
-                                        <Badge variant="outline" className="border-red-500 text-red-600 px-4 py-1">
-                                          {r.pending} pending
-                                        </Badge>
-                                      ) : (
-                                        <Badge variant="secondary" className="px-4 py-1">
-                                          Reviewed
-                                        </Badge>
-                                      )}
+                                    <div className="flex justify-between w-full items-center pr-4">
+                                      <span className="text-sm font-semibold capitalize">{r.role}</span>
+                                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <span>{r.total} appeals</span>
+                                        {r.pending > 0 ? (
+                                          <Badge variant="destructive" className="text-xs">{r.pending} pending</Badge>
+                                        ) : (
+                                          <Badge variant="secondary" className="text-xs">Reviewed</Badge>
+                                        )}
+                                      </div>
                                     </div>
                                   </AccordionTrigger>
 
@@ -563,22 +549,18 @@ export default function AppealReview() {
                                           <Accordion type="single" collapsible value={openFaculty === f.email ? f.email : ""}>
                                             <AccordionItem value={f.email} className="border-none">
                                               <AccordionTrigger
-                                                className="px-6 py-4 hover:bg-slate-50"
+                                                className="px-4 py-3 hover:no-underline hover:bg-muted/20"
                                                 onClick={() => setOpenFaculty(openFaculty === f.email ? null : f.email)}
                                               >
-                                                <div className="flex justify-between w-full items-center">
-                                                  <div>
-                                                    <div className="font-medium text-base">{f.name}</div>
-                                                    <div className="text-sm text-muted-foreground">{f.email}</div>
+                                                <div className="flex justify-between w-full items-center pr-4">
+                                                  <div className="text-left">
+                                                    <div className="text-sm font-medium">{f.name}</div>
+                                                    <div className="text-xs text-muted-foreground">{f.email}</div>
                                                   </div>
                                                   {f.pending > 0 ? (
-                                                    <Badge variant="destructive" className="px-3 py-1">
-                                                      {f.pending}
-                                                    </Badge>
+                                                    <Badge variant="destructive" className="text-xs">{f.pending} pending</Badge>
                                                   ) : (
-                                                    <Badge variant="secondary" className="px-3 py-1">
-                                                      Done
-                                                    </Badge>
+                                                    <Badge variant="secondary" className="text-xs">Done</Badge>
                                                   )}
                                                 </div>
                                               </AccordionTrigger>
@@ -595,40 +577,39 @@ export default function AppealReview() {
                                                         {Object.entries(criteriaGroups).map(([crit, { pending, resolved }]) => (
                                                           <Card key={crit} className="border shadow-sm">
                                                             <AccordionItem value={crit} className="border-none">
-                                                              <AccordionTrigger className="px-6 py-4 text-base font-medium">
-                                                                {crit}
-                                                                <div className="ml-auto flex gap-8 text-sm font-normal pr-2">
-                                                                  <span className="text-red-600">Pending: {pending.length}</span>
-                                                                  <span className="text-green-700">Resolved: {resolved.length}</span>
+                                                              <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/20 text-sm">
+                                                                <div className="flex items-center justify-between w-full pr-4">
+                                                                  <span className="font-medium">{crit}</span>
+                                                                  <div className="flex gap-3 text-xs">
+                                                                    {pending.length > 0 && <span className="text-destructive font-medium">{pending.length} pending</span>}
+                                                                    <span className="text-muted-foreground">{resolved.length} resolved</span>
+                                                                  </div>
                                                                 </div>
                                                               </AccordionTrigger>
 
-                                                              <AccordionContent className="px-6 pb-8 pt-4 space-y-10">
-                                                                <div>
-                                                                  <h4 className="text-xl font-semibold text-red-600 mb-5">Pending Appeals</h4>
-                                                                  {pending.length === 0 ? (
-                                                                    <div className="text-center py-10 bg-slate-50 rounded-lg text-muted-foreground">
-                                                                      No pending appeals
-                                                                    </div>
-                                                                  ) : (
-                                                                    <div className="space-y-6">
+                                                              <AccordionContent className="px-4 pb-4 pt-3 space-y-6">
+                                                                {pending.length > 0 && (
+                                                                  <div>
+                                                                    <h4 className="text-xs font-medium uppercase tracking-wide text-destructive mb-3 flex items-center gap-2">
+                                                                      <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                                                                      Pending ({pending.length})
+                                                                    </h4>
+                                                                    <div className="space-y-3">
                                                                       {pending.map((item) => renderAppealCard(item, "pending"))}
                                                                     </div>
-                                                                  )}
-                                                                </div>
-
-                                                                <div>
-                                                                  <h4 className="text-lg font-semibold text-green-700 mb-5">Resolved Appeals</h4>
-                                                                  {resolved.length === 0 ? (
-                                                                    <div className="text-center py-10 bg-slate-50 rounded-lg text-muted-foreground">
-                                                                      No resolved appeals yet
-                                                                    </div>
-                                                                  ) : (
-                                                                    <div className="space-y-6">
+                                                                  </div>
+                                                                )}
+                                                                {resolved.length > 0 && (
+                                                                  <div>
+                                                                    <h4 className="text-xs font-medium uppercase tracking-wide text-green-700 mb-3 flex items-center gap-2">
+                                                                      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                                                                      Resolved ({resolved.length})
+                                                                    </h4>
+                                                                    <div className="space-y-3">
                                                                       {resolved.map((item) => renderAppealCard(item, "resolved"))}
                                                                     </div>
-                                                                  )}
-                                                                </div>
+                                                                  </div>
+                                                                )}
                                                               </AccordionContent>
                                                             </AccordionItem>
                                                           </Card>
@@ -657,90 +638,82 @@ export default function AppealReview() {
             </div>
           )
         ) : (
-          <div className="space-y-5">
-            <h2 className="text-2xl font-bold">Faculty with Appeals</h2>
+          <div className="space-y-3">
             {facultyList.length === 0 ? (
-              <Card className="p-10 text-center text-muted-foreground bg-slate-50">
+              <div className="text-center py-16 border rounded-lg bg-muted/30 text-muted-foreground text-sm">
                 No appeals available
-              </Card>
+              </div>
             ) : (
               facultyList.map((f) => (
-                <Card key={f.email} className="shadow-md hover:shadow-lg transition-shadow">
+                <Card key={f.email} className="border shadow-sm hover:shadow-md transition-shadow">
                   <Accordion type="single" collapsible value={openFaculty === f.email ? f.email : ""}>
                     <AccordionItem value={f.email} className="border-none">
-                      <AccordionTrigger className="px-6 py-5">
-                        <div className="flex justify-between w-full items-center">
-                          <div>
-                            <div className="text-xl font-semibold">{f.name}</div>
-                            <div className="text-sm text-muted-foreground mt-1">{f.email} • {f.role}</div>
+                      <AccordionTrigger
+                        className="px-5 py-4 hover:no-underline hover:bg-muted/30 data-[state=open]:bg-muted/20"
+                        onClick={() => setOpenFaculty(openFaculty === f.email ? null : f.email)}
+                      >
+                        <div className="flex justify-between w-full items-center pr-4">
+                          <div className="text-left">
+                            <div className="font-semibold">{f.name}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">{f.email} • <span className="capitalize">{f.role}</span></div>
                           </div>
-                          <div className="flex items-center gap-6">
-                            <div className="text-right">
-                              <div className="text-2xl font-bold">{f.total}</div>
-                              <div className="text-sm text-muted-foreground">Appeals</div>
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">{f.total} appeals</span>
                             {f.pending > 0 ? (
-                              <Badge variant="destructive" className="text-base px-4 py-2">
-                                {f.pending} pending
-                              </Badge>
+                              <Badge variant="destructive" className="text-xs">{f.pending} pending</Badge>
                             ) : (
-                              <Badge variant="secondary" className="text-base px-4 py-2">
-                                All clear
-                              </Badge>
+                              <Badge variant="secondary" className="text-xs">All clear</Badge>
                             )}
                           </div>
                         </div>
                       </AccordionTrigger>
 
-                      <AccordionContent className="px-6 pb-8 pt-4">
+                      <AccordionContent className="px-5 pb-5 pt-3">
                         {openFaculty === f.email && (
-                          <div className="space-y-8">
+                          <div>
                             {Object.keys(criteriaGroups).length === 0 ? (
-                              <Card className="p-10 text-center text-muted-foreground bg-slate-50">
+                              <div className="text-center py-10 text-muted-foreground text-sm">
                                 No appeals found
-                              </Card>
+                              </div>
                             ) : (
-                              <Accordion type="single" collapsible className="space-y-5">
+                              <Accordion type="single" collapsible className="space-y-2">
                                 {Object.entries(criteriaGroups).map(([crit, { pending, resolved }]) => (
-                                  <Card key={crit} className="border shadow-sm">
-                                    <AccordionItem value={crit} className="border-none">
-                                      <AccordionTrigger className="px-6 py-4 text-base font-medium">
-                                        {crit}
-                                        <div className="ml-auto flex gap-10 text-sm">
-                                          <span className="text-red-600">Pending: {pending.length}</span>
-                                          <span className="text-green-700">Resolved: {resolved.length}</span>
+                                  <AccordionItem key={crit} value={crit} className="border rounded-md">
+                                    <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/20 text-sm">
+                                      <div className="flex items-center justify-between w-full pr-4">
+                                        <span className="font-medium">{crit}</span>
+                                        <div className="flex gap-3 text-xs">
+                                          {pending.length > 0 && <span className="text-destructive font-medium">{pending.length} pending</span>}
+                                          <span className="text-muted-foreground">{resolved.length} resolved</span>
                                         </div>
-                                      </AccordionTrigger>
+                                      </div>
+                                    </AccordionTrigger>
 
-                                      <AccordionContent className="px-6 pb-8 pt-4 space-y-10">
+                                    <AccordionContent className="px-4 pb-4 pt-3 space-y-6">
+                                      {pending.length > 0 && (
                                         <div>
-                                          <h4 className="text-lg font-semibold text-red-600 mb-5">Pending Appeals</h4>
-                                          {pending.length === 0 ? (
-                                            <div className="text-center py-10 bg-slate-50 rounded-lg text-muted-foreground">
-                                              No pending appeals
-                                            </div>
-                                          ) : (
-                                            <div className="space-y-6">
-                                              {pending.map((item) => renderAppealCard(item, "pending"))}
-                                            </div>
-                                          )}
+                                          <h4 className="text-xs font-medium uppercase tracking-wide text-destructive mb-3 flex items-center gap-2">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                                            Pending ({pending.length})
+                                          </h4>
+                                          <div className="space-y-3">
+                                            {pending.map((item) => renderAppealCard(item, "pending"))}
+                                          </div>
                                         </div>
-
+                                      )}
+                                      {resolved.length > 0 && (
                                         <div>
-                                          <h4 className="text-lg font-semibold text-green-700 mb-5">Resolved Appeals</h4>
-                                          {resolved.length === 0 ? (
-                                            <div className="text-center py-10 bg-slate-50 rounded-lg text-muted-foreground">
-                                              No resolved appeals yet
-                                            </div>
-                                          ) : (
-                                            <div className="space-y-6">
-                                              {resolved.map((item) => renderAppealCard(item, "resolved"))}
-                                            </div>
-                                          )}
+                                          <h4 className="text-xs font-medium uppercase tracking-wide text-green-700 mb-3 flex items-center gap-2">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                                            Resolved ({resolved.length})
+                                          </h4>
+                                          <div className="space-y-3">
+                                            {resolved.map((item) => renderAppealCard(item, "resolved"))}
+                                          </div>
                                         </div>
-                                      </AccordionContent>
-                                    </AccordionItem>
-                                  </Card>
+                                      )}
+                                    </AccordionContent>
+                                  </AccordionItem>
                                 ))}
                               </Accordion>
                             )}

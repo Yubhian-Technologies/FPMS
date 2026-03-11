@@ -8,19 +8,27 @@ const SUPERADMIN_DOC_ID = process.env.SUPERADMIN_DOC_ID || "root";
 const USERS_COLLECTION = "users";
 
 const normDesig = (s) =>
-  String(s || "").trim().toLowerCase().replace(/f{2,}/g, "f").replace(/s{2,}/g, "s");
+  String(s || "")
+    .trim()
+    .toLowerCase();
 
 const getDesignationTarget = async (college, designation) => {
   if (!college || !designation) return "";
   try {
-    const saDoc = await db.collection("superadmin").doc(SUPERADMIN_DOC_ID).get();
+    const saDoc = await db
+      .collection("superadmin")
+      .doc(SUPERADMIN_DOC_ID)
+      .get();
     if (!saDoc.exists) return "";
     const col = (saDoc.data()?.colleges || []).find(
-      (c) => String(c?.name || "").trim().toLowerCase() === college.toLowerCase()
+      (c) =>
+        String(c?.name || "")
+          .trim()
+          .toLowerCase() === college.toLowerCase(),
     );
     if (!col) return "";
     const des = (col.designations || []).find(
-      (d) => normDesig(d?.name) === normDesig(designation)
+      (d) => normDesig(d?.name) === normDesig(designation),
     );
     return des?.target || "";
   } catch (e) {
@@ -81,7 +89,7 @@ export const hodLogin = async (req, res) => {
 
     const designationTarget = await getDesignationTarget(
       hodData.college,
-      hodData.designation
+      hodData.designation,
     );
 
     return res.status(200).json({
@@ -529,8 +537,6 @@ export const deleteFaculty = async (req, res) => {
   }
 };
 
-
-
 export const getHodCollegeDetails = async (req, res) => {
   try {
     let hodCollege = String(req.hod?.college || "").trim();
@@ -677,17 +683,34 @@ export const getHodDashboard = async (req, res) => {
 
     const submissionsSnap = await db.collection("submissions").get();
 
-    const allSubmissions = submissionsSnap.docs.map(doc => ({
+    const allSubmissions = submissionsSnap.docs.map((doc) => ({
       ...doc.data(),
       id: doc.id,
     }));
 
     const submissionsMap = new Map();
-    allSubmissions.forEach(sub => {
+    allSubmissions.forEach((sub) => {
       if (!submissionsMap.has(sub.userId)) {
         submissionsMap.set(sub.userId, []);
       }
       submissionsMap.get(sub.userId).push(sub);
+    });
+
+    // Build designation → target map for this college
+    const saDoc = await db
+      .collection("superadmin")
+      .doc(SUPERADMIN_DOC_ID)
+      .get();
+    const saColleges = saDoc.exists ? saDoc.data()?.colleges || [] : [];
+    const collegeDef = saColleges.find(
+      (c) =>
+        String(c?.name || "")
+          .trim()
+          .toLowerCase() === college.toLowerCase(),
+    );
+    const designationTargetMap = {};
+    (collegeDef?.designations || []).forEach((d) => {
+      if (d?.name) designationTargetMap[normDesig(d.name)] = d.target || "";
     });
 
     const staffSnap = await db
@@ -697,11 +720,13 @@ export const getHodDashboard = async (req, res) => {
       .where("role", "==", "faculty")
       .get();
 
-    const staff = staffSnap.docs.map(doc => {
+    const staff = staffSnap.docs.map((doc) => {
       const data = doc.data();
       return {
         ...data,
         id: doc.id,
+        designationTarget:
+          designationTargetMap[normDesig(data.designation || "")] || "",
         submissions: submissionsMap.get(data.uid) || [],
       };
     });
@@ -710,7 +735,6 @@ export const getHodDashboard = async (req, res) => {
       success: true,
       data: { staff },
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Internal server error" });

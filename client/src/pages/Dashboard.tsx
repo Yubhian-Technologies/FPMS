@@ -15,7 +15,23 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { FileText,Filter, Clock, Folder, File, Award, User,Briefcase, Building, BookOpen, Users, School, CheckCircle, AlertCircle, BarChart2 } from "lucide-react";
+import {
+  FileText,
+  Filter,
+  Clock,
+  Folder,
+  File,
+  Award,
+  User,
+  Briefcase,
+  Building,
+  BookOpen,
+  Users,
+  School,
+  CheckCircle,
+  AlertCircle,
+  BarChart2,
+} from "lucide-react";
 import { api } from "@/api/api";
 import jsPDF from "jspdf";
 import { Button } from "@/components/ui/button";
@@ -30,12 +46,24 @@ import { FPMSFormOverview } from "@/components/fpms/FPMSFormOverview";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 
 /* ---------------- STATUS CONFIG ---------------- */
-const statusConfig: Record<string, { label: string; variant: "outline" | "secondary" | "default" | "success" | "warning" | "destructive" }> = {
-  pending:        { label: "Pending",       variant: "outline" },
-  submitted:      { label: "Submitted",     variant: "secondary" },
-  reviewed:       { label: "Under Review",  variant: "default" },
-  accepted:       { label: "Accepted",      variant: "success" },
-  appealed:       { label: "Appealed",      variant: "warning" },
+const statusConfig: Record<
+  string,
+  {
+    label: string;
+    variant:
+      | "outline"
+      | "secondary"
+      | "default"
+      | "success"
+      | "warning"
+      | "destructive";
+  }
+> = {
+  pending: { label: "Pending", variant: "outline" },
+  submitted: { label: "Submitted", variant: "secondary" },
+  reviewed: { label: "Under Review", variant: "default" },
+  accepted: { label: "Accepted", variant: "success" },
+  appealed: { label: "Appealed", variant: "warning" },
   "appeal-resolved": { label: "Appeal Resolved", variant: "success" },
 };
 
@@ -47,151 +75,173 @@ export default function Dashboard() {
   const [committeeData, setCommitteeData] = useState<any>(null);
   const [designations, setDesignations] = useState<any[]>([]);
   // ─── FILTER STATES ───
-const [selectedCollege, setSelectedCollege] = useState<string>("All");
-const [selectedRole, setSelectedRole] = useState<string>("All");
-const [selectedStaff, setSelectedStaff] = useState<string>("All");
-const [selectedCriteria, setSelectedCriteria] = useState<string>("All");
-const [selectedModule, setSelectedModule] = useState<string>("All");
-const [staffList, setStaffList] = useState<any[]>([]);
+  const [selectedCollege, setSelectedCollege] = useState<string>("All");
+  const [selectedRole, setSelectedRole] = useState<string>("All");
+  const [selectedStaff, setSelectedStaff] = useState<string>("All");
+  const [selectedCriteria, setSelectedCriteria] = useState<string>("All");
+  const [selectedModule, setSelectedModule] = useState<string>("All");
+  const [staffList, setStaffList] = useState<any[]>([]);
 
-const [filteredData, setFilteredData] = useState<any[]>([]);
+  const [filteredData, setFilteredData] = useState<any[]>([]);
+  const [userTarget, setUserTarget] = useState<string>(
+    user?.designationTarget || "Not assigned",
+  );
 
   const displayName = user?.name || user?.email || "User";
 
-  // Normalize designation names to handle common spelling typos
-  // e.g. "Proffessor" → "profesor", "Assisstant" → "asistant"
-  const normalizeDesignation = (s: string) =>
-    (s || "").trim().toLowerCase()
-      .replace(/\s+/g, " ")
-      .replace(/f{2,}/g, "f")
-      .replace(/s{2,}/g, "s");
-
-// Primary: use designationTarget embedded in login response
-// Fallback: look up from designations list (for cached sessions)
-const userTarget =
-  user?.designationTarget ||
-  designations.find(
-    d => normalizeDesignation(d.name) === normalizeDesignation(user?.designation || "")
-  )?.target ||
-  "Not assigned";
-  
   useEffect(() => {
-  if (!user) return;
+    if (!user) return;
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      // ─── COMMON: PERSONAL SUBMISSIONS (for faculty + HOD) ───
-      const personalFetch = async () => {
-        const res = await api.get("/api/submissions/my-submissions", {
-          headers: {
-            "x-user-id": user.uid,
-            "x-user-email": user.email || "",
-            "x-user-name": user.name || "",
-            "x-user-role": user.role,
-            "x-college": user.college || "",
-            "x-department": user.department || "",
-          },
-        });
-        console.log(res.data);
-        if (res.data.success) {
-          const sorted = [...(res.data.data || [])].sort(
-            (a, b) => (b.createdAt?.seconds || 0) * 1000 - (a.createdAt?.seconds || 0) * 1000
-          );
-          setSubmissions(sorted);
-        }
-      };
-
-      // ─── ROLE-SPECIFIC ───
-      if (user.role === "committee") {
-        const res = await api.get("/api/auth/dashboard-data", {
-          headers: { "x-user-id": user.uid, "x-user-role": user.role },
-        });
-        if (res.data.success) setCommitteeData(res.data.data);
-         setStaffList(res.data.data.staff || []); 
-      } 
-      else if (user.role === "principle" || user.role === "vice principle") {
-        const res = await api.get("/api/admin/college-dashboard", {
-          headers: { "x-user-id": user.uid, "x-user-role": user.role },
-        });
-        if (res.data.success) setCommitteeData(res.data.data);
-         setStaffList(res.data.data.staff || []);
-      } 
-      else if (user.role === "hod") {
-        const deptRes = await api.get("/api/hod/hod-dashboard", {
-          headers: {
-            "x-user-id": user.uid,
-            "x-user-role": user.role,
-            "x-college": user.college,
-            "x-department": user.department,
-          },
-        });
-        if (deptRes.data.success) setCommitteeData(deptRes.data.data);
-         setStaffList(deptRes.data.data.staff || []);
-
-        await personalFetch();
-      } 
-      else {
-        await personalFetch();
-      }
-
-      // ─── FETCH DESIGNATIONS ─── (add this here, inside try)
-      const fetchDesignations = async () => {
-        try {
-          console.log("[Dashboard] Fetching designations for user:", user.role, "| college:", user.college, "| designation:", user.designation);
-          const res = await api.get("/api/colleges/designations");
-          console.log("[Dashboard] Designations API response:", res.data);
-          if (res.data?.success) {
-            if (user.role === "committee") {
-              const allDesignations = (res.data.data || []).flatMap(
-                (college: any) => college.designations || []
-              );
-              console.log("[Dashboard] committee designations:", allDesignations);
-              setDesignations(allDesignations);
-            } else {
-              console.log("[Dashboard] designations for user college:", res.data.data?.designations);
-              setDesignations(res.data.data?.designations || []);
-            }
-          } else {
-            console.warn("[Dashboard] Designations API returned success:false", res.data);
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // ─── COMMON: PERSONAL SUBMISSIONS (for faculty + HOD) ───
+        const personalFetch = async () => {
+          const res = await api.get("/api/submissions/my-submissions", {
+            headers: {
+              "x-user-id": user.uid,
+              "x-user-email": user.email || "",
+              "x-user-name": user.name || "",
+              "x-user-role": user.role,
+              "x-college": user.college || "",
+              "x-department": user.department || "",
+            },
+          });
+          console.log(res.data);
+          if (res.data.success) {
+            const sorted = [...(res.data.data || [])].sort(
+              (a, b) =>
+                (b.createdAt?.seconds || 0) * 1000 -
+                (a.createdAt?.seconds || 0) * 1000,
+            );
+            setSubmissions(sorted);
           }
-        } catch (err) {
-          console.error("[Dashboard] Failed to fetch designations:", err);
+        };
+
+        // ─── ROLE-SPECIFIC ───
+        if (user.role === "committee") {
+          const res = await api.get("/api/auth/dashboard-data", {
+            headers: { "x-user-id": user.uid, "x-user-role": user.role },
+          });
+          if (res.data.success) setCommitteeData(res.data.data);
+          setStaffList(res.data.data.staff || []);
+        } else if (
+          user.role === "principle" ||
+          user.role === "vice principle"
+        ) {
+          const res = await api.get("/api/admin/college-dashboard", {
+            headers: { "x-user-id": user.uid, "x-user-role": user.role },
+          });
+          if (res.data.success) setCommitteeData(res.data.data);
+          setStaffList(res.data.data.staff || []);
+        } else if (user.role === "hod") {
+          const deptRes = await api.get("/api/hod/hod-dashboard", {
+            headers: {
+              "x-user-id": user.uid,
+              "x-user-role": user.role,
+              "x-college": user.college,
+              "x-department": user.department,
+            },
+          });
+          if (deptRes.data.success) setCommitteeData(deptRes.data.data);
+          setStaffList(deptRes.data.data.staff || []);
+
+          await personalFetch();
+        } else {
+          await personalFetch();
         }
-      };
 
-      await fetchDesignations(); 
+        // ─── FETCH DESIGNATIONS ─── (add this here, inside try)
+        const fetchDesignations = async () => {
+          try {
+            console.log(
+              "[Dashboard] Fetching designations for user:",
+              user.role,
+              "| college:",
+              user.college,
+              "| designation:",
+              user.designation,
+            );
+            const res = await api.get("/api/colleges/designations");
+            console.log("[Dashboard] Designations API response:", res.data);
+            if (res.data?.success) {
+              let fetchedDesignations: any[] = [];
+              if (user.role === "committee") {
+                // Preserve college on each entry so staff ScoreOverview can do college-scoped lookup
+                fetchedDesignations = (res.data.data || []).flatMap(
+                  (college: any) =>
+                    (college.designations || []).map((d: any) => ({
+                      ...d,
+                      college: college.college,
+                    })),
+                );
+              } else {
+                fetchedDesignations = res.data.data?.designations || [];
+              }
+              setDesignations(fetchedDesignations);
 
-    } catch (err) {
-      console.error("Dashboard fetch error:", err);
-    } finally {
-      setLoading(false);
+              // Resolve the logged-in user's own target by exact case-insensitive match
+              const myDesig = (user?.designation || "").trim().toLowerCase();
+              if (myDesig) {
+                const match = fetchedDesignations.find(
+                  (d: any) => (d.name || "").trim().toLowerCase() === myDesig,
+                );
+                if (match?.target) {
+                  setUserTarget(String(match.target));
+                } else if (user?.designationTarget) {
+                  setUserTarget(String(user.designationTarget));
+                }
+              } else if (user?.designationTarget) {
+                setUserTarget(String(user.designationTarget));
+              }
+            } else {
+              console.warn(
+                "[Dashboard] Designations API returned success:false",
+                res.data,
+              );
+            }
+          } catch (err) {
+            console.error("[Dashboard] Failed to fetch designations:", err);
+          }
+        };
+
+        await fetchDesignations();
+      } catch (err) {
+        console.error("Dashboard fetch error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user]);
+
+  const applyFilter = () => {
+    if (!committeeData) return;
+
+    let filteredStaff: any[] = staffList;
+
+    // Skip college filter for principal/vice principal
+    if (user?.role === "committee" && selectedCollege !== "All") {
+      filteredStaff = filteredStaff.filter(
+        (s) => s.college === selectedCollege,
+      );
     }
+
+    if (selectedRole !== "All")
+      filteredStaff = filteredStaff.filter((s) => s.role === selectedRole);
+    if (selectedStaff !== "All")
+      filteredStaff = filteredStaff.filter((s) => s.name === selectedStaff);
+
+    let subs: any[] = filteredStaff.flatMap((s) => s.submissions || []);
+
+    if (selectedCriteria !== "All")
+      subs = subs.filter((s) => s.criteriaName === selectedCriteria);
+    if (selectedModule !== "All")
+      subs = subs.filter((s) => s.moduleName === selectedModule);
+
+    setFilteredData(subs);
   };
-
-  fetchData();
-}, [user]);
-
-const applyFilter = () => {
-  if (!committeeData) return;
-
-  let filteredStaff: any[] = staffList;
-
-  // Skip college filter for principal/vice principal
-  if (user?.role === "committee" && selectedCollege !== "All") {
-    filteredStaff = filteredStaff.filter(s => s.college === selectedCollege);
-  }
-
-  if (selectedRole !== "All") filteredStaff = filteredStaff.filter(s => s.role === selectedRole);
-  if (selectedStaff !== "All") filteredStaff = filteredStaff.filter(s => s.name === selectedStaff);
-
-  let subs: any[] = filteredStaff.flatMap(s => s.submissions || []);
-
-  if (selectedCriteria !== "All") subs = subs.filter(s => s.criteriaName === selectedCriteria);
-  if (selectedModule !== "All") subs = subs.filter(s => s.moduleName === selectedModule);
-
-  setFilteredData(subs);
-};
 
   if (loading) {
     return (
@@ -204,612 +254,885 @@ const applyFilter = () => {
     );
   }
 
-  if (["committee", "principle", "vice principle", "hod"].includes(user?.role || "")) {
-  const isHod = user?.role === "hod";
-  const isDean = user?.role === "principle" || user?.role === "vice principle";
-  
-  const groupedData = staffList.reduce((acc: any, staff: any) => {
-    const collegeName = staff.college || "Unknown College";
-    const roleName = staff.role || "Unknown Role";
+  if (
+    ["committee", "principle", "vice principle", "hod"].includes(
+      user?.role || "",
+    )
+  ) {
+    const isHod = user?.role === "hod";
+    const isDean =
+      user?.role === "principle" || user?.role === "vice principle";
 
-    if (!acc[collegeName]) acc[collegeName] = {};
-    if (!acc[collegeName][roleName]) acc[collegeName][roleName] = [];
-    acc[collegeName][roleName].push(staff);
-    return acc;
-  }, {});
+    const groupedData = staffList.reduce((acc: any, staff: any) => {
+      const collegeName = staff.college || "Unknown College";
+      const roleName = staff.role || "Unknown Role";
 
-  // Aggregate stats for department/college view
-  let totalSubmissions = 0;
-  let totalFinalScore = 0;
-  let totalMaxMarks = 0;
-  let totalAppealed = 0;
-  let totalCompleted = 0;
-  staffList.forEach((staff: any) => {
-    staff.submissions?.forEach((sub: any) => {
-      totalSubmissions++;
-      totalFinalScore += sub.finalScore ?? 0;
-      totalMaxMarks += sub.maxMarks ?? 0;
-      if (sub.status === "appealed") totalAppealed++;
-      if (sub.status === "accepted" || sub.status === "appeal-resolved") totalCompleted++;
+      if (!acc[collegeName]) acc[collegeName] = {};
+      if (!acc[collegeName][roleName]) acc[collegeName][roleName] = [];
+      acc[collegeName][roleName].push(staff);
+      return acc;
+    }, {});
+
+    // Aggregate stats for department/college view
+    let totalSubmissions = 0;
+    let totalFinalScore = 0;
+    let totalMaxMarks = 0;
+    let totalAppealed = 0;
+    let totalCompleted = 0;
+    staffList.forEach((staff: any) => {
+      staff.submissions?.forEach((sub: any) => {
+        totalSubmissions++;
+        totalFinalScore += sub.finalScore ?? 0;
+        totalMaxMarks += sub.maxMarks ?? 0;
+        if (sub.status === "appealed") totalAppealed++;
+        if (sub.status === "accepted" || sub.status === "appeal-resolved")
+          totalCompleted++;
+      });
     });
-  });
 
-  // ─── PERSONAL STATS (only used when isHod === true) ───
-  let personalClaimed = 0, personalReviewer = 0, personalFinal = 0, personalMax = 0;
-  let personalCompleted = 0, personalAppealed = 0;
-  submissions.forEach((sub: any) => {
-    personalClaimed += sub.claimedScore ?? 0;
-    personalReviewer += sub.reviewerScore ?? 0;
-    personalFinal += sub.finalScore ?? 0;
-    personalMax += sub.maxMarks ?? 0;
-    if (sub.status === "accepted" || sub.status === "appeal-resolved") personalCompleted++;
-    if (sub.status === "appealed") personalAppealed++;
-  });
+    // ─── PERSONAL STATS (only used when isHod === true) ───
+    let personalClaimed = 0,
+      personalReviewer = 0,
+      personalFinal = 0,
+      personalMax = 0;
+    let personalCompleted = 0,
+      personalAppealed = 0;
+    submissions.forEach((sub: any) => {
+      personalClaimed += sub.claimedScore ?? 0;
+      personalReviewer += sub.reviewerScore ?? 0;
+      personalFinal += sub.finalScore ?? 0;
+      personalMax += sub.maxMarks ?? 0;
+      if (sub.status === "accepted" || sub.status === "appeal-resolved")
+        personalCompleted++;
+      if (sub.status === "appealed") personalAppealed++;
+    });
 
-  return (
-    <DashboardLayout
-      title={`${displayName}'s Dashboard`}
-      subtitle={
-        user.role === "principle" ? "Principal View" :
-        user.role === "vice principle" ? "Vice Principal View" :
-        user.role === "hod" ? "HOD View" : "Committee View"
-      }
-    >
-      {user?.role !== "committee" && (
-  <div className="mb-6">
-    <DeadlineAlert
-      
-    />
-  </div>
-)}
+    return (
+      <DashboardLayout
+        title={`${displayName}'s Dashboard`}
+        subtitle={
+          user.role === "principle"
+            ? "Principal View"
+            : user.role === "vice principle"
+              ? "Vice Principal View"
+              : user.role === "hod"
+                ? "HOD View"
+                : "Committee View"
+        }
+      >
+        {user?.role !== "committee" && (
+          <div className="mb-6">
+            <DeadlineAlert />
+          </div>
+        )}
 
-      <StatusCards
-  role={user?.role || "committee"}
-  submissions={isHod || user.role === "faculty" ? submissions : undefined}
-  committeeData={!(isHod || user.role === "faculty") ? committeeData : undefined}
-/>
-     
-{isHod && (
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-    
-    {/* Score Overview */}
-    <ScoreOverview 
-      submissions={submissions}
-      userTarget={userTarget}
-    />
+        <StatusCards
+          role={user?.role || "committee"}
+          submissions={
+            isHod || user.role === "faculty" ? submissions : undefined
+          }
+          committeeData={
+            !(isHod || user.role === "faculty") ? committeeData : undefined
+          }
+        />
 
-    {/* Right Column */}
-    <div className="space-y-6">
-      
-      {/* User Profile */}
-      {user && <UserProfile user={user} />}
+        {isHod && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+            {/* Score Overview */}
+            <ScoreOverview submissions={submissions} userTarget={userTarget} />
 
-      {/* Target Card */}
-      <Card className="shadow-sm border">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Briefcase className="h-5 w-5 text-primary" />
-            Your Target
-          </CardTitle>
-          <CardDescription>
-            {user?.designation || "Designation"}
-          </CardDescription>
-        </CardHeader>
+            {/* Right Column */}
+            <div className="space-y-6">
+              {/* User Profile */}
+              {user && <UserProfile user={user} />}
 
-        <CardContent className="text-center py-4">
-          <p className="text-4xl font-bold text-primary">
-            {userTarget}
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {userTarget === "Not assigned" || userTarget === "Not found"
-              ? "Contact admin"
-              : "Target points"}
-          </p>
-        </CardContent>
-      </Card>
+              {/* Target Card */}
+              <Card className="shadow-sm border">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-primary" />
+                    Your Target
+                  </CardTitle>
+                  <CardDescription>
+                    {user?.designation || "Designation"}
+                  </CardDescription>
+                </CardHeader>
 
-    </div>
+                <CardContent className="text-center py-4">
+                  <p className="text-4xl font-bold text-primary">
+                    {userTarget}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {userTarget === "Not assigned" || userTarget === "Not found"
+                      ? "Contact admin"
+                      : "Target points"}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
 
-    {/* Quick Actions */}
-    <QuickActions />
+            {/* Quick Actions */}
+            <QuickActions />
+          </div>
+        )}
 
-  </div>
-)}
+        {isHod && (
+          <>
+            {/* Recent Activity */}
+            <div className="mt-8 mb-8">
+              <RecentActivity
+                submissions={
+                  isHod
+                    ? submissions
+                    : staffList.flatMap((s) => s.submissions || [])
+                }
+              />
+            </div>
 
-{isHod && (
-  <>
-    {/* Recent Activity */}
-    <div className="mt-8 mb-8">
-      <RecentActivity 
-        submissions={
-          isHod
-            ? submissions
-            : staffList.flatMap(s => s.submissions || [])
-        } 
-      />
-    </div>
-
-    {/* FPMS Section */}
-    <div className="mt-8 mb-8 space-y-4">
-      <div>
-        <h2 className="text-xl font-semibold text-foreground">
-          FPMS Categories
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Complete all sections to submit your annual performance report
-        </p>
-      </div>
-
-      <FPMSFormOverview 
-        submissions={
-          isHod
-            ? submissions
-            : staffList.flatMap(s => s.submissions || [])
-        } 
-      />
-    </div>
-  </>
-)}
-     
-
-
-
-<Card className="shadow-sm rounded-xl overflow-hidden mt-6 mb-6">
-  <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10">
-    <CardTitle className="flex items-center gap-2 text-xl font-bold">
-      <Building className="h-5 w-5 text-primary" />
-      {isHod ? "Department Staff Overview" : "College → Role → Staff Overview"}
-    </CardTitle>
-    <CardDescription className="text-muted-foreground">
-      {isHod ? "Browse staff members in your department and their submissions" : "Browse institutions, roles, staff, and their detailed submissions with counts"}
-    </CardDescription>
-  </CardHeader>
-  <CardContent className="p-0">
-    <Accordion type="single" collapsible className="divide-y">
-      {Object.entries(groupedData).map(([collegeName, roles]: any) => {
-        const collegeStaffCount = Object.values(roles).reduce((sum: number, staffArray: any) => sum + staffArray.length, 0);
-        const collegeRolesCount = Object.keys(roles).length;
-        return (
-          <AccordionItem key={collegeName} value={collegeName}>
-            <AccordionTrigger className="px-6 py-4 text-xl font-bold hover:bg-muted/50 transition-colors data-[state=open]:bg-muted/30">
-              <div className="flex justify-between w-full pr-4">
-                <span>{collegeName}</span>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1"><Users className="h-4 w-4" /> {collegeRolesCount} Roles</span>
-                  <span className="flex items-center gap-1"><User className="h-4 w-4" /> {collegeStaffCount} Staff</span>
-                </div>
+            {/* FPMS Section */}
+            <div className="mt-8 mb-8 space-y-4">
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">
+                  FPMS Categories
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Complete all sections to submit your annual performance report
+                </p>
               </div>
-            </AccordionTrigger>
-            <AccordionContent className="px-6 pb-6 pt-4 bg-background">
-              
-              <Accordion type="single" collapsible className="divide-y">
-                {Object.entries(roles).map(([roleName, staffArray]: any) => {
-                  const roleStaffCount = staffArray.length;
-                  return (
-                    <AccordionItem key={roleName} value={`${collegeName}-${roleName}`}>
-                      <AccordionTrigger className="px-5 py-3 text-lg font-semibold capitalize hover:bg-secondary/20 transition-colors data-[state=open]:bg-secondary/10">
-                        <div className="flex justify-between w-full pr-4">
-                          <span>{roleName}</span>
-                          <Badge variant="outline" className="text-sm">{roleStaffCount} Staff</Badge>
+
+              <FPMSFormOverview
+                submissions={
+                  isHod
+                    ? submissions
+                    : staffList.flatMap((s) => s.submissions || [])
+                }
+              />
+            </div>
+          </>
+        )}
+
+        <Card className="shadow-sm rounded-xl overflow-hidden mt-6 mb-6">
+          <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10">
+            <CardTitle className="flex items-center gap-2 text-xl font-bold">
+              <Building className="h-5 w-5 text-primary" />
+              {isHod
+                ? "Department Staff Overview"
+                : "College → Role → Staff Overview"}
+            </CardTitle>
+            <CardDescription className="text-muted-foreground">
+              {isHod
+                ? "Browse staff members in your department and their submissions"
+                : "Browse institutions, roles, staff, and their detailed submissions with counts"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Accordion type="single" collapsible className="divide-y">
+              {Object.entries(groupedData).map(([collegeName, roles]: any) => {
+                const collegeStaffCount = Object.values(roles).reduce(
+                  (sum: number, staffArray: any) => sum + staffArray.length,
+                  0,
+                );
+                const collegeRolesCount = Object.keys(roles).length;
+                return (
+                  <AccordionItem key={collegeName} value={collegeName}>
+                    <AccordionTrigger className="px-6 py-4 text-xl font-bold hover:bg-muted/50 transition-colors data-[state=open]:bg-muted/30">
+                      <div className="flex justify-between w-full pr-4">
+                        <span>{collegeName}</span>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Users className="h-4 w-4" /> {collegeRolesCount}{" "}
+                            Roles
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <User className="h-4 w-4" /> {collegeStaffCount}{" "}
+                            Staff
+                          </span>
                         </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="px-5 pb-4 bg-background">
-                        <Accordion type="single" collapsible>
-                          {staffArray.map((staff: any) => {
-                            const staffSubmissionsCount = staff.submissions?.length || 0;
-                            let staffTotalFinal = 0;
-                            let staffTotalMax = 0;
-                            let staffTotalClaimed = 0;
-                            let staffTotalReviewer = 0;
-                            let staffAppealedCount = 0;
-                            let staffCompletedCount = 0;
-
-                            staff.submissions?.forEach((sub: any) => {
-                              const effectiveFinal = sub.finalScore ?? sub.reviewerScore ?? sub.claimedScore ?? 0;
-                              staffTotalFinal += effectiveFinal;
-                              staffTotalMax += sub.maxMarks ?? 0;
-                              staffTotalClaimed += sub.claimedScore ?? 0;
-                              staffTotalReviewer += sub.reviewerScore ?? 0;
-                              if (sub.status === "appealed") staffAppealedCount++;
-                              if (sub.status === "accepted" || sub.status === "appeal-resolved") staffCompletedCount++;
-                            });
-
-                            const staffProgress = staffTotalMax > 0 ? (staffTotalFinal / staffTotalMax) * 100 : 0;
-                            const staffCompletionRate = staffSubmissionsCount > 0 ? (staffCompletedCount / staffSubmissionsCount) * 100 : 0;
-
-                            // Group submissions by criteria > module
-                            const groupedSubmissions = (staff.submissions || []).reduce((acc: any, sub: any) => {
-                              const crit = sub.criteriaName || "Other Criteria";
-                              const mod = sub.moduleName || "General";
-
-                              if (!acc[crit]) acc[crit] = {};
-                              if (!acc[crit][mod]) acc[crit][mod] = [];
-                              acc[crit][mod].push(sub);
-                              return acc;
-                            }, {});
-
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-6 pb-6 pt-4 bg-background">
+                      <Accordion type="single" collapsible className="divide-y">
+                        {Object.entries(roles).map(
+                          ([roleName, staffArray]: any) => {
+                            const roleStaffCount = staffArray.length;
                             return (
-                              <AccordionItem key={staff.id} value={staff.id} className="my-2">
-                                <AccordionTrigger className="px-4 py-3 hover:bg-muted/30 rounded-md transition-colors data-[state=open]:bg-muted/20">
+                              <AccordionItem
+                                key={roleName}
+                                value={`${collegeName}-${roleName}`}
+                              >
+                                <AccordionTrigger className="px-5 py-3 text-lg font-semibold capitalize hover:bg-secondary/20 transition-colors data-[state=open]:bg-secondary/10">
                                   <div className="flex justify-between w-full pr-4">
-                                    <div className="flex items-center gap-3">
-                                      <User className="h-4 w-4 text-muted-foreground" />
-                                      {staff.name}
-                                    </div>
-                                    <Badge variant="outline" className="text-xs">{staffSubmissionsCount} Submissions</Badge>
+                                    <span>{roleName}</span>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-sm"
+                                    >
+                                      {roleStaffCount} Staff
+                                    </Badge>
                                   </div>
                                 </AccordionTrigger>
-                                <AccordionContent className="px-4 pt-4 pb-6 bg-background">
-                                  <Accordion type="single" collapsible className="space-y-4">
-                                    <AccordionItem value="details">
-                                      <AccordionTrigger className="text-lg font-semibold flex items-center gap-2">
-                                        <User className="h-5 w-5 text-primary" /> Staff Details
-                                      </AccordionTrigger>
-                                      <AccordionContent>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm p-4 border rounded-lg shadow-sm bg-card">
-                                          <div><span className="font-medium">Name:</span> {staff.name}</div>
-                                          <div><span className="font-medium">Email:</span> {staff.email}</div>
-                                          <div><span className="font-medium">Department:</span> {staff.department || "N/A"}</div>
-                                          <div><span className="font-medium">College:</span> {staff.college}</div>
-                                          <div><span className="font-medium">Level:</span> {staff.level || "N/A"}</div>
-                                          <div><span className="font-medium">Role:</span> {staff.role || "N/A"}</div>
-                                        </div>
-                                      </AccordionContent>
-                                    </AccordionItem>
+                                <AccordionContent className="px-5 pb-4 bg-background">
+                                  <Accordion type="single" collapsible>
+                                    {staffArray.map((staff: any) => {
+                                      const staffSubmissionsCount =
+                                        staff.submissions?.length || 0;
+                                      let staffTotalFinal = 0;
+                                      let staffTotalMax = 0;
+                                      let staffTotalClaimed = 0;
+                                      let staffTotalReviewer = 0;
+                                      let staffAppealedCount = 0;
+                                      let staffCompletedCount = 0;
 
-                                    {/* ─── Replaced Performance Summary with ScoreOverview ─── */}
-                                    <AccordionItem value="performance">
-                                      <AccordionTrigger className="text-lg font-semibold flex items-center gap-2">
-                                        <BarChart2 className="h-5 w-5 text-primary" /> Score Overview
-                                      </AccordionTrigger>
-                                      <AccordionContent>
-                                        <div className="p-4 border rounded-lg shadow-sm bg-card">
-                                          <ScoreOverview
-  submissions={staff.submissions || []}
-  userTarget={
-    designations.find(
-      d => normalizeDesignation(d.name) === normalizeDesignation(staff.designation || "")
-    )?.target ?? undefined
-  }
-/>
-                                        </div>
-                                      </AccordionContent>
-                                    </AccordionItem>
+                                      staff.submissions?.forEach((sub: any) => {
+                                        const effectiveFinal =
+                                          sub.finalScore ??
+                                          sub.reviewerScore ??
+                                          sub.claimedScore ??
+                                          0;
+                                        staffTotalFinal += effectiveFinal;
+                                        staffTotalMax += sub.maxMarks ?? 0;
+                                        staffTotalClaimed +=
+                                          sub.claimedScore ?? 0;
+                                        staffTotalReviewer +=
+                                          sub.reviewerScore ?? 0;
+                                        if (sub.status === "appealed")
+                                          staffAppealedCount++;
+                                        if (
+                                          sub.status === "accepted" ||
+                                          sub.status === "appeal-resolved"
+                                        )
+                                          staffCompletedCount++;
+                                      });
 
-                                    <AccordionItem value="submissions">
-                                      <AccordionTrigger className="text-lg font-semibold flex items-center gap-2">
-                                        <Award className="h-5 w-5 text-primary" /> Submissions ({staffSubmissionsCount})
-                                      </AccordionTrigger>
-                                      <AccordionContent>
-                                        <div className="p-4 border rounded-lg shadow-sm bg-card">
-                                          <p className="text-sm text-muted-foreground mb-4">Grouped by Criteria and Module with detailed views</p>
-                                          {Object.keys(groupedSubmissions).length === 0 ? (
-                                            <div className="py-12 text-center text-muted-foreground border border-dashed rounded-lg">
-                                              No submissions found
+                                      const staffProgress =
+                                        staffTotalMax > 0
+                                          ? (staffTotalFinal / staffTotalMax) *
+                                            100
+                                          : 0;
+                                      const staffCompletionRate =
+                                        staffSubmissionsCount > 0
+                                          ? (staffCompletedCount /
+                                              staffSubmissionsCount) *
+                                            100
+                                          : 0;
+
+                                      // Group submissions by criteria > module
+                                      const groupedSubmissions = (
+                                        staff.submissions || []
+                                      ).reduce((acc: any, sub: any) => {
+                                        const crit =
+                                          sub.criteriaName || "Other Criteria";
+                                        const mod = sub.moduleName || "General";
+
+                                        if (!acc[crit]) acc[crit] = {};
+                                        if (!acc[crit][mod])
+                                          acc[crit][mod] = [];
+                                        acc[crit][mod].push(sub);
+                                        return acc;
+                                      }, {});
+
+                                      return (
+                                        <AccordionItem
+                                          key={staff.id}
+                                          value={staff.id}
+                                          className="my-2"
+                                        >
+                                          <AccordionTrigger className="px-4 py-3 hover:bg-muted/30 rounded-md transition-colors data-[state=open]:bg-muted/20">
+                                            <div className="flex justify-between w-full pr-4">
+                                              <div className="flex items-center gap-3">
+                                                <User className="h-4 w-4 text-muted-foreground" />
+                                                {staff.name}
+                                              </div>
+                                              <Badge
+                                                variant="outline"
+                                                className="text-xs"
+                                              >
+                                                {staffSubmissionsCount}{" "}
+                                                Submissions
+                                              </Badge>
                                             </div>
-                                          ) : (
-                                            <Accordion type="single" collapsible className="space-y-4">
-                                              {Object.entries(groupedSubmissions).map(([criteria, modules]: any) => {
-                                                const criteriaModulesCount = Object.keys(modules).length;
-                                                const criteriaSubsCount = Object.values(modules).reduce((sum: number, subs: any) => sum + subs.length, 0);
-                                                return (
-                                                  <AccordionItem key={criteria} value={criteria}>
-                                                    <AccordionTrigger className="px-6 py-4 text-lg font-semibold hover:bg-muted/50 transition-colors data-[state=open]:bg-muted/30">
-                                                      <div className="flex justify-between w-full pr-4">
-                                                        <span>{criteria}</span>
-                                                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                                          <span className="flex items-center gap-1"><BookOpen className="h-4 w-4" /> {criteriaModulesCount} Modules</span>
-                                                          <span className="flex items-center gap-1"><File className="h-4 w-4" /> {criteriaSubsCount} Submissions</span>
-                                                        </div>
+                                          </AccordionTrigger>
+                                          <AccordionContent className="px-4 pt-4 pb-6 bg-background">
+                                            <Accordion
+                                              type="single"
+                                              collapsible
+                                              className="space-y-4"
+                                            >
+                                              <AccordionItem value="details">
+                                                <AccordionTrigger className="text-lg font-semibold flex items-center gap-2">
+                                                  <User className="h-5 w-5 text-primary" />{" "}
+                                                  Staff Details
+                                                </AccordionTrigger>
+                                                <AccordionContent>
+                                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm p-4 border rounded-lg shadow-sm bg-card">
+                                                    <div>
+                                                      <span className="font-medium">
+                                                        Name:
+                                                      </span>{" "}
+                                                      {staff.name}
+                                                    </div>
+                                                    <div>
+                                                      <span className="font-medium">
+                                                        Email:
+                                                      </span>{" "}
+                                                      {staff.email}
+                                                    </div>
+                                                    <div>
+                                                      <span className="font-medium">
+                                                        Department:
+                                                      </span>{" "}
+                                                      {staff.department ||
+                                                        "N/A"}
+                                                    </div>
+                                                    <div>
+                                                      <span className="font-medium">
+                                                        College:
+                                                      </span>{" "}
+                                                      {staff.college}
+                                                    </div>
+                                                    <div>
+                                                      <span className="font-medium">
+                                                        Level:
+                                                      </span>{" "}
+                                                      {staff.level || "N/A"}
+                                                    </div>
+                                                    <div>
+                                                      <span className="font-medium">
+                                                        Role:
+                                                      </span>{" "}
+                                                      {staff.role || "N/A"}
+                                                    </div>
+                                                  </div>
+                                                </AccordionContent>
+                                              </AccordionItem>
+
+                                              {/* ─── Replaced Performance Summary with ScoreOverview ─── */}
+                                              <AccordionItem value="performance">
+                                                <AccordionTrigger className="text-lg font-semibold flex items-center gap-2">
+                                                  <BarChart2 className="h-5 w-5 text-primary" />{" "}
+                                                  Score Overview
+                                                </AccordionTrigger>
+                                                <AccordionContent>
+                                                  <div className="p-4 border rounded-lg shadow-sm bg-card">
+                                                    <ScoreOverview
+                                                      submissions={
+                                                        staff.submissions || []
+                                                      }
+                                                      userTarget={
+                                                        staff.designationTarget ||
+                                                        undefined
+                                                      }
+                                                    />
+                                                  </div>
+                                                </AccordionContent>
+                                              </AccordionItem>
+
+                                              <AccordionItem value="submissions">
+                                                <AccordionTrigger className="text-lg font-semibold flex items-center gap-2">
+                                                  <Award className="h-5 w-5 text-primary" />{" "}
+                                                  Submissions (
+                                                  {staffSubmissionsCount})
+                                                </AccordionTrigger>
+                                                <AccordionContent>
+                                                  <div className="p-4 border rounded-lg shadow-sm bg-card">
+                                                    <p className="text-sm text-muted-foreground mb-4">
+                                                      Grouped by Criteria and
+                                                      Module with detailed views
+                                                    </p>
+                                                    {Object.keys(
+                                                      groupedSubmissions,
+                                                    ).length === 0 ? (
+                                                      <div className="py-12 text-center text-muted-foreground border border-dashed rounded-lg">
+                                                        No submissions found
                                                       </div>
-                                                    </AccordionTrigger>
-                                                    <AccordionContent className="px-6 pb-6 pt-2 bg-background">
-                                                      <Accordion type="single" collapsible className="space-y-3">
-                                                        {Object.entries(modules).map(([moduleName, subs]: any) => {
-                                                          const moduleSubsCount = subs.length;
-                                                          return (
-                                                            <AccordionItem key={moduleName} value={`${criteria}-${moduleName}`}>
-                                                              <AccordionTrigger className="px-5 py-3 hover:bg-secondary/20 transition-colors data-[state=open]:bg-secondary/10">
-                                                                <div className="flex justify-between w-full pr-4">
-                                                                  <div className="flex items-center gap-2">
-                                                                    <BookOpen className="h-4 w-4 text-primary" />
-                                                                    {moduleName}
+                                                    ) : (
+                                                      <Accordion
+                                                        type="single"
+                                                        collapsible
+                                                        className="space-y-4"
+                                                      >
+                                                        {Object.entries(
+                                                          groupedSubmissions,
+                                                        ).map(
+                                                          ([
+                                                            criteria,
+                                                            modules,
+                                                          ]: any) => {
+                                                            const criteriaModulesCount =
+                                                              Object.keys(
+                                                                modules,
+                                                              ).length;
+                                                            const criteriaSubsCount =
+                                                              Object.values(
+                                                                modules,
+                                                              ).reduce(
+                                                                (
+                                                                  sum: number,
+                                                                  subs: any,
+                                                                ) =>
+                                                                  sum +
+                                                                  subs.length,
+                                                                0,
+                                                              );
+                                                            return (
+                                                              <AccordionItem
+                                                                key={criteria}
+                                                                value={criteria}
+                                                              >
+                                                                <AccordionTrigger className="px-6 py-4 text-lg font-semibold hover:bg-muted/50 transition-colors data-[state=open]:bg-muted/30">
+                                                                  <div className="flex justify-between w-full pr-4">
+                                                                    <span>
+                                                                      {criteria}
+                                                                    </span>
+                                                                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                                                      <span className="flex items-center gap-1">
+                                                                        <BookOpen className="h-4 w-4" />{" "}
+                                                                        {
+                                                                          criteriaModulesCount
+                                                                        }{" "}
+                                                                        Modules
+                                                                      </span>
+                                                                      <span className="flex items-center gap-1">
+                                                                        <File className="h-4 w-4" />{" "}
+                                                                        {
+                                                                          criteriaSubsCount
+                                                                        }{" "}
+                                                                        Submissions
+                                                                      </span>
+                                                                    </div>
                                                                   </div>
-                                                                  <Badge variant="outline" className="ml-2 text-xs">
-                                                                    {moduleSubsCount} item{moduleSubsCount !== 1 ? "s" : ""}
-                                                                  </Badge>
-                                                                </div>
-                                                              </AccordionTrigger>
-                                                              <AccordionContent className="px-5 pb-5 pt-3 bg-background">
-                                                                <div className="space-y-4">
-                                                                  {subs.map((sub: any) => {
-                                                                    const effectiveFinal = sub.finalScore ?? sub.reviewerScore ?? sub.claimedScore ?? 0;
-                                                                    const subProgress = sub.maxMarks > 0 ? (effectiveFinal / sub.maxMarks) * 100 : 0;
-                                                                    return (
-                                                                      <Card
-                                                                        key={sub.id}
-                                                                        className="border shadow-sm hover:shadow-md transition-shadow rounded-lg overflow-hidden"
-                                                                      >
-                                                                        <CardHeader className="pb-2 bg-muted/10 px-4 py-3">
-                                                                          <div className="flex justify-between items-start">
-                                                                            <CardTitle className="text-base font-semibold">{sub.taskName}</CardTitle>
-                                                                            {/* <Badge
+                                                                </AccordionTrigger>
+                                                                <AccordionContent className="px-6 pb-6 pt-2 bg-background">
+                                                                  <Accordion
+                                                                    type="single"
+                                                                    collapsible
+                                                                    className="space-y-3"
+                                                                  >
+                                                                    {Object.entries(
+                                                                      modules,
+                                                                    ).map(
+                                                                      ([
+                                                                        moduleName,
+                                                                        subs,
+                                                                      ]: any) => {
+                                                                        const moduleSubsCount =
+                                                                          subs.length;
+                                                                        return (
+                                                                          <AccordionItem
+                                                                            key={
+                                                                              moduleName
+                                                                            }
+                                                                            value={`${criteria}-${moduleName}`}
+                                                                          >
+                                                                            <AccordionTrigger className="px-5 py-3 hover:bg-secondary/20 transition-colors data-[state=open]:bg-secondary/10">
+                                                                              <div className="flex justify-between w-full pr-4">
+                                                                                <div className="flex items-center gap-2">
+                                                                                  <BookOpen className="h-4 w-4 text-primary" />
+                                                                                  {
+                                                                                    moduleName
+                                                                                  }
+                                                                                </div>
+                                                                                <Badge
+                                                                                  variant="outline"
+                                                                                  className="ml-2 text-xs"
+                                                                                >
+                                                                                  {
+                                                                                    moduleSubsCount
+                                                                                  }{" "}
+                                                                                  item
+                                                                                  {moduleSubsCount !==
+                                                                                  1
+                                                                                    ? "s"
+                                                                                    : ""}
+                                                                                </Badge>
+                                                                              </div>
+                                                                            </AccordionTrigger>
+                                                                            <AccordionContent className="px-5 pb-5 pt-3 bg-background">
+                                                                              <div className="space-y-4">
+                                                                                {subs.map(
+                                                                                  (
+                                                                                    sub: any,
+                                                                                  ) => {
+                                                                                    const effectiveFinal =
+                                                                                      sub.finalScore ??
+                                                                                      sub.reviewerScore ??
+                                                                                      sub.claimedScore ??
+                                                                                      0;
+                                                                                    const subProgress =
+                                                                                      sub.maxMarks >
+                                                                                      0
+                                                                                        ? (effectiveFinal /
+                                                                                            sub.maxMarks) *
+                                                                                          100
+                                                                                        : 0;
+                                                                                    return (
+                                                                                      <Card
+                                                                                        key={
+                                                                                          sub.id
+                                                                                        }
+                                                                                        className="border shadow-sm hover:shadow-md transition-shadow rounded-lg overflow-hidden"
+                                                                                      >
+                                                                                        <CardHeader className="pb-2 bg-muted/10 px-4 py-3">
+                                                                                          <div className="flex justify-between items-start">
+                                                                                            <CardTitle className="text-base font-semibold">
+                                                                                              {
+                                                                                                sub.taskName
+                                                                                              }
+                                                                                            </CardTitle>
+                                                                                            {/* <Badge
                                                                               variant={statusConfig[sub.status]?.variant || "outline"}
                                                                               className="text-xs px-3 py-0.5"
                                                                             >
                                                                               {statusConfig[sub.status]?.label || sub.status}
                                                                             </Badge> */}
-                                                                          </div>
-                                                                        </CardHeader>
-                                                                        <CardContent className="px-4 py-3">
-                                                                          <div className="space-y-4">
-                                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                                                                              <p><span className="font-medium">Form:</span> {sub.formTitle}</p>
-                                                                              <p><span className="font-medium">Claimed:</span> {sub.claimedScore}</p>
-                                                                              <p><span className="font-medium">Reviewer:</span> {sub.reviewerScore ?? "—"}</p>
-                                                                              <p><span className="font-medium">Final:</span> {sub.finalScore ?? sub.reviewerScore ?? sub.claimedScore ?? "Pending"}</p>
-                                                                              <p><span className="font-medium">Max Marks:</span> {sub.maxMarks}</p>
-                                                                              {/* {sub.createdAt && (
+                                                                                          </div>
+                                                                                        </CardHeader>
+                                                                                        <CardContent className="px-4 py-3">
+                                                                                          <div className="space-y-4">
+                                                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                                                                                              <p>
+                                                                                                <span className="font-medium">
+                                                                                                  Form:
+                                                                                                </span>{" "}
+                                                                                                {
+                                                                                                  sub.formTitle
+                                                                                                }
+                                                                                              </p>
+                                                                                              <p>
+                                                                                                <span className="font-medium">
+                                                                                                  Claimed:
+                                                                                                </span>{" "}
+                                                                                                {
+                                                                                                  sub.claimedScore
+                                                                                                }
+                                                                                              </p>
+                                                                                              <p>
+                                                                                                <span className="font-medium">
+                                                                                                  Reviewer:
+                                                                                                </span>{" "}
+                                                                                                {sub.reviewerScore ??
+                                                                                                  "—"}
+                                                                                              </p>
+                                                                                              <p>
+                                                                                                <span className="font-medium">
+                                                                                                  Final:
+                                                                                                </span>{" "}
+                                                                                                {sub.finalScore ??
+                                                                                                  sub.reviewerScore ??
+                                                                                                  sub.claimedScore ??
+                                                                                                  "Pending"}
+                                                                                              </p>
+                                                                                              <p>
+                                                                                                <span className="font-medium">
+                                                                                                  Max
+                                                                                                  Marks:
+                                                                                                </span>{" "}
+                                                                                                {
+                                                                                                  sub.maxMarks
+                                                                                                }
+                                                                                              </p>
+                                                                                              {/* {sub.createdAt && (
                                                                                 <p><span className="font-medium">Submitted:</span> {new Date(sub.createdAt.seconds * 1000).toLocaleDateString()}</p>
                                                                               )} */}
-                                                                            </div>
-                                                                            {/* <div className="space-y-2">
+                                                                                            </div>
+                                                                                            {/* <div className="space-y-2">
                                                                               <div className="flex justify-between text-sm">
                                                                                 <span>Progress</span>
                                                                                 <span>{subProgress.toFixed(1)}%</span>
                                                                               </div>
                                                                               <Progress value={subProgress} className="h-2" />
                                                                             </div> */}
-                                                                          </div>
-                                                                        </CardContent>
-                                                                      </Card>
-                                                                    );
-                                                                  })}
-                                                                </div>
-                                                              </AccordionContent>
-                                                            </AccordionItem>
-                                                          );
-                                                        })}
+                                                                                          </div>
+                                                                                        </CardContent>
+                                                                                      </Card>
+                                                                                    );
+                                                                                  },
+                                                                                )}
+                                                                              </div>
+                                                                            </AccordionContent>
+                                                                          </AccordionItem>
+                                                                        );
+                                                                      },
+                                                                    )}
+                                                                  </Accordion>
+                                                                </AccordionContent>
+                                                              </AccordionItem>
+                                                            );
+                                                          },
+                                                        )}
                                                       </Accordion>
-                                                    </AccordionContent>
-                                                  </AccordionItem>
-                                                );
-                                              })}
+                                                    )}
+                                                  </div>
+                                                </AccordionContent>
+                                              </AccordionItem>
                                             </Accordion>
-                                          )}
-                                        </div>
-                                      </AccordionContent>
-                                    </AccordionItem>
+                                          </AccordionContent>
+                                        </AccordionItem>
+                                      );
+                                    })}
                                   </Accordion>
                                 </AccordionContent>
                               </AccordionItem>
                             );
-                          })}
-                        </Accordion>
-                      </AccordionContent>
-                    </AccordionItem>
-                  );
-                })}
-              </Accordion>
-            </AccordionContent>
-          </AccordionItem>
-        );
-      })}
-    </Accordion>
-  </CardContent>
-</Card>
+                          },
+                        )}
+                      </Accordion>
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })}
+            </Accordion>
+          </CardContent>
+        </Card>
 
-{["committee", "principle", "vice principle"].includes(user?.role || "") && (
-  <div className="mt-8 mb-6 bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden">
-    {/* Header */}
-    <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-100">
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-blue-100 rounded-lg">
-          <svg 
-            className="w-5 h-5 text-blue-600" 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
-          </svg>
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">Filter Submissions</h3>
-          <p className="text-sm text-gray-600 mt-0.5">
-            Refine the list using the options below
-          </p>
-        </div>
-      </div>
-    </div>
+        {["committee", "principle", "vice principle"].includes(
+          user?.role || "",
+        ) && (
+          <div className="mt-8 mb-6 bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <svg
+                    className="w-5 h-5 text-blue-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Filter Submissions
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-0.5">
+                    Refine the list using the options below
+                  </p>
+                </div>
+              </div>
+            </div>
 
-    {/* Filters */}
-    <div className="p-6 space-y-5">
-      {/* College - only for committee */}
-      {user?.role === "committee" && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            College
-          </label>
-          <select
-            className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
-            value={selectedCollege}
-            onChange={e => {
-              setSelectedCollege(e.target.value);
-              setSelectedStaff("All");
-            }}
-          >
-            <option value="All">All Colleges</option>
-            {staffList
-              .map(s => s.college)
-              .filter((v, i, a) => a.indexOf(v) === i)
-              .sort()
-              .map(college => (
-                <option key={college} value={college}>
-                  {college}
-                </option>
-              ))}
-          </select>
-        </div>
-      )}
+            {/* Filters */}
+            <div className="p-6 space-y-5">
+              {/* College - only for committee */}
+              {user?.role === "committee" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    College
+                  </label>
+                  <select
+                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
+                    value={selectedCollege}
+                    onChange={(e) => {
+                      setSelectedCollege(e.target.value);
+                      setSelectedStaff("All");
+                    }}
+                  >
+                    <option value="All">All Colleges</option>
+                    {staffList
+                      .map((s) => s.college)
+                      .filter((v, i, a) => a.indexOf(v) === i)
+                      .sort()
+                      .map((college) => (
+                        <option key={college} value={college}>
+                          {college}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
 
-      {/* Role */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Role
-        </label>
-        <select
-          className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
-          value={selectedRole}
-          onChange={e => {
-            setSelectedRole(e.target.value);
-            setSelectedStaff("All");
-            setSelectedCriteria("All");
-            setSelectedModule("All");
-          }}
-        >
-          <option value="All">All Roles</option>
-          {staffList
-            .filter(s => selectedCollege === "All" || s.college === selectedCollege)
-            .map(s => s.role)
-            .filter((v,i,a)=>a.indexOf(v)===i)
-            .sort()
-            .map(role => (
-              <option key={role} value={role}>
-                {role}
-              </option>
-            ))}
-        </select>
-      </div>
+              {/* Role */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Role
+                </label>
+                <select
+                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
+                  value={selectedRole}
+                  onChange={(e) => {
+                    setSelectedRole(e.target.value);
+                    setSelectedStaff("All");
+                    setSelectedCriteria("All");
+                    setSelectedModule("All");
+                  }}
+                >
+                  <option value="All">All Roles</option>
+                  {staffList
+                    .filter(
+                      (s) =>
+                        selectedCollege === "All" ||
+                        s.college === selectedCollege,
+                    )
+                    .map((s) => s.role)
+                    .filter((v, i, a) => a.indexOf(v) === i)
+                    .sort()
+                    .map((role) => (
+                      <option key={role} value={role}>
+                        {role}
+                      </option>
+                    ))}
+                </select>
+              </div>
 
-      {/* Staff */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Staff Member
-        </label>
-        <select
-          className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
-          value={selectedStaff}
-          onChange={e => {
-            setSelectedStaff(e.target.value);
-            setSelectedCriteria("All");
-            setSelectedModule("All");
-          }}
-        >
-          <option value="All">All Staff</option>
-          {staffList
-            .filter(s => 
-              (selectedCollege === "All" || s.college === selectedCollege) &&
-              (selectedRole === "All" || s.role === selectedRole)
-            )
-            .map(s => s.name)
-            .filter((v,i,a)=>a.indexOf(v)===i)
-            .sort()
-            .map(name => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-        </select>
-      </div>
+              {/* Staff */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Staff Member
+                </label>
+                <select
+                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
+                  value={selectedStaff}
+                  onChange={(e) => {
+                    setSelectedStaff(e.target.value);
+                    setSelectedCriteria("All");
+                    setSelectedModule("All");
+                  }}
+                >
+                  <option value="All">All Staff</option>
+                  {staffList
+                    .filter(
+                      (s) =>
+                        (selectedCollege === "All" ||
+                          s.college === selectedCollege) &&
+                        (selectedRole === "All" || s.role === selectedRole),
+                    )
+                    .map((s) => s.name)
+                    .filter((v, i, a) => a.indexOf(v) === i)
+                    .sort()
+                    .map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                </select>
+              </div>
 
-      {/* Criteria */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Criteria
-        </label>
-        <select
-          className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
-          value={selectedCriteria}
-          onChange={e => {
-            setSelectedCriteria(e.target.value);
-            setSelectedModule("All");
-          }}
-        >
-          <option value="All">All Criteria</option>
-          {staffList
-            .filter(s => 
-              (selectedCollege === "All" || s.college === selectedCollege) &&
-              (selectedRole === "All" || s.role === selectedRole) &&
-              (selectedStaff === "All" || s.name === selectedStaff)
-            )
-            .flatMap(s => s.submissions || [])
-            .map(s => s.criteriaName)
-            .filter((v,i,a)=>a.indexOf(v)===i)
-            .sort()
-            .map(name => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-        </select>
-      </div>
+              {/* Criteria */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Criteria
+                </label>
+                <select
+                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
+                  value={selectedCriteria}
+                  onChange={(e) => {
+                    setSelectedCriteria(e.target.value);
+                    setSelectedModule("All");
+                  }}
+                >
+                  <option value="All">All Criteria</option>
+                  {staffList
+                    .filter(
+                      (s) =>
+                        (selectedCollege === "All" ||
+                          s.college === selectedCollege) &&
+                        (selectedRole === "All" || s.role === selectedRole) &&
+                        (selectedStaff === "All" || s.name === selectedStaff),
+                    )
+                    .flatMap((s) => s.submissions || [])
+                    .map((s) => s.criteriaName)
+                    .filter((v, i, a) => a.indexOf(v) === i)
+                    .sort()
+                    .map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                </select>
+              </div>
 
-      {/* Module */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Module
-        </label>
-        <select
-          className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
-          value={selectedModule}
-          onChange={e => setSelectedModule(e.target.value)}
-        >
-          <option value="All">All Modules</option>
-          {staffList
-            .filter(s => 
-              (selectedCollege === "All" || s.college === selectedCollege) &&
-              (selectedRole === "All" || s.role === selectedRole) &&
-              (selectedStaff === "All" || s.name === selectedStaff)
-            )
-            .flatMap(s => s.submissions || [])
-            .filter(sub => selectedCriteria === "All" || sub.criteriaName === selectedCriteria)
-            .map(sub => sub.moduleName)
-            .filter((v,i,a)=>a.indexOf(v)===i)
-            .sort()
-            .map(name => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-        </select>
-      </div>
+              {/* Module */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Module
+                </label>
+                <select
+                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-colors"
+                  value={selectedModule}
+                  onChange={(e) => setSelectedModule(e.target.value)}
+                >
+                  <option value="All">All Modules</option>
+                  {staffList
+                    .filter(
+                      (s) =>
+                        (selectedCollege === "All" ||
+                          s.college === selectedCollege) &&
+                        (selectedRole === "All" || s.role === selectedRole) &&
+                        (selectedStaff === "All" || s.name === selectedStaff),
+                    )
+                    .flatMap((s) => s.submissions || [])
+                    .filter(
+                      (sub) =>
+                        selectedCriteria === "All" ||
+                        sub.criteriaName === selectedCriteria,
+                    )
+                    .map((sub) => sub.moduleName)
+                    .filter((v, i, a) => a.indexOf(v) === i)
+                    .sort()
+                    .map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                </select>
+              </div>
 
-      {/* Apply Button */}
-      <button
-        onClick={applyFilter}
-        className="w-full mt-3 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-1"
-      >
-        Apply Filters
-      </button>
-    </div>
-  </div>
-)}
+              {/* Apply Button */}
+              <button
+                onClick={applyFilter}
+                className="w-full mt-3 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow transition-colors focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-1"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        )}
 
-{filteredData.length > 0 && (
-  <div className="mt-6 mb-6 bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden">
-    {/* Header */}
-    <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-indigo-100 rounded-lg">
-          <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-        </div>
-        <h3 className="text-lg font-semibold text-gray-900">Filtered Submissions</h3>
-      </div>
-    </div>
+        {filteredData.length > 0 && (
+          <div className="mt-6 mb-6 bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 rounded-lg">
+                  <svg
+                    className="w-5 h-5 text-indigo-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Filtered Submissions
+                </h3>
+              </div>
+            </div>
 
-    {/* Content */}
-    <div className="p-6 space-y-5">
-      {filteredData.map(sub => (
-        <div 
-          key={sub.id} 
-          className="border border-gray-200 rounded-lg overflow-hidden bg-white hover:shadow-md transition-shadow"
-        >
-          <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-            <h4 className="font-medium text-gray-900">{sub.taskName}</h4>
-            {/* <span 
+            {/* Content */}
+            <div className="p-6 space-y-5">
+              {filteredData.map((sub) => (
+                <div
+                  key={sub.id}
+                  className="border border-gray-200 rounded-lg overflow-hidden bg-white hover:shadow-md transition-shadow"
+                >
+                  <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+                    <h4 className="font-medium text-gray-900">
+                      {sub.taskName}
+                    </h4>
+                    {/* <span 
               className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
                 statusConfig[sub.status]?.variant === "success" ? "bg-green-100 text-green-800" :
                 statusConfig[sub.status]?.variant === "warning" ? "bg-yellow-100 text-yellow-800" :
@@ -819,46 +1142,59 @@ const applyFilter = () => {
             >
               {statusConfig[sub.status]?.label || sub.status}
             </span> */}
-          </div>
+                  </div>
 
-          <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
-            <div>
-              <span className="font-medium text-gray-700">Staff:</span>{' '}
-              {staffList.find(staff => 
-                (staff.submissions || []).some(s => s.id === sub.id)
-              )?.name ?? "Unknown"}
-            </div>
-            <div>
-              <span className="font-medium text-gray-700">Form:</span> {sub.formTitle}
-            </div>
-            <div>
-              <span className="font-medium text-gray-700">Claimed:</span> {sub.claimedScore}
-            </div>
-            <div>
-              <span className="font-medium text-gray-700">Reviewer:</span> {sub.reviewerScore ?? "—"}
-            </div>
-            <div>
-              <span className="font-medium text-gray-700">Final:</span>{' '}
-              {sub.finalScore ?? sub.reviewerScore ?? sub.claimedScore ?? "Pending"}
-            </div>
-            <div>
-              <span className="font-medium text-gray-700">Max Marks:</span> {sub.maxMarks}
+                  <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                    <div>
+                      <span className="font-medium text-gray-700">Staff:</span>{" "}
+                      {staffList.find((staff) =>
+                        (staff.submissions || []).some((s) => s.id === sub.id),
+                      )?.name ?? "Unknown"}
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">Form:</span>{" "}
+                      {sub.formTitle}
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">
+                        Claimed:
+                      </span>{" "}
+                      {sub.claimedScore}
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">
+                        Reviewer:
+                      </span>{" "}
+                      {sub.reviewerScore ?? "—"}
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">Final:</span>{" "}
+                      {sub.finalScore ??
+                        sub.reviewerScore ??
+                        sub.claimedScore ??
+                        "Pending"}
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">
+                        Max Marks:
+                      </span>{" "}
+                      {sub.maxMarks}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {filteredData.length === 0 && (
+                <div className="py-12 text-center text-gray-500">
+                  No submissions match the selected filters
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      ))}
-
-      {filteredData.length === 0 && (
-        <div className="py-12 text-center text-gray-500">
-          No submissions match the selected filters
-        </div>
-      )}
-    </div>
-  </div>
-)}
-    </DashboardLayout>
-  );
-}
+        )}
+      </DashboardLayout>
+    );
+  }
 
   const totalSubmissions = submissions.length;
   let totalClaimed = 0;
@@ -872,88 +1208,79 @@ const applyFilter = () => {
     totalReviewer += sub.reviewerScore ?? 0;
     totalFinal += sub.finalScore ?? 0;
     totalMax += sub.maxMarks ?? 0;
-    if (sub.status === "accepted" || sub.status === "appeal-resolved") completedCount++;
+    if (sub.status === "accepted" || sub.status === "appeal-resolved")
+      completedCount++;
     if (sub.status === "appealed") appealedCount++;
   });
-
 
   return (
     <DashboardLayout
       title={`${displayName}'s Dashboard`}
       subtitle={`Welcome back, ${displayName.split(" ")[0]}!`}
     >
-     {user?.role !== "committee" && (
-  <div className="mb-6">
-    <DeadlineAlert
-      onCompleteClick={() => {
-        window.location.href = "/submit-performance"; 
-      }}
-    />
-  </div>
-)}
+      {user?.role !== "committee" && (
+        <div className="mb-6">
+          <DeadlineAlert
+            onCompleteClick={() => {
+              window.location.href = "/submit-performance";
+            }}
+          />
+        </div>
+      )}
 
       <div className="space-y-8">
-        <StatusCards 
-  role={user?.role || "faculty"} 
-  submissions={submissions} 
-/>
+        <StatusCards role={user?.role || "faculty"} submissions={submissions} />
 
-<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-  <ScoreOverview 
-  submissions={submissions} 
-  userTarget={userTarget} 
-/>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <ScoreOverview submissions={submissions} userTarget={userTarget} />
 
-  {user && (
-  <div className="space-y-6">
-    
-    {/* User Profile */}
-    <UserProfile user={user} />
+          {user && (
+            <div className="space-y-6">
+              {/* User Profile */}
+              <UserProfile user={user} />
 
-    {/* Target Card */}
-    <Card className="shadow-sm border">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Briefcase className="h-5 w-5 text-primary" />
-          Your Target
-        </CardTitle>
-        <CardDescription>
-          {user.designation || "Designation"}
-        </CardDescription>
-      </CardHeader>
+              {/* Target Card */}
+              <Card className="shadow-sm border">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Briefcase className="h-5 w-5 text-primary" />
+                    Your Target
+                  </CardTitle>
+                  <CardDescription>
+                    {user.designation || "Designation"}
+                  </CardDescription>
+                </CardHeader>
 
-      <CardContent className="text-center py-4">
-        <p className="text-4xl font-bold text-primary">
-          {userTarget}
-        </p>
-        <p className="text-sm text-muted-foreground mt-1">
-          {userTarget === "Not assigned" || userTarget === "Not found"
-            ? "Contact admin"
-            : "Target points"}
-        </p>
-      </CardContent>
-    </Card>
+                <CardContent className="text-center py-4">
+                  <p className="text-4xl font-bold text-primary">
+                    {userTarget}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {userTarget === "Not assigned" || userTarget === "Not found"
+                      ? "Contact admin"
+                      : "Target points"}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
-  </div>
-)}
+          <QuickActions />
+        </div>
 
-  <QuickActions />
-</div>
+        <RecentActivity submissions={submissions}></RecentActivity>
 
-<RecentActivity submissions={submissions} ></RecentActivity>
-
-
-<div className="space-y-4">
+        <div className="space-y-4">
           <div>
-            <h2 className="text-xl font-semibold text-foreground">FPMS Categories</h2>
+            <h2 className="text-xl font-semibold text-foreground">
+              FPMS Categories
+            </h2>
             <p className="text-sm text-muted-foreground">
               Complete all sections to submit your annual performance report
             </p>
           </div>
-           <FPMSFormOverview submissions={submissions}></FPMSFormOverview>
+          <FPMSFormOverview submissions={submissions}></FPMSFormOverview>
         </div>
-
- 
       </div>
     </DashboardLayout>
   );
