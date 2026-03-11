@@ -1,30 +1,32 @@
 import admin from 'firebase-admin';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Check if environment variable exists
+if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+  console.error("FIREBASE_SERVICE_ACCOUNT is missing in environment variables");
+  process.exit(1);
+}
+
+let serviceAccount;
 
 try {
-  let serviceAccount;
+  // Parse Firebase credentials from environment variable
+  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  } else {
-    const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
-    serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+  // Initialize Firebase only once
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
   }
 
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-
   console.log("FIREBASE CONNECTED SUCCESSFULLY");
+
 } catch (error) {
   console.error("FIREBASE CONNECTION FAILED");
   console.error(error);
+  process.exit(1);
 }
 
+// Export Firebase services
 export const auth = admin.auth();
-export const db = admin.firestore();      
+export const db = admin.firestore();
