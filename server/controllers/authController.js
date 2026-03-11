@@ -991,7 +991,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
           : undefined,
       college: decodedToken?.college || "", // ← add this
       department: decodedToken?.department || "",
-      designation: decodedToken?.designation || ""
+      designation: decodedToken?.designation || "",
     };
   }
 
@@ -1041,7 +1041,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
           : undefined,
       college,
       department,
-      designation 
+      designation,
     };
   }
 
@@ -1058,7 +1058,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
           userData.level !== undefined ? Number(userData.level) : undefined,
         college: userData.college || "", // ← add this
         department: userData.department || "",
-        designation: userData.designation || ""
+        designation: userData.designation || "",
       };
     }
 
@@ -1067,7 +1067,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
       level: userData.level !== undefined ? Number(userData.level) : undefined,
       college: userData.college || "", // ← add this
       department: userData.department || "",
-      designation: userData.designation || ""
+      designation: userData.designation || "",
     };
   }
 
@@ -1095,7 +1095,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
               : undefined,
           college: committeeData.college || "", // ← add this
           department: committeeData.department || "",
-          designation: committeeData.designation || ""
+          designation: committeeData.designation || "",
         };
       }
     }
@@ -1119,7 +1119,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
           level: undefined,
           college: adminData.college || "",
           department: "",
-          designation: adminData.designation || ""
+          designation: adminData.designation || "",
         };
       }
     } catch (e) {
@@ -1132,7 +1132,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
     level: undefined,
     college: "",
     department: "",
-    designation: ""
+    designation: "",
   };
 };
 
@@ -1191,22 +1191,33 @@ export const unifiedLogin = async (req, res) => {
     if (resolvedCollege && resolvedDesignation) {
       try {
         const normDesig = (s) =>
-          String(s || "").trim().toLowerCase().replace(/f{2,}/g, "f").replace(/s{2,}/g, "s");
-        const saDoc = await db.collection("superadmin").doc(SUPERADMIN_DOC_ID).get();
+          String(s || "")
+            .trim()
+            .toLowerCase();
+        const saDoc = await db
+          .collection("superadmin")
+          .doc(SUPERADMIN_DOC_ID)
+          .get();
         if (saDoc.exists) {
           const saColleges = saDoc.data()?.colleges || [];
           const col = saColleges.find(
-            (c) => String(c?.name || "").trim().toLowerCase() === resolvedCollege.toLowerCase()
+            (c) =>
+              String(c?.name || "")
+                .trim()
+                .toLowerCase() === resolvedCollege.toLowerCase(),
           );
           if (col) {
             const des = (col.designations || []).find(
-              (d) => normDesig(d?.name) === normDesig(resolvedDesignation)
+              (d) => normDesig(d?.name) === normDesig(resolvedDesignation),
             );
             designationTarget = des?.target || "";
           }
         }
       } catch (e) {
-        console.error("[unifiedLogin] designationTarget lookup failed:", e.message);
+        console.error(
+          "[unifiedLogin] designationTarget lookup failed:",
+          e.message,
+        );
       }
     }
 
@@ -2096,26 +2107,60 @@ export const getCriteriaModulesTasks = async (req, res) => {
   }
 };
 
-
-
 export const getCommitteeDashboard = async (req, res) => {
   try {
+    const normDesig = (s) =>
+      String(s || "")
+        .trim()
+        .toLowerCase();
+
     // Fetch all submissions first
     const submissionsSnap = await db.collection("submissions").get();
-    const allSubmissions = submissionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const allSubmissions = submissionsSnap.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
 
     // Build a map from userId → submissions
     const submissionsMap = new Map();
-    allSubmissions.forEach(sub => {
+    allSubmissions.forEach((sub) => {
       if (!submissionsMap.has(sub.userId)) submissionsMap.set(sub.userId, []);
       submissionsMap.get(sub.userId).push(sub);
     });
 
+    // Build per-college designation target maps
+    const saDoc = await db
+      .collection("superadmin")
+      .doc(SUPERADMIN_DOC_ID)
+      .get();
+    const saColleges = saDoc.exists ? saDoc.data()?.colleges || [] : [];
+    const collegeDesignationMap = {}; // college name (lower) → { normDesigName → target }
+    saColleges.forEach((c) => {
+      const key = String(c?.name || "")
+        .trim()
+        .toLowerCase();
+      collegeDesignationMap[key] = {};
+      (c.designations || []).forEach((d) => {
+        if (d?.name)
+          collegeDesignationMap[key][normDesig(d.name)] = d.target || "";
+      });
+    });
+
     // Fetch all users
     const usersSnap = await db.collection("users").get();
-    const staff = usersSnap.docs.map(doc => {
+    const staff = usersSnap.docs.map((doc) => {
       const data = doc.data();
-      return { ...data, id: doc.id, submissions: submissionsMap.get(data.uid) || [] };
+      const collegeKey = String(data.college || "")
+        .trim()
+        .toLowerCase();
+      const designTargetMap = collegeDesignationMap[collegeKey] || {};
+      return {
+        ...data,
+        id: doc.id,
+        designationTarget:
+          designTargetMap[normDesig(data.designation || "")] || "",
+        submissions: submissionsMap.get(data.uid) || [],
+      };
     });
 
     return res.json({ success: true, data: { staff } });

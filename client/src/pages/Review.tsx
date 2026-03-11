@@ -74,21 +74,23 @@ function EvidenceViewer({ evidence }: { evidence: string | null }) {
   const lower = url.toLowerCase();
 
   const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(lower);
-  const isPdf = /\.(pdf)$/i.test(lower) || lower.includes("drive.google.com") || lower.includes("docs.google.com");
+  const isPdf =
+    /\.(pdf)$/i.test(lower) ||
+    lower.includes("drive.google.com") ||
+    lower.includes("docs.google.com");
 
   let embedUrl = url;
   if (url.includes("drive.google.com/file/d/")) {
     const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (match?.[1]) embedUrl = `https://drive.google.com/file/d/${match[1]}/preview`;
+    if (match?.[1])
+      embedUrl = `https://drive.google.com/file/d/${match[1]}/preview`;
   } else if (isPdf && !url.includes("docs.google.com")) {
     embedUrl = `https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(url)}`;
   }
 
   return (
     <>
-      <p className="text-muted-foreground line-clamp-2 break-all mb-2">
-        {url}
-      </p>
+      <p className="text-muted-foreground line-clamp-2 break-all mb-2">{url}</p>
 
       {isImage && (
         <div className="mt-2">
@@ -132,7 +134,11 @@ function EvidenceViewer({ evidence }: { evidence: string | null }) {
             <DialogTitle>Evidence View</DialogTitle>
           </DialogHeader>
           <div className="mt-2 flex justify-center bg-muted/40 p-2 rounded">
-            <img src={url} alt="Full evidence" className="max-w-full max-h-[70vh] object-contain" />
+            <img
+              src={url}
+              alt="Full evidence"
+              className="max-w-full max-h-[70vh] object-contain"
+            />
           </div>
         </DialogContent>
       </Dialog>
@@ -151,9 +157,13 @@ export default function Review() {
   const [reviewInputs, setReviewInputs] = useState<
     Record<string, { verifiedScore: string; remarks: string }>
   >({});
-  const [selectedFacultyEmail, setSelectedFacultyEmail] = useState<string | null>(null);
+  const [selectedFacultyEmail, setSelectedFacultyEmail] = useState<
+    string | null
+  >(null);
 
   const isHOD = (user?.role || "").toLowerCase() === "hod";
+  const isCommittee = user?.role === "committee";
+  const isPrinciple = user?.role === "principle";
   const canReview = user?.role && user.role !== "faculty";
 
   const fetchQueue = async () => {
@@ -164,8 +174,12 @@ export default function Review() {
         api.get("/api/submissions/my-reviewed"),
       ]);
 
-      const pending = Array.isArray(pendingRes.data?.data) ? pendingRes.data.data : [];
-      const reviewed = Array.isArray(reviewedRes.data?.data) ? reviewedRes.data.data : [];
+      const pending = Array.isArray(pendingRes.data?.data)
+        ? pendingRes.data.data
+        : [];
+      const reviewed = Array.isArray(reviewedRes.data?.data)
+        ? reviewedRes.data.data
+        : [];
 
       setQueue(pending);
       setReviewedItems(reviewed);
@@ -177,7 +191,8 @@ export default function Review() {
           if (!id || next[id]) return;
           next[id] = {
             verifiedScore:
-              item.claimedScore !== null && Number.isFinite(Number(item.claimedScore))
+              item.claimedScore !== null &&
+              Number.isFinite(Number(item.claimedScore))
                 ? String(item.claimedScore)
                 : "",
             remarks: "",
@@ -229,63 +244,332 @@ export default function Review() {
   const displayUser = (item: SubmissionItem) =>
     isHOD ? item.userName || item.userEmail || "—" : "Faculty Member";
 
-  // ─── Faculty grouping & status ────────────────────────────────────────
-  const facultyMap = isHOD
-    ? [...queue, ...reviewedItems].reduce((acc, item) => {
+  // ─── Grouping helpers ─────────────────────────────────────────────────
+  const allItems = [...queue, ...reviewedItems];
+
+  const filteredItems = searchTerm.trim()
+    ? allItems.filter((item) =>
+        [
+          item.userName,
+          item.userEmail,
+          item.college,
+          item.department,
+          item.criteriaName,
+          item.taskName,
+          item.moduleName,
+        ].some((v) =>
+          v?.toLowerCase().includes(searchTerm.trim().toLowerCase()),
+        ),
+      )
+    : allItems;
+
+  type FacultyEntry = { name: string; email: string; items: SubmissionItem[] };
+
+  const groupByCriteria = (items: SubmissionItem[]) =>
+    items.reduce(
+      (acc, item) => {
+        const c = item.criteriaName?.trim() || "Unspecified Criteria";
+        if (!acc[c]) acc[c] = { pending: [], reviewed: [] };
+        if (item.reviewerScore == null) acc[c].pending.push(item);
+        else acc[c].reviewed.push(item);
+        return acc;
+      },
+      {} as Record<
+        string,
+        { pending: SubmissionItem[]; reviewed: SubmissionItem[] }
+      >,
+    );
+
+  const groupByFaculty = (
+    items: SubmissionItem[],
+  ): Record<string, FacultyEntry> =>
+    items.reduce(
+      (acc, item) => {
         const key = item.userEmail || "unknown";
-        if (!acc[key]) {
+        if (!acc[key])
           acc[key] = {
             name: item.userName || key.split("@")[0] || "Unknown",
+            email: key,
             items: [],
           };
-        }
         acc[key].items.push(item);
         return acc;
-      }, {} as Record<string, { name: string; items: SubmissionItem[] }>)
-    : {};
+      },
+      {} as Record<string, FacultyEntry>,
+    );
 
-  const getFacultyStatus = (items: SubmissionItem[]) => {
-    const total = items.length;
-    const reviewedCount = items.filter((i) => i.reviewerScore != null).length;
-    const pendingCount = total - reviewedCount;
+  const groupByKey = (
+    items: SubmissionItem[],
+    keyFn: (i: SubmissionItem) => string,
+  ) =>
+    items.reduce(
+      (acc, item) => {
+        const k = keyFn(item);
+        if (!acc[k]) acc[k] = [];
+        acc[k].push(item);
+        return acc;
+      },
+      {} as Record<string, SubmissionItem[]>,
+    );
 
-    if (pendingCount === 0)
-      return { label: "Completed", variant: "success", bg: "bg-green-100 text-green-800 border-green-300" };
-    if (reviewedCount === 0)
-      return { label: "Pending", variant: "destructive", bg: "bg-red-100 text-red-800 border-red-300" };
-    return { label: "!Not Completed", variant: "default", bg: "bg-amber-100 text-amber-800 border-amber-300" };
+  // Deepest tier: Faculty → Criteria → Submissions
+  const renderFacultyTier = (fMap: Record<string, FacultyEntry>) => {
+    const entries = Object.entries(fMap).sort(([, a], [, b]) => {
+      const ap = a.items.filter((i) => i.reviewerScore == null).length;
+      const bp = b.items.filter((i) => i.reviewerScore == null).length;
+      return bp - ap;
+    });
+
+    if (entries.length === 0)
+      return (
+        <div className="py-8 text-center text-muted-foreground border border-dashed rounded-lg">
+          No submissions found
+        </div>
+      );
+
+    return (
+      <Accordion type="single" collapsible className="space-y-2">
+        {entries.map(([email, faculty]) => {
+          const pendingCount = faculty.items.filter(
+            (i) => i.reviewerScore == null,
+          ).length;
+          const total = faculty.items.length;
+          const isComplete = pendingCount === 0;
+          const statusBg = isComplete
+            ? "bg-green-50 text-green-700 border border-green-200"
+            : pendingCount === total
+              ? "bg-red-50 text-red-700 border border-red-200"
+              : "bg-amber-50 text-amber-700 border border-amber-200";
+          const statusLabel = isComplete
+            ? "Completed"
+            : pendingCount === total
+              ? "Pending"
+              : "In Progress";
+          const criteriaMap = groupByCriteria(faculty.items);
+
+          return (
+            <AccordionItem
+              key={email}
+              value={email}
+              className="border rounded-lg"
+            >
+              <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-muted/30 data-[state=open]:bg-muted/20">
+                <div className="flex items-center justify-between w-full pr-4">
+                  <div className="text-left">
+                    <div className="font-semibold">{faculty.name}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {email}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {total} items
+                    </span>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full ${statusBg}`}
+                    >
+                      {statusLabel}
+                    </span>
+                    {pendingCount > 0 && (
+                      <Badge variant="destructive" className="text-xs">
+                        {pendingCount} pending
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-5 pb-5 pt-2">
+                <Accordion type="single" collapsible className="space-y-2">
+                  {Object.entries(criteriaMap).map(
+                    ([criteria, { pending, reviewed }]) => (
+                      <AccordionItem
+                        key={criteria}
+                        value={criteria}
+                        className="border rounded-md"
+                      >
+                        <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/20 text-sm">
+                          <div className="flex items-center justify-between w-full pr-4">
+                            <span className="font-medium">{criteria}</span>
+                            <div className="flex gap-3 text-xs">
+                              {pending.length > 0 && (
+                                <span className="text-destructive font-medium">
+                                  {pending.length} pending
+                                </span>
+                              )}
+                              <span className="text-muted-foreground">
+                                {reviewed.length} reviewed
+                              </span>
+                            </div>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-4 pb-4 pt-3 space-y-6">
+                          {pending.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                                <span className="h-2 w-2 rounded-full bg-destructive" />
+                                Pending Review ({pending.length})
+                              </h4>
+                              <div className="space-y-4">
+                                {pending.map((item) =>
+                                  renderSubmissionCard(item, "pending"),
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {reviewed.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                                <span className="h-2 w-2 rounded-full bg-green-500" />
+                                Reviewed ({reviewed.length})
+                              </h4>
+                              <div className="space-y-4">
+                                {reviewed.map((item) =>
+                                  renderSubmissionCard(item, "reviewed"),
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    ),
+                  )}
+                </Accordion>
+              </AccordionContent>
+            </AccordionItem>
+          );
+        })}
+      </Accordion>
+    );
   };
 
-  const facultyList = Object.entries(facultyMap)
-    .filter(([key]) => key !== "unknown")
-    .map(([email, data]) => {
-      const status = getFacultyStatus(data.items);
-      return {
-        email,
-        name: data.name,
-        total: data.items.length,
-        pending: data.items.filter((i) => i.reviewerScore == null).length,
-        status,
-      };
-    })
-    .sort((a, b) => (a.status.label === "Completed" ? 1 : b.status.label === "Completed" ? -1 : 0));
+  // Mid tier: one grouping level wrapping renderFacultyTier
+  const renderGroupTier = (
+    groups: Record<string, SubmissionItem[]>,
+    countLabel: string,
+  ) => {
+    const entries = Object.entries(groups);
+    if (entries.length === 0) return null;
+    return (
+      <Accordion type="single" collapsible className="space-y-4">
+        {entries.map(([key, items]) => {
+          const pendingCount = items.filter(
+            (i) => i.reviewerScore == null,
+          ).length;
+          const memberCount = new Set(items.map((i) => i.userEmail)).size;
+          return (
+            <AccordionItem
+              key={key}
+              value={key}
+              className="border rounded-xl overflow-hidden"
+            >
+              <AccordionTrigger className="px-6 py-4 text-base font-bold bg-muted/20 hover:bg-muted/40 hover:no-underline data-[state=open]:bg-muted/30">
+                <div className="flex items-center justify-between w-full pr-4">
+                  <span className="capitalize">{key}</span>
+                  <div className="flex gap-4 text-sm font-normal text-muted-foreground">
+                    <span>
+                      {memberCount} {countLabel}
+                    </span>
+                    {pendingCount > 0 && (
+                      <span className="text-destructive font-medium">
+                        {pendingCount} pending
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6 pt-4">
+                {renderFacultyTier(groupByFaculty(items))}
+              </AccordionContent>
+            </AccordionItem>
+          );
+        })}
+      </Accordion>
+    );
+  };
 
-  const selectedFaculty = selectedFacultyEmail ? facultyMap[selectedFacultyEmail] : null;
-  const selectedItems = selectedFaculty?.items || [];
+  // Committee: College → Role+Dept → Faculty → Criteria
+  const renderCommitteeView = () => {
+    const byCollege = groupByKey(
+      filteredItems,
+      (i) => i.college?.trim() || "Unknown College",
+    );
+    return (
+      <Accordion type="single" collapsible className="space-y-4">
+        {Object.entries(byCollege).map(([college, collegeItems]) => {
+          const pendingCount = collegeItems.filter(
+            (i) => i.reviewerScore == null,
+          ).length;
+          const staffCount = new Set(collegeItems.map((i) => i.userEmail)).size;
+          const byRoleDept = groupByKey(
+            collegeItems,
+            (i) =>
+              `${i.userRole || "Staff"}${i.department ? ` — ${i.department}` : ""}`,
+          );
+          return (
+            <AccordionItem
+              key={college}
+              value={college}
+              className="border rounded-xl overflow-hidden"
+            >
+              <AccordionTrigger className="px-6 py-5 text-lg font-bold bg-gradient-to-r from-primary/5 to-primary/10 hover:from-primary/10 hover:to-primary/15 hover:no-underline data-[state=open]:from-primary/10">
+                <div className="flex items-center justify-between w-full pr-4">
+                  <span>{college}</span>
+                  <div className="flex gap-4 text-sm font-normal text-muted-foreground">
+                    <span>{staffCount} staff</span>
+                    {pendingCount > 0 && (
+                      <span className="text-destructive font-medium">
+                        {pendingCount} pending
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6 pt-4">
+                <Accordion type="single" collapsible className="space-y-3">
+                  {Object.entries(byRoleDept).map(([roleDept, rdItems]) => {
+                    const rdPending = rdItems.filter(
+                      (i) => i.reviewerScore == null,
+                    ).length;
+                    const rdCount = new Set(rdItems.map((i) => i.userEmail))
+                      .size;
+                    return (
+                      <AccordionItem
+                        key={roleDept}
+                        value={roleDept}
+                        className="border rounded-lg"
+                      >
+                        <AccordionTrigger className="px-5 py-3 font-semibold hover:no-underline hover:bg-muted/30 data-[state=open]:bg-muted/20">
+                          <div className="flex items-center justify-between w-full pr-4">
+                            <span className="capitalize">{roleDept}</span>
+                            <div className="flex gap-4 text-sm font-normal text-muted-foreground">
+                              <span>{rdCount} people</span>
+                              {rdPending > 0 && (
+                                <span className="text-destructive font-medium">
+                                  {rdPending} pending
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-5 pb-4 pt-3">
+                          {renderFacultyTier(groupByFaculty(rdItems))}
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
+              </AccordionContent>
+            </AccordionItem>
+          );
+        })}
+      </Accordion>
+    );
+  };
 
-  const criteriaGroups = selectedItems.reduce((acc, item) => {
-    const criteria = item.criteriaName?.trim() || "Unspecified Criteria";
-    if (!acc[criteria]) acc[criteria] = { pending: [], reviewed: [] };
-    if (item.reviewerScore == null) {
-      acc[criteria].pending.push(item);
-    } else {
-      acc[criteria].reviewed.push(item);
-    }
-    return acc;
-  }, {} as Record<string, { pending: SubmissionItem[]; reviewed: SubmissionItem[] }>);
-
-  const resolveFormTitle = (formTitle?: string | null) => String(formTitle || "").trim() || "—";
-  const resolveCriteriaName = (criteriaName?: string | null) => String(criteriaName || "").trim() || "—";
+  const resolveFormTitle = (formTitle?: string | null) =>
+    String(formTitle || "").trim() || "—";
+  const resolveCriteriaName = (criteriaName?: string | null) =>
+    String(criteriaName || "").trim() || "—";
 
   const updateReviewInput = (
     submissionId: string,
@@ -362,7 +646,10 @@ export default function Review() {
     }
   };
 
-  const renderSubmissionCard = (item: SubmissionItem, type: "pending" | "reviewed") => {
+  const renderSubmissionCard = (
+    item: SubmissionItem,
+    type: "pending" | "reviewed",
+  ) => {
     const id = String(item.id || "").trim();
     const input = reviewInputs[id] || { verifiedScore: "", remarks: "" };
     const isReviewing = !!reviewing[id];
@@ -375,11 +662,16 @@ export default function Review() {
         <CardHeader className="pb-3">
           <div className="flex justify-between items-start gap-4">
             <div className="space-y-1 flex-1">
-              <CardTitle className="text-base">{item.taskName || "Task"}</CardTitle>
+              <CardTitle className="text-base">
+                {item.taskName || "Task"}
+              </CardTitle>
               <div className="text-xs text-muted-foreground space-y-0.5">
-                <div>{item.moduleName || "—"} • {displayUser(item)}</div>
                 <div>
-                  Form: {resolveFormTitle(item.formTitle)} • {resolveCriteriaName(item.criteriaName)}
+                  {item.moduleName || "—"} • {displayUser(item)}
+                </div>
+                <div>
+                  Form: {resolveFormTitle(item.formTitle)} •{" "}
+                  {resolveCriteriaName(item.criteriaName)}
                 </div>
               </div>
             </div>
@@ -389,8 +681,8 @@ export default function Review() {
                   statusLower === "appealed"
                     ? "destructive"
                     : statusLower === "reviewed"
-                    ? "default"
-                    : "secondary"
+                      ? "default"
+                      : "secondary"
                 }
               >
                 {statusLower}
@@ -403,12 +695,19 @@ export default function Review() {
         <CardContent className="space-y-5 pt-1">
           <div className="flex justify-between items-center text-sm bg-muted/50 rounded px-3 py-2.5">
             <div>
-              <span className="font-medium">Claimed:</span> {item.claimedScore ?? 0} / {max}
+              <span className="font-medium">Claimed:</span>{" "}
+              {item.claimedScore ?? 0} / {max}
             </div>
             {item.reviewerScore != null && (
               <div className="font-medium">
                 Awarded:{" "}
-                <span className={item.reviewerScore === item.claimedScore ? "text-green-600" : "text-amber-600"}>
+                <span
+                  className={
+                    item.reviewerScore === item.claimedScore
+                      ? "text-green-600"
+                      : "text-amber-600"
+                  }
+                >
                   {item.reviewerScore}
                 </span>
               </div>
@@ -430,7 +729,9 @@ export default function Review() {
 
           {item.isAppealed && item.appealReason && (
             <div className="border border-amber-200 bg-amber-50/70 rounded p-3 text-sm">
-              <div className="font-medium text-amber-900 mb-1.5">Appeal Request</div>
+              <div className="font-medium text-amber-900 mb-1.5">
+                Appeal Request
+              </div>
               <p className="text-amber-800">{item.appealReason}</p>
               {item.appealRequestedScore != null && (
                 <p className="mt-2 text-amber-800">
@@ -442,22 +743,40 @@ export default function Review() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium mb-1.5">Verified Score</label>
+              <label className="block text-sm font-medium mb-1.5">
+                Verified Score
+              </label>
               <Input
                 type="number"
                 min={0}
                 max={max}
-                value={type === "pending" ? input.verifiedScore : (item.reviewerScore ?? "")}
-                onChange={(e) => type === "pending" && updateReviewInput(id, "verifiedScore", e.target.value, max)}
+                value={
+                  type === "pending"
+                    ? input.verifiedScore
+                    : (item.reviewerScore ?? "")
+                }
+                onChange={(e) =>
+                  type === "pending" &&
+                  updateReviewInput(id, "verifiedScore", e.target.value, max)
+                }
                 disabled={type === "reviewed" || isReviewing}
                 className={type === "reviewed" ? "bg-muted" : ""}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">Remarks</label>
+              <label className="block text-sm font-medium mb-1.5">
+                Remarks
+              </label>
               <Textarea
-                value={type === "pending" ? input.remarks : (item.reviewerReason ?? "")}
-                onChange={(e) => type === "pending" && updateReviewInput(id, "remarks", e.target.value)}
+                value={
+                  type === "pending"
+                    ? input.remarks
+                    : (item.reviewerReason ?? "")
+                }
+                onChange={(e) =>
+                  type === "pending" &&
+                  updateReviewInput(id, "remarks", e.target.value)
+                }
                 placeholder="Optional remarks..."
                 rows={2}
                 disabled={type === "reviewed" || isReviewing}
@@ -468,14 +787,23 @@ export default function Review() {
 
           {type === "pending" ? (
             <div className="flex justify-end pt-2">
-              <Button size="sm" onClick={() => handleReview(item)} disabled={isReviewing}>
-                {isReviewing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button
+                size="sm"
+                onClick={() => handleReview(item)}
+                disabled={isReviewing}
+              >
+                {isReviewing && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
                 {isReviewing ? "Saving..." : "Submit Review"}
               </Button>
             </div>
           ) : (
             <div className="flex justify-end">
-              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+              <Badge
+                variant="outline"
+                className="bg-blue-50 text-blue-700 border-blue-200"
+              >
                 Reviewed
               </Badge>
             </div>
@@ -486,163 +814,98 @@ export default function Review() {
   };
 
   return (
-    <DashboardLayout title="Review Submissions" subtitle="Faculty Performance Review">
-      {/* Summary Cards - unchanged */}
-      <div className="grid gap-4 md:grid-cols-3 mb-8">
+    <DashboardLayout
+      title="Review Submissions"
+      subtitle="Faculty Performance Review"
+    >
+      {/* Summary Cards */}
+      <div className="grid gap-4 md:grid-cols-3 mb-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total
+            </CardTitle>
             <FileText className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{queue.length + reviewedItems.length}</div>
+            <div className="text-3xl font-bold">
+              {queue.length + reviewedItems.length}
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Pending
+            </CardTitle>
             <TrendingUp className="h-5 w-5 text-destructive rotate-180" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-destructive">{queue.length}</div>
+            <div className="text-3xl font-bold text-destructive">
+              {queue.length}
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Reviewed</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Reviewed
+            </CardTitle>
             <TrendingUp className="h-5 w-5 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-600">{reviewedItems.length}</div>
+            <div className="text-3xl font-bold text-green-600">
+              {reviewedItems.length}
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {isHOD ? (
-        <div className="space-y-8">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Faculty Overview</h2>
-            <div className="text-sm text-muted-foreground">{facultyList.length} faculty</div>
-          </div>
+      {/* Search */}
+      <div className="mb-6">
+        <Input
+          placeholder="Search by name, college, department, criteria..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-xl"
+        />
+      </div>
 
-          {facultyList.length === 0 ? (
-            <div className="text-center py-12 border rounded-lg bg-muted/30 text-muted-foreground">
-              No faculty submissions available
-            </div>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-              {facultyList.map((f) => (
-                <Card
-                  key={f.email}
-                  className={`cursor-pointer transition-all hover:shadow-md hover:border-primary/50 ${
-                    f.status.label === "Completed" ? "opacity-75" : ""
-                  }`}
-                  onClick={() => setSelectedFacultyEmail(f.email)}
-                >
-                  <CardContent className="p-5">
-                    <div className="flex justify-between items-start gap-3">
-                      <div>
-                        <div className="font-semibold">{f.name}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">{f.email}</div>
-                      </div>
-                      <Badge className={`px-3 py-1 ${f.status.bg}`}>{f.status.label}</Badge>
-                    </div>
-                    <div className="mt-4 flex justify-between text-sm">
-                      <div>
-                        Total: <strong>{f.total}</strong>
-                      </div>
-                      <div className={f.pending > 0 ? "text-destructive font-medium" : ""}>
-                        Pending: <strong>{f.pending}</strong>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+      {/* Grouped Content */}
+      {allItems.length === 0 ? (
+        <div className="text-center py-16 border rounded-lg bg-muted/30 text-muted-foreground">
+          No submissions available
         </div>
+      ) : filteredItems.length === 0 ? (
+        <div className="text-center py-16 border rounded-lg bg-muted/30 text-muted-foreground">
+          No results for &ldquo;{searchTerm}&rdquo;
+        </div>
+      ) : isCommittee ? (
+        // Committee: College → Role+Dept → Faculty → Criteria
+        renderCommitteeView()
+      ) : isPrinciple ? (
+        // Principle/VP: Role+Dept → Faculty → Criteria
+        renderGroupTier(
+          groupByKey(
+            filteredItems,
+            (i) =>
+              `${i.userRole || "Staff"}${i.department ? ` — ${i.department}` : ""}`,
+          ),
+          "faculty",
+        )
+      ) : isHOD ? (
+        // HOD: Faculty → Criteria (within their department)
+        renderFacultyTier(groupByFaculty(filteredItems))
       ) : (
-        <>
-          <h6 className="text-lg font-bold mb-5">Pending Review</h6>
-          {queue.length === 0 ? (
-            <div className="text-center py-12 border rounded-lg bg-muted/30 text-muted-foreground mb-12">
-              No pending submissions
-            </div>
-          ) : (
-            <div className="space-y-6 mb-12">{queue.map((item) => renderSubmissionCard(item, "pending"))}</div>
-          )}
-
-          <h2 className="text-lg font-semibold mb-4">My Reviewed Submissions</h2>
-          {reviewedItems.length === 0 ? (
-            <div className="text-center py-12 border rounded-lg bg-muted/30 text-muted-foreground">
-              No submissions reviewed yet
-            </div>
-          ) : (
-            <div className="space-y-6">{reviewedItems.map((item) => renderSubmissionCard(item, "reviewed"))}</div>
-          )}
-        </>
+        // Dean / others: Department → Faculty → Criteria
+        renderGroupTier(
+          groupByKey(
+            filteredItems,
+            (i) => i.department?.trim() || "Unknown Department",
+          ),
+          "faculty",
+        )
       )}
-
-      {/* Faculty Detail Dialog - unchanged structure */}
-      <Dialog open={!!selectedFacultyEmail} onOpenChange={() => setSelectedFacultyEmail(null)}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto p-6">
-          <DialogHeader className="pb-5 border-b">
-            <DialogTitle className="text-2xl">{selectedFaculty?.name || "Faculty"} Submissions</DialogTitle>
-            <p className="text-sm text-muted-foreground mt-1.5">
-              {selectedItems.length} items • {selectedItems.filter((i) => i.reviewerScore == null).length} still pending
-            </p>
-          </DialogHeader>
-
-          {Object.keys(criteriaGroups).length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground">No submissions found</div>
-          ) : (
-            <Accordion
-              type="single"
-              collapsible
-              defaultValue={Object.keys(criteriaGroups)[0]}
-              className="space-y-4 mt-6"
-            >
-              {Object.entries(criteriaGroups).map(([criteria, { pending, reviewed }]) => (
-                <AccordionItem key={criteria} value={criteria} className="border rounded-lg">
-                  <AccordionTrigger className="px-5 py-4 hover:no-underline bg-muted/30">
-                    <div className="flex items-center justify-between w-full pr-4">
-                      <span className="text-lg font-semibold">{criteria}</span>
-                      <div className="flex gap-6 text-sm font-medium">
-                        <span>
-                          Pending:{" "}
-                          <strong className={pending.length > 0 ? "text-destructive" : ""}>{pending.length}</strong>
-                        </span>
-                        <span>Reviewed: {reviewed.length}</span>
-                      </div>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="px-5 pb-6 pt-5 space-y-10">
-                    {pending.length > 0 && (
-                      <div>
-                        <h4 className="text-base font-medium mb-5 flex items-center gap-2">
-                          <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                          Pending Review ({pending.length})
-                        </h4>
-                        <div className="space-y-6">{pending.map((item) => renderSubmissionCard(item, "pending"))}</div>
-                      </div>
-                    )}
-
-                    {reviewed.length > 0 && (
-                      <div>
-                        <h4 className="text-base font-medium mb-5 flex items-center gap-2">
-                          <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
-                          Reviewed ({reviewed.length})
-                        </h4>
-                        <div className="space-y-6">{reviewed.map((item) => renderSubmissionCard(item, "reviewed"))}</div>
-                      </div>
-                    )}
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          )}
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   );
 }
