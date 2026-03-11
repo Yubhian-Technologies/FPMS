@@ -1095,7 +1095,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
               : undefined,
           college: committeeData.college || "", // ← add this
           department: committeeData.department || "",
-          designation: userData.designation || ""
+          designation: committeeData.designation || ""
         };
       }
     }
@@ -1119,7 +1119,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
           level: undefined,
           college: adminData.college || "",
           department: "",
-          designation: userData.designation || ""
+          designation: adminData.designation || ""
         };
       }
     } catch (e) {
