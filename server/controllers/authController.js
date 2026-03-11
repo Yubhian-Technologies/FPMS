@@ -1184,6 +1184,32 @@ export const unifiedLogin = async (req, res) => {
       normalizedEmail,
     );
 
+    // Look up the designation target from the superadmin college settings
+    let designationTarget = "";
+    const resolvedCollege = resolved.college || "";
+    const resolvedDesignation = resolved.designation || "";
+    if (resolvedCollege && resolvedDesignation) {
+      try {
+        const normDesig = (s) =>
+          String(s || "").trim().toLowerCase().replace(/f{2,}/g, "f").replace(/s{2,}/g, "s");
+        const saDoc = await db.collection("superadmin").doc(SUPERADMIN_DOC_ID).get();
+        if (saDoc.exists) {
+          const saColleges = saDoc.data()?.colleges || [];
+          const col = saColleges.find(
+            (c) => String(c?.name || "").trim().toLowerCase() === resolvedCollege.toLowerCase()
+          );
+          if (col) {
+            const des = (col.designations || []).find(
+              (d) => normDesig(d?.name) === normDesig(resolvedDesignation)
+            );
+            designationTarget = des?.target || "";
+          }
+        }
+      } catch (e) {
+        console.error("[unifiedLogin] designationTarget lookup failed:", e.message);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       token: firebaseData.idToken,
@@ -1195,7 +1221,8 @@ export const unifiedLogin = async (req, res) => {
         level: resolved.level,
         college: resolved.college || "",
         department: resolved.department || "",
-        designation: resolved.designation || ""
+        designation: resolved.designation || "",
+        designationTarget,
       },
     });
   } catch (error) {

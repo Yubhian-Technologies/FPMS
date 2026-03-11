@@ -57,10 +57,23 @@ const [staffList, setStaffList] = useState<any[]>([]);
 const [filteredData, setFilteredData] = useState<any[]>([]);
 
   const displayName = user?.name || user?.email || "User";
-  
-const userTarget = designations.find(
-  d => d.name.trim().toLowerCase() === user?.designation?.trim().toLowerCase()
-)?.target || "Not assigned";
+
+  // Normalize designation names to handle common spelling typos
+  // e.g. "Proffessor" → "profesor", "Assisstant" → "asistant"
+  const normalizeDesignation = (s: string) =>
+    (s || "").trim().toLowerCase()
+      .replace(/\s+/g, " ")
+      .replace(/f{2,}/g, "f")
+      .replace(/s{2,}/g, "s");
+
+// Primary: use designationTarget embedded in login response
+// Fallback: look up from designations list (for cached sessions)
+const userTarget =
+  user?.designationTarget ||
+  designations.find(
+    d => normalizeDesignation(d.name) === normalizeDesignation(user?.designation || "")
+  )?.target ||
+  "Not assigned";
   
   useEffect(() => {
   if (!user) return;
@@ -125,29 +138,25 @@ const userTarget = designations.find(
       // ─── FETCH DESIGNATIONS ─── (add this here, inside try)
       const fetchDesignations = async () => {
         try {
-          const res = await api.get("/api/admin/designations", {
-            headers: {
-              "x-user-id": user.uid,
-              "x-user-role": user.role,
-              "x-college": user.college || "",
-            },
-          });
-          console.log("Designations",res.data);
+          console.log("[Dashboard] Fetching designations for user:", user.role, "| college:", user.college, "| designation:", user.designation);
+          const res = await api.get("/api/colleges/designations");
+          console.log("[Dashboard] Designations API response:", res.data);
           if (res.data?.success) {
-
-  if (user.role === "committee") {
-    // Flatten all colleges' designations into single array
-    const allDesignations = (res.data.data || []).flatMap(
-      (college: any) => college.designations || []
-    );
-    setDesignations(allDesignations);
-  } else {
-    setDesignations(res.data.data?.designations || []);
-  }
-
-}
+            if (user.role === "committee") {
+              const allDesignations = (res.data.data || []).flatMap(
+                (college: any) => college.designations || []
+              );
+              console.log("[Dashboard] committee designations:", allDesignations);
+              setDesignations(allDesignations);
+            } else {
+              console.log("[Dashboard] designations for user college:", res.data.data?.designations);
+              setDesignations(res.data.data?.designations || []);
+            }
+          } else {
+            console.warn("[Dashboard] Designations API returned success:false", res.data);
+          }
         } catch (err) {
-          console.error("Failed to fetch designations:", err);
+          console.error("[Dashboard] Failed to fetch designations:", err);
         }
       };
 
@@ -455,11 +464,11 @@ const applyFilter = () => {
                                       </AccordionTrigger>
                                       <AccordionContent>
                                         <div className="p-4 border rounded-lg shadow-sm bg-card">
-                                          <ScoreOverview 
-  submissions={staff.submissions || []} 
+                                          <ScoreOverview
+  submissions={staff.submissions || []}
   userTarget={
     designations.find(
-      d => d.name.trim().toLowerCase() === ( staff.designation || "").trim().toLowerCase()
+      d => normalizeDesignation(d.name) === normalizeDesignation(staff.designation || "")
     )?.target ?? undefined
   }
 />

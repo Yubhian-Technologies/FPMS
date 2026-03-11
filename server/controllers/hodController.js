@@ -7,6 +7,27 @@ import admin from "firebase-admin";
 const SUPERADMIN_DOC_ID = process.env.SUPERADMIN_DOC_ID || "root";
 const USERS_COLLECTION = "users";
 
+const normDesig = (s) =>
+  String(s || "").trim().toLowerCase().replace(/f{2,}/g, "f").replace(/s{2,}/g, "s");
+
+const getDesignationTarget = async (college, designation) => {
+  if (!college || !designation) return "";
+  try {
+    const saDoc = await db.collection("superadmin").doc(SUPERADMIN_DOC_ID).get();
+    if (!saDoc.exists) return "";
+    const col = (saDoc.data()?.colleges || []).find(
+      (c) => String(c?.name || "").trim().toLowerCase() === college.toLowerCase()
+    );
+    if (!col) return "";
+    const des = (col.designations || []).find(
+      (d) => normDesig(d?.name) === normDesig(designation)
+    );
+    return des?.target || "";
+  } catch (e) {
+    return "";
+  }
+};
+
 const normalizeStringArray = (value) => {
   if (!Array.isArray(value)) return [];
 
@@ -58,6 +79,11 @@ export const hodLogin = async (req, res) => {
       });
     }
 
+    const designationTarget = await getDesignationTarget(
+      hodData.college,
+      hodData.designation
+    );
+
     return res.status(200).json({
       success: true,
       message: "HOD login successful",
@@ -69,6 +95,8 @@ export const hodLogin = async (req, res) => {
         role: "hod",
         college: hodData.college || "",
         department: hodData.department || "",
+        designation: hodData.designation || "",
+        designationTarget,
       },
     });
   } catch (error) {

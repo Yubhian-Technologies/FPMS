@@ -1,6 +1,29 @@
 import bcrypt from "bcryptjs";
 import { db } from "../config/firebase.js";
 
+const SUPERADMIN_DOC_ID = process.env.SUPERADMIN_DOC_ID || "root";
+
+const normDesig = (s) =>
+  String(s || "").trim().toLowerCase().replace(/f{2,}/g, "f").replace(/s{2,}/g, "s");
+
+const getDesignationTarget = async (college, designation) => {
+  if (!college || !designation) return "";
+  try {
+    const saDoc = await db.collection("superadmin").doc(SUPERADMIN_DOC_ID).get();
+    if (!saDoc.exists) return "";
+    const col = (saDoc.data()?.colleges || []).find(
+      (c) => String(c?.name || "").trim().toLowerCase() === college.toLowerCase()
+    );
+    if (!col) return "";
+    const des = (col.designations || []).find(
+      (d) => normDesig(d?.name) === normDesig(designation)
+    );
+    return des?.target || "";
+  } catch (e) {
+    return "";
+  }
+};
+
 export const facultyLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -60,16 +83,24 @@ export const facultyLogin = async (req, res) => {
       });
     }
 
+    const designationTarget = await getDesignationTarget(
+      facultyData.college,
+      facultyData.designation
+    );
+
     return res.status(200).json({
       success: true,
       message: "Faculty login successful",
       user: {
         id: facultyDoc.id,
+        uid: facultyDoc.id,
         name: facultyData.name,
         email: facultyData.email,
         role: "faculty",
+        college: facultyData.college || "",
         department: facultyData.department,
         designation: facultyData.designation,
+        designationTarget,
       },
     });
   } catch (error) {
