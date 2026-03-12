@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { db } from "../config/firebase.js";
+import { signInWithFirebaseEmailPassword } from "../utils/firebaseSignIn.js";
 
 const SUPERADMIN_DOC_ID = process.env.SUPERADMIN_DOC_ID || "root";
 
@@ -88,9 +89,15 @@ export const facultyLogin = async (req, res) => {
       facultyData.designation
     );
 
+    const token = await signInWithFirebaseEmailPassword({
+      email: normalizedEmail,
+      password,
+    });
+
     return res.status(200).json({
       success: true,
       message: "Faculty login successful",
+      token,
       user: {
         id: facultyDoc.id,
         uid: facultyDoc.id,
@@ -105,6 +112,15 @@ export const facultyLogin = async (req, res) => {
     });
   } catch (error) {
     console.error("Faculty login error:", error);
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message:
+          error.statusCode === 401
+            ? "Invalid email or password"
+            : error.message,
+      });
+    }
     return res.status(500).json({
       success: false,
       message: "Internal server error",

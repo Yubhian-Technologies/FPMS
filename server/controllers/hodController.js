@@ -3,6 +3,7 @@
 import bcrypt from "bcryptjs";
 import { db, auth } from "../config/firebase.js";
 import admin from "firebase-admin";
+import { signInWithFirebaseEmailPassword } from "../utils/firebaseSignIn.js";
 
 const SUPERADMIN_DOC_ID = process.env.SUPERADMIN_DOC_ID || "root";
 const USERS_COLLECTION = "users";
@@ -62,9 +63,13 @@ export const hodLogin = async (req, res) => {
       });
     }
 
+    const normalizedEmail = String(email || "")
+      .trim()
+      .toLowerCase();
+
     const snapshot = await db
       .collection("hods")
-      .where("email", "==", email)
+      .where("email", "==", normalizedEmail)
       .limit(1)
       .get();
 
@@ -92,9 +97,15 @@ export const hodLogin = async (req, res) => {
       hodData.designation,
     );
 
+    const token = await signInWithFirebaseEmailPassword({
+      email: normalizedEmail,
+      password,
+    });
+
     return res.status(200).json({
       success: true,
       message: "HOD login successful",
+      token,
       user: {
         id: hodDoc.id,
         uid: hodDoc.id,
@@ -109,6 +120,15 @@ export const hodLogin = async (req, res) => {
     });
   } catch (error) {
     console.error("HOD login error:", error);
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message:
+          error.statusCode === 401
+            ? "Invalid email or password"
+            : error.message,
+      });
+    }
     return res.status(500).json({
       success: false,
       message: "Internal server error",

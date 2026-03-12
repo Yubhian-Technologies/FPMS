@@ -3,6 +3,7 @@
 import bcrypt from "bcryptjs";
 import { db, auth } from "../config/firebase.js";
 import admin from "firebase-admin";
+import { signInWithFirebaseEmailPassword } from "../utils/firebaseSignIn.js";
 
 const SUPERADMIN_DOC_ID = process.env.SUPERADMIN_DOC_ID || "root";
 const USERS_COLLECTION = "users";
@@ -33,9 +34,13 @@ export const adminLogin = async (req, res) => {
       });
     }
 
+    const normalizedEmail = String(email || "")
+      .trim()
+      .toLowerCase();
+
     const snapshot = await db
       .collection("admins")
-      .where("email", "==", email)
+      .where("email", "==", normalizedEmail)
       .limit(1)
       .get();
 
@@ -58,9 +63,15 @@ export const adminLogin = async (req, res) => {
       });
     }
 
+    const token = await signInWithFirebaseEmailPassword({
+      email: normalizedEmail,
+      password,
+    });
+
     return res.status(200).json({
       success: true,
       message: "Admin login successful",
+      token,
       user: {
         id: adminDoc.id,
         name: adminData.name,
@@ -71,6 +82,15 @@ export const adminLogin = async (req, res) => {
     });
   } catch (error) {
     console.error("Admin login error:", error);
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message:
+          error.statusCode === 401
+            ? "Invalid email or password"
+            : error.message,
+      });
+    }
     return res.status(500).json({
       success: false,
       message: "Internal server error",

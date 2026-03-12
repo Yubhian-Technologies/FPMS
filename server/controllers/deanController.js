@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { db } from "../config/firebase.js";
 import admin from "firebase-admin";
+import { signInWithFirebaseEmailPassword } from "../utils/firebaseSignIn.js";
 
 export const deanLogin = async (req, res) => {
   try {
@@ -52,9 +53,15 @@ export const deanLogin = async (req, res) => {
       });
     }
 
+    const token = await signInWithFirebaseEmailPassword({
+      email: normalizedEmail,
+      password,
+    });
+
     return res.status(200).json({
       success: true,
       message: "Dean login successful",
+      token,
       user: {
         id: deanDoc.id,
         name: deanData.name,
@@ -65,6 +72,15 @@ export const deanLogin = async (req, res) => {
     });
   } catch (error) {
     console.error("Dean login error:", error);
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message:
+          error.statusCode === 401
+            ? "Invalid email or password"
+            : error.message,
+      });
+    }
     return res.status(500).json({
       success: false,
       message: "Internal server error",
