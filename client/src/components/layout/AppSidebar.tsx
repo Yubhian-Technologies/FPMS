@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  KeyRound,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -206,6 +207,20 @@ const getNavItems = (
       label: "My Appeals",
       href: "/my-appeals",
       roles: ["faculty", "dean", "hod"],
+    },
+    {
+      icon: KeyRound,
+      label: "Change Password",
+      href: "/change-password",
+      roles: [
+        "faculty",
+        "hod",
+        "committee",
+        "principle",
+        "dean",
+        "vice principle",
+        "superadmin",
+      ],
     },
   ];
 

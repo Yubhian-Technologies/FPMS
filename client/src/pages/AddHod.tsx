@@ -54,6 +54,8 @@ interface Hod {
   role?: string;
   level?: number;
   hasPhd?: boolean;
+  experience?: number;
+  dateOfJoining?: string;
 }
 
 interface CollegeDetails {
@@ -61,6 +63,12 @@ interface CollegeDetails {
   name: string;
   code?: string;
   branches?: string[];
+}
+
+interface DesignationOption {
+  name: string;
+  target: string;
+  phd: boolean;
 }
 
 export default function AddHod() {
@@ -78,7 +86,7 @@ export default function AddHod() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [hodRoleLevel, setHodRoleLevel] = useState(0);
-  const [designations, setDesignations] = useState<string[]>([]);
+  const [designations, setDesignations] = useState<DesignationOption[]>([]);
 
   // Excel upload state
   const xlsxInputRef = useRef<HTMLInputElement>(null);
@@ -107,22 +115,33 @@ export default function AddHod() {
           ? payload.designations
           : [];
 
-      // Convert objects to strings (use name or title)
-      const normalized = list
+      const normalized: DesignationOption[] = list
         .map((item) => {
-          if (typeof item === "string") return item.trim();
+          if (typeof item === "string")
+            return { name: item.trim(), target: "", phd: false };
           if (typeof item === "object" && item !== null)
-            return String(item.name || item.title || "").trim();
-          return "";
+            return {
+              name: String(item.name || item.title || "").trim(),
+              target: String(item.target || "").trim(),
+              phd: Boolean(item.phd),
+            };
+          return null;
         })
-        .filter(Boolean);
+        .filter((item): item is DesignationOption => !!item?.name);
 
       setDesignations(normalized);
-      console.log("Designations fetched:", normalized);
     } catch (err) {
       console.error("Failed to fetch designations", err);
       setDesignations([]);
     }
+  };
+
+  const calculateExperience = (dateStr: string): number => {
+    if (!dateStr) return 0;
+    const joining = new Date(dateStr);
+    const today = new Date();
+    const diffMs = today.getTime() - joining.getTime();
+    return Math.max(0, Math.floor(diffMs / (365.25 * 24 * 60 * 60 * 1000)));
   };
 
   const [formData, setFormData] = useState({
@@ -136,6 +155,8 @@ export default function AddHod() {
     role: "hod",
     level: 0,
     hasPhd: false,
+    dateOfJoining: "",
+    experience: "",
   });
 
   const lockedCollegeName = collegeDetails?.name || "";
@@ -262,11 +283,13 @@ export default function AddHod() {
       pass: "",
       confirm_pass: "",
       college: lockedCollegeName,
-      designation: designations[0] || "",
+      designation: designations[0]?.name || "",
       department: availableBranchOptions[0] || "",
       role: "hod",
       level: hodRoleLevel,
-      hasPhd: false,
+      hasPhd: designations[0]?.phd ?? false,
+      dateOfJoining: "",
+      experience: "",
     });
     setShowPassword(false);
     setShowConfirmPassword(false);
@@ -284,6 +307,26 @@ export default function AddHod() {
   };
 
   const openEdit = (hod: Hod) => {
+    const rawDesignation =
+      typeof hod.designation === "string"
+        ? hod.designation
+        : (hod.designation as any)?.name ||
+          (hod.designation as any)?.title ||
+          "";
+    const storedHasPhd = !!hod.hasPhd;
+    // Prefer exact match; fall back to same-name match (handles old data without phd field)
+    const exactMatch = designations.find(
+      (d) => d.name === rawDesignation && d.phd === storedHasPhd,
+    );
+    const nameMatch =
+      exactMatch ?? designations.find((d) => d.name === rawDesignation);
+    const resolvedDesignation =
+      nameMatch?.name ?? rawDesignation ?? designations[0]?.name ?? "";
+    const resolvedHasPhd = exactMatch
+      ? storedHasPhd
+      : (nameMatch?.phd ?? storedHasPhd);
+
+    const joiningDate = hod.dateOfJoining || "";
     setFormData({
       name: hod.name,
       email: hod.email,
@@ -291,19 +334,19 @@ export default function AddHod() {
       confirm_pass: "",
       college: lockedCollegeName || hod.college,
       department: hod.department || "",
-      designation:
-        typeof hod.designation === "string"
-          ? hod.designation
-          : (hod.designation as any)?.name ||
-            (hod.designation as any)?.title ||
-            designations[0] ||
-            "",
+      designation: resolvedDesignation,
       role: "hod",
       level:
         hod.level !== undefined && Number.isFinite(Number(hod.level))
           ? Number(hod.level)
           : hodRoleLevel,
-      hasPhd: !!hod.hasPhd,
+      hasPhd: resolvedHasPhd,
+      dateOfJoining: joiningDate,
+      experience: joiningDate
+        ? String(calculateExperience(joiningDate))
+        : hod.experience !== undefined
+          ? String(hod.experience)
+          : "",
     });
     setEditingId(hod.id);
     setIsAddingHod(true);
@@ -380,6 +423,9 @@ export default function AddHod() {
         role: "hod",
         level: Number(formData.level),
         hasPhd: formData.hasPhd,
+        dateOfJoining: formData.dateOfJoining || undefined,
+        experience:
+          formData.experience !== "" ? Number(formData.experience) : undefined,
       };
 
       if (editingId) {
@@ -406,7 +452,7 @@ export default function AddHod() {
   const validateExcelRow = (
     row: Omit<(typeof excelRows)[0], "error">,
     currentBranches: string[],
-    currentDesignations: string[],
+    currentDesignations: DesignationOption[],
     occupiedDepts: Set<string>,
   ): string => {
     let error = "";
@@ -428,7 +474,8 @@ export default function AddHod() {
     }
     if (row.designation.trim() && currentDesignations.length > 0) {
       const desigValid = currentDesignations.some(
-        (d) => d.trim().toLowerCase() === row.designation.trim().toLowerCase(),
+        (d) =>
+          d.name.trim().toLowerCase() === row.designation.trim().toLowerCase(),
       );
       if (!desigValid) error += "Designation not in allowed list. ";
     }
@@ -600,7 +647,7 @@ export default function AddHod() {
           confirm_pass: row.pass,
           college: lockedCollegeName,
           department: row.department,
-          designation: row.designation || designations[0] || "",
+          designation: row.designation || designations[0]?.name || "",
           role: "hod",
           level: hodRoleLevel,
           hasPhd: row.hasPhd,
@@ -802,21 +849,37 @@ export default function AddHod() {
                 <div className="space-y-2">
                   <Label>Designation *</Label>
                   <Select
-                    value={formData.designation}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, designation: value })
+                    value={
+                      formData.designation
+                        ? `${formData.designation}__${formData.hasPhd ? "phd" : "nophd"}`
+                        : ""
                     }
+                    onValueChange={(key) => {
+                      const opt = designations.find(
+                        (d) => `${d.name}__${d.phd ? "phd" : "nophd"}` === key,
+                      );
+                      if (opt)
+                        setFormData({
+                          ...formData,
+                          designation: opt.name,
+                          hasPhd: opt.phd,
+                        });
+                    }}
                     disabled={designations.length === 0}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select designation" />
                     </SelectTrigger>
                     <SelectContent>
-                      {designations.map((desig) => (
-                        <SelectItem key={desig} value={desig}>
-                          {desig}
-                        </SelectItem>
-                      ))}
+                      {designations.map((d) => {
+                        const key = `${d.name}__${d.phd ? "phd" : "nophd"}`;
+                        return (
+                          <SelectItem key={key} value={key}>
+                            {d.name} {d.phd ? "(PhD)" : "(No PhD)"}
+                            {d.target ? ` — Target: ${d.target}` : ""}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -827,6 +890,33 @@ export default function AddHod() {
                 <div className="space-y-2">
                   <Label>Level *</Label>
                   <Input value={String(formData.level)} disabled />
+                </div>
+                <div className="space-y-2">
+                  <Label>Date of Joining</Label>
+                  <Input
+                    type="date"
+                    max={new Date().toISOString().split("T")[0]}
+                    value={formData.dateOfJoining}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        dateOfJoining: e.target.value,
+                        experience: e.target.value
+                          ? String(calculateExperience(e.target.value))
+                          : "",
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Experience (Years)</Label>
+                  <Input
+                    type="number"
+                    value={formData.experience}
+                    disabled
+                    className="bg-muted"
+                    placeholder="Auto-calculated"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>
@@ -898,18 +988,31 @@ export default function AddHod() {
                     )}
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label>Has PhD</Label>
-                  <label className="flex items-center gap-2 rounded-md border px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.hasPhd}
-                      onChange={(e) =>
-                        setFormData({ ...formData, hasPhd: e.target.checked })
+                  <Label>Target Score</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      value={
+                        designations.find(
+                          (d) =>
+                            d.name === formData.designation &&
+                            d.phd === formData.hasPhd,
+                        )?.target || "—"
                       }
-                      className="h-4 w-4"
+                      disabled
+                      className="bg-muted font-semibold max-w-[180px]"
                     />
-                    <span className="text-sm">HOD has completed PhD</span>
-                  </label>
+                    {formData.designation && (
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full font-medium ${
+                          formData.hasPhd
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                            : "bg-muted text-muted-foreground border"
+                        }`}
+                      >
+                        {formData.hasPhd ? "PhD" : "No PhD"}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1182,7 +1285,7 @@ export default function AddHod() {
                           value={
                             designations.some(
                               (d) =>
-                                d.trim().toLowerCase() ===
+                                d.name.trim().toLowerCase() ===
                                 row.designation.trim().toLowerCase(),
                             )
                               ? row.designation
@@ -1202,9 +1305,11 @@ export default function AddHod() {
                             <SelectValue placeholder="Select designation" />
                           </SelectTrigger>
                           <SelectContent>
-                            {designations.map((d) => (
-                              <SelectItem key={d} value={d}>
-                                {d}
+                            {Array.from(
+                              new Set(designations.map((d) => d.name)),
+                            ).map((name) => (
+                              <SelectItem key={name} value={name}>
+                                {name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -1257,7 +1362,10 @@ export default function AddHod() {
               )}
               {designations.length > 0 && (
                 <p>
-                  <strong>Valid designations:</strong> {designations.join(", ")}
+                  <strong>Valid designations:</strong>{" "}
+                  {Array.from(new Set(designations.map((d) => d.name))).join(
+                    ", ",
+                  )}
                 </p>
               )}
             </div>

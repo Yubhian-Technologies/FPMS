@@ -4,21 +4,36 @@ import { db } from "../config/firebase.js";
 const SUPERADMIN_DOC_ID = process.env.SUPERADMIN_DOC_ID || "root";
 
 const normDesig = (s) =>
-  String(s || "").trim().toLowerCase().replace(/f{2,}/g, "f").replace(/s{2,}/g, "s");
+  String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/f{2,}/g, "f")
+    .replace(/s{2,}/g, "s");
 
-const getDesignationTarget = async (college, designation) => {
+const getDesignationTarget = async (college, designation, hasPhd) => {
   if (!college || !designation) return "";
   try {
-    const saDoc = await db.collection("superadmin").doc(SUPERADMIN_DOC_ID).get();
+    const saDoc = await db
+      .collection("superadmin")
+      .doc(SUPERADMIN_DOC_ID)
+      .get();
     if (!saDoc.exists) return "";
     const col = (saDoc.data()?.colleges || []).find(
-      (c) => String(c?.name || "").trim().toLowerCase() === college.toLowerCase()
+      (c) =>
+        String(c?.name || "")
+          .trim()
+          .toLowerCase() === college.toLowerCase(),
     );
     if (!col) return "";
-    const des = (col.designations || []).find(
-      (d) => normDesig(d?.name) === normDesig(designation)
+    const candidates = (col.designations || []).filter(
+      (d) => normDesig(d?.name) === normDesig(designation),
     );
-    return des?.target || "";
+    if (candidates.length === 0) return "";
+    if (hasPhd !== undefined && candidates.length > 1) {
+      const exact = candidates.find((d) => Boolean(d.phd) === Boolean(hasPhd));
+      if (exact) return exact.target || "";
+    }
+    return candidates[0].target || "";
   } catch (e) {
     return "";
   }
@@ -85,7 +100,8 @@ export const facultyLogin = async (req, res) => {
 
     const designationTarget = await getDesignationTarget(
       facultyData.college,
-      facultyData.designation
+      facultyData.designation,
+      facultyData.hasPhd,
     );
 
     return res.status(200).json({
@@ -101,6 +117,7 @@ export const facultyLogin = async (req, res) => {
         department: facultyData.department,
         designation: facultyData.designation,
         designationTarget,
+        hasPhd: Boolean(facultyData.hasPhd ?? false),
       },
     });
   } catch (error) {

@@ -41,6 +41,7 @@ interface Principal {
   role?: string;
   level?: number;
   experience?: number;
+  dateOfJoining?: string;
   hasPhD?: boolean;
 }
 
@@ -73,6 +74,14 @@ export default function AddPrincipal() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const calculateExperience = (dateStr: string): number => {
+    if (!dateStr) return 0;
+    const joining = new Date(dateStr);
+    const today = new Date();
+    const diffMs = today.getTime() - joining.getTime();
+    return Math.max(0, Math.floor(diffMs / (365.25 * 24 * 60 * 60 * 1000)));
+  };
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -81,6 +90,7 @@ export default function AddPrincipal() {
     college: "",
     role: "",
     level: 0,
+    dateOfJoining: "",
     experience: "",
     hasPhD: false,
   });
@@ -216,6 +226,7 @@ export default function AddPrincipal() {
       college: "",
       role: lockedRoleName,
       level: lockedRoleLevel,
+      dateOfJoining: "",
       experience: "",
       hasPhD: false,
     });
@@ -236,6 +247,7 @@ export default function AddPrincipal() {
   };
 
   const openEdit = (principal: Principal) => {
+    const joiningDate = principal.dateOfJoining || "";
     setFormData({
       name: principal.name,
       email: principal.email,
@@ -244,8 +256,12 @@ export default function AddPrincipal() {
       college: principal.college,
       role: lockedRoleName,
       level: lockedRoleLevel,
-      experience:
-        principal.experience !== undefined ? String(principal.experience) : "",
+      dateOfJoining: joiningDate,
+      experience: joiningDate
+        ? String(calculateExperience(joiningDate))
+        : principal.experience !== undefined
+          ? String(principal.experience)
+          : "",
       hasPhD: !!principal.hasPhD,
     });
     setConfirmPassword("");
@@ -261,7 +277,7 @@ export default function AddPrincipal() {
       !formData.college ||
       !formData.role ||
       !Number.isFinite(formData.level) ||
-      formData.experience === ""
+      !formData.dateOfJoining
     ) {
       toast({ title: "Fill all required fields", variant: "destructive" });
       return;
@@ -321,6 +337,7 @@ export default function AddPrincipal() {
         role: lockedRoleName,
         level: lockedRoleLevel,
         password: formData.password || undefined,
+        dateOfJoining: formData.dateOfJoining || undefined,
         experience: Number(formData.experience),
         hasPhd: formData.hasPhD,
       };
@@ -461,15 +478,30 @@ export default function AddPrincipal() {
                   <Input value={String(lockedRoleLevel)} disabled />
                 </div>
                 <div className="space-y-2">
-                  <Label>Experience (Years) *</Label>
+                  <Label>Date of Joining *</Label>
+                  <Input
+                    type="date"
+                    max={new Date().toISOString().split("T")[0]}
+                    value={formData.dateOfJoining}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        dateOfJoining: e.target.value,
+                        experience: e.target.value
+                          ? String(calculateExperience(e.target.value))
+                          : "",
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Experience (Years)</Label>
                   <Input
                     type="number"
-                    min={0}
-                    placeholder="e.g., 12"
                     value={formData.experience}
-                    onChange={(e) =>
-                      setFormData({ ...formData, experience: e.target.value })
-                    }
+                    disabled
+                    className="bg-muted"
+                    placeholder="Auto-calculated from Date of Joining"
                   />
                 </div>
                 <div className="space-y-2">

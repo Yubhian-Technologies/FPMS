@@ -92,6 +92,8 @@ export const addHod = async (req, res) => {
       level,
       hasPhd,
       designation,
+      dateOfJoining,
+      experience,
     } = req.body;
 
     const normalizedName = String(name || "").trim();
@@ -192,6 +194,10 @@ export const addHod = async (req, res) => {
           hasPhd: Boolean(hasPhd),
           role: "hod",
           isActive: true,
+          ...(dateOfJoining ? { dateOfJoining: String(dateOfJoining) } : {}),
+          ...(experience !== undefined
+            ? { experience: Number(experience) }
+            : {}),
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
@@ -225,6 +231,8 @@ export const addDean = async (req, res) => {
       level,
       hasPhd,
       designation,
+      dateOfJoining,
+      experience,
     } = req.body;
 
     const normalizedName = String(name || "").trim();
@@ -331,6 +339,10 @@ export const addDean = async (req, res) => {
           role: normalizedRole,
           level: normalizedLevel,
           isActive: true,
+          ...(dateOfJoining ? { dateOfJoining: String(dateOfJoining) } : {}),
+          ...(experience !== undefined
+            ? { experience: Number(experience) }
+            : {}),
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
@@ -892,6 +904,8 @@ export const updateHod = async (req, res) => {
       level,
       hasPhd,
       designation,
+      dateOfJoining,
+      experience,
     } = req.body;
 
     const hodRef = db.collection(USERS_COLLECTION).doc(id);
@@ -941,6 +955,9 @@ export const updateHod = async (req, res) => {
       updateData.level = normalizedLevel;
     }
     if (hasPhd !== undefined) updateData.hasPhd = Boolean(hasPhd);
+    if (dateOfJoining !== undefined)
+      updateData.dateOfJoining = String(dateOfJoining);
+    if (experience !== undefined) updateData.experience = Number(experience);
 
     const resolvedPassword = String(password ?? pass ?? "");
     const resolvedConfirmPassword = String(
@@ -1036,6 +1053,8 @@ export const updateDean = async (req, res) => {
       level,
       hasPhd,
       designation,
+      dateOfJoining,
+      experience,
     } = req.body;
 
     const deanRef = db.collection(USERS_COLLECTION).doc(id);
@@ -1097,6 +1116,9 @@ export const updateDean = async (req, res) => {
       updateData.level = normalizedLevel;
     }
     if (hasPhd !== undefined) updateData.hasPhd = Boolean(hasPhd);
+    if (dateOfJoining !== undefined)
+      updateData.dateOfJoining = String(dateOfJoining);
+    if (experience !== undefined) updateData.experience = Number(experience);
 
     const resolvedPassword = String(password ?? pass ?? "");
     const resolvedConfirmPassword = String(
@@ -1328,8 +1350,15 @@ export const getCollegeDashboard = async (req, res) => {
     );
     const designationTargetMap = {};
     (collegeDef?.designations || []).forEach((d) => {
-      if (d?.name)
-        designationTargetMap[normDesigAdmin(d.name)] = d.target || "";
+      if (d?.name) {
+        // PhD-aware key: prefer lookup by name+phd combo
+        const phdKey = `${normDesigAdmin(d.name)}__${d.phd ? "phd" : "nophd"}`;
+        designationTargetMap[phdKey] = d.target || "";
+        // Fallback name-only key for data that may lack hasPhd field
+        if (!designationTargetMap[normDesigAdmin(d.name)]) {
+          designationTargetMap[normDesigAdmin(d.name)] = d.target || "";
+        }
+      }
     });
 
     /* -------- FETCH STAFF OF SAME COLLEGE -------- */
@@ -1340,11 +1369,14 @@ export const getCollegeDashboard = async (req, res) => {
 
     const staff = staffSnap.docs.map((doc) => {
       const data = doc.data();
+      const phdKey = `${normDesigAdmin(data.designation || "")}__${data.hasPhd ? "phd" : "nophd"}`;
       return {
         ...data,
         id: doc.id,
         designationTarget:
-          designationTargetMap[normDesigAdmin(data.designation || "")] || "",
+          designationTargetMap[phdKey] ||
+          designationTargetMap[normDesigAdmin(data.designation || "")] ||
+          "",
         submissions: submissionsMap.get(data.uid) || [],
       };
     });
@@ -1510,10 +1542,11 @@ export const updateCollegeDesignations = async (req, res) => {
       });
     }
 
-    // Normalize designations with target
+    // Normalize designations with target and phd flag
     const nextDesignations = (req.body?.designations || []).map((d) => ({
       name: String(d.name || "").trim(),
-      target: String(d.target || "").trim(), // <-- store target
+      target: String(d.target || "").trim(),
+      phd: Boolean(d.phd),
     }));
 
     const superadminRef = db.collection("superadmin").doc(SUPERADMIN_DOC_ID);

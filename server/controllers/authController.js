@@ -1002,6 +1002,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
     let college = decodedToken?.college || "";
     const department = decodedToken?.department || "";
     const designation = userData?.designation || "";
+    const hasPhd = userData?.hasPhd;
 
     // Principle/admin college lives in the "admins" collection, not in token claims
     if (
@@ -1042,6 +1043,7 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
       college,
       department,
       designation,
+      hasPhd,
     };
   }
 
@@ -1056,18 +1058,20 @@ const resolveRoleFromFirebase = async (decodedToken, email) => {
         role: "committee",
         level:
           userData.level !== undefined ? Number(userData.level) : undefined,
-        college: userData.college || "", // ← add this
+        college: userData.college || "",
         department: userData.department || "",
         designation: userData.designation || "",
+        hasPhd: userData.hasPhd,
       };
     }
 
     return {
       role: String(userData.role || inferRoleFromEmail(email)),
       level: userData.level !== undefined ? Number(userData.level) : undefined,
-      college: userData.college || "", // ← add this
+      college: userData.college || "",
       department: userData.department || "",
       designation: userData.designation || "",
+      hasPhd: userData.hasPhd,
     };
   }
 
@@ -1186,6 +1190,7 @@ export const unifiedLogin = async (req, res) => {
 
     // Look up the designation target from the superadmin college settings
     let designationTarget = "";
+    let resolvedHasPhd = resolved.hasPhd;
     const resolvedCollege = resolved.college || "";
     const resolvedDesignation = resolved.designation || "";
     if (resolvedCollege && resolvedDesignation) {
@@ -1207,10 +1212,22 @@ export const unifiedLogin = async (req, res) => {
                 .toLowerCase() === resolvedCollege.toLowerCase(),
           );
           if (col) {
-            const des = (col.designations || []).find(
+            const candidates = (col.designations || []).filter(
               (d) => normDesig(d?.name) === normDesig(resolvedDesignation),
             );
-            designationTarget = des?.target || "";
+            if (candidates.length > 0) {
+              let des = candidates[0];
+              if (resolvedHasPhd !== undefined && candidates.length > 1) {
+                const exact = candidates.find(
+                  (d) => Boolean(d.phd) === Boolean(resolvedHasPhd),
+                );
+                if (exact) des = exact;
+              }
+              designationTarget = des?.target || "";
+              if (resolvedHasPhd === undefined && des) {
+                resolvedHasPhd = Boolean(des.phd);
+              }
+            }
           }
         }
       } catch (e) {
@@ -1234,6 +1251,7 @@ export const unifiedLogin = async (req, res) => {
         department: resolved.department || "",
         designation: resolved.designation || "",
         designationTarget,
+        hasPhd: Boolean(resolvedHasPhd ?? false),
       },
     });
   } catch (error) {
@@ -1304,6 +1322,7 @@ export const addAdmin = async (req, res) => {
       experience,
       hasPhd,
       role,
+      dateOfJoining,
     } = req.body;
     const normalizedEmail = String(email || "")
       .trim()
@@ -1401,6 +1420,7 @@ export const addAdmin = async (req, res) => {
           principal: isPrincipalRole(normalizedRole),
           vicePrincipal: isVicePrincipalRole(normalizedRole),
           isActive: true,
+          ...(dateOfJoining ? { dateOfJoining: String(dateOfJoining) } : {}),
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
@@ -1499,6 +1519,7 @@ export const updateAdmin = async (req, res) => {
       experience,
       hasPhd,
       role,
+      dateOfJoining,
     } = req.body;
 
     const adminRef = db.collection("users").doc(id);
@@ -1543,6 +1564,8 @@ export const updateAdmin = async (req, res) => {
     if (level !== undefined) updateData.level = Number(level);
     if (experience !== undefined) updateData.experience = Number(experience);
     if (hasPhd !== undefined) updateData.hasPhd = Boolean(hasPhd);
+    if (dateOfJoining !== undefined)
+      updateData.dateOfJoining = String(dateOfJoining);
 
     if (password) {
       if (String(password).length < 6) {
@@ -2167,5 +2190,111 @@ export const getCommitteeDashboard = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+export const changePassword = async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Old password and new password are required",
+      });
+    }
+
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must be at least 6 characters",
+      });
+    }
+
+    const apiKey = process.env.FIREBASE_WEB_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({
+        success: false,
+        message: "Server configuration error",
+      });
+    }
+
+    // Resolve user email and uid from token or dev headers
+    let userEmail = null;
+    let userUid = null;
+
+    const authHeader = req.headers.authorization;
+    const isDev = process.env.NODE_ENV !== "production";
+
+    if (isDev && req.headers["x-user-email"] && req.headers["x-user-id"]) {
+      userEmail = String(req.headers["x-user-email"]).trim().toLowerCase();
+      userUid = String(req.headers["x-user-id"]);
+    } else if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.split(" ")[1];
+      try {
+        const decoded = await auth.verifyIdToken(token);
+        userEmail = decoded.email;
+        userUid = decoded.uid;
+      } catch {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid or expired token",
+        });
+      }
+    } else {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    if (!userEmail) {
+      return res.status(400).json({
+        success: false,
+        message: "Could not determine user email",
+      });
+    }
+
+    // Verify old password by signing in with Firebase REST API
+    const verifyResponse = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: userEmail,
+          password: String(oldPassword),
+          returnSecureToken: true,
+        }),
+      },
+    );
+
+    const verifyData = await verifyResponse.json();
+    if (!verifyResponse.ok || !verifyData?.idToken) {
+      return res.status(400).json({
+        success: false,
+        message: "Current password is incorrect",
+      });
+    }
+
+    // Resolve uid from the verified token if not already set
+    if (!userUid) {
+      const decoded = await auth.verifyIdToken(verifyData.idToken);
+      userUid = decoded.uid;
+    }
+
+    // Update password via Firebase Admin SDK
+    await auth.updateUser(userUid, { password: String(newPassword) });
+
+    return res.status(200).json({
+      success: true,
+      message: "Password updated successfully",
+    });
+  } catch (err) {
+    console.error("[changePassword] Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };

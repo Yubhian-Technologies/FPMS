@@ -19,6 +19,7 @@ interface User {
   department?: string;
   designation?: string;
   designationTarget?: string;
+  hasPhd?: boolean;
 }
 
 interface AuthContextType {

@@ -46,6 +46,7 @@ import CreateFormScreen from "./pages/CreateFormScreen";
 import FormPreviewScreen from "./pages/FormPreviewScreen";
 import WorkflowRules from "./pages/WorkflowRules";
 import MyAppeals from "./pages/MyAppeals";
+import ChangePassword from "./pages/ChangePassword";
 
 const queryClient = new QueryClient();
 
@@ -260,8 +261,15 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route path="/my-appeals" 
-      element={<MyAppeals></MyAppeals>}></Route>
+      <Route path="/my-appeals" element={<MyAppeals></MyAppeals>}></Route>
+      <Route
+        path="/change-password"
+        element={
+          <ProtectedRoute>
+            <ChangePassword />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/superadmin/roles"
         element={

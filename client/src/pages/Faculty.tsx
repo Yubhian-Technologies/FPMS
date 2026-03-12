@@ -56,8 +56,15 @@ interface FacultyMember {
   college: string;
   designation: string;
   experience: number;
+  dateOfJoining?: string;
   hasPhd: boolean;
   isActive: boolean;
+}
+
+interface DesignationOption {
+  name: string;
+  target: string;
+  phd: boolean;
 }
 
 interface CollegeDetails {
@@ -71,7 +78,7 @@ export default function Faculty() {
   const { user } = useAuth();
   const [faculty, setFaculty] = useState<FacultyMember[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [designations, setDesignations] = useState<string[]>([]);
+  const [designations, setDesignations] = useState<DesignationOption[]>([]);
   const [collegeDetails, setCollegeDetails] = useState<CollegeDetails | null>(
     null,
   );
@@ -106,6 +113,14 @@ export default function Faculty() {
     }>
   >([]);
 
+  const calculateExperience = (dateStr: string): number => {
+    if (!dateStr) return 0;
+    const joining = new Date(dateStr);
+    const today = new Date();
+    const diffMs = today.getTime() - joining.getTime();
+    return Math.max(0, Math.floor(diffMs / (365.25 * 24 * 60 * 60 * 1000)));
+  };
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -116,6 +131,7 @@ export default function Faculty() {
     designation: "",
     role: "faculty",
     level: 0,
+    dateOfJoining: "",
     experience: "0",
     status: "active" as "active" | "inactive",
     hasPhd: false,
@@ -171,8 +187,6 @@ export default function Faculty() {
   const fetchDesignations = async () => {
     try {
       const res = await api.get("/api/admin/designations");
-      console.log("[Faculty] Designations response:", res.data);
-
       const payload = res.data?.data;
       const designationList = Array.isArray(payload)
         ? payload
@@ -180,12 +194,21 @@ export default function Faculty() {
           ? payload.designations
           : [];
 
-      console.log("[Faculty] Parsed designations:", designationList);
-      setDesignations(
-        designationList
-          .map((item: any) => String(item.name || item || "").trim()) // <- use item.name
-          .filter(Boolean),
-      );
+      const normalized: DesignationOption[] = designationList
+        .map((item: any) => {
+          if (typeof item === "string")
+            return { name: item.trim(), target: "", phd: false };
+          if (typeof item === "object" && item !== null)
+            return {
+              name: String(item.name || item || "").trim(),
+              target: String(item.target || "").trim(),
+              phd: Boolean(item.phd),
+            };
+          return null;
+        })
+        .filter((item: any): item is DesignationOption => !!item?.name);
+
+      setDesignations(normalized);
     } catch (error) {
       console.error("[Faculty] Failed to fetch designations:", error);
       setDesignations([]);
@@ -235,12 +258,13 @@ export default function Faculty() {
       confirm_pass: "",
       college: lockedCollegeName,
       department: lockedDepartment || branchOptions[0] || "",
-      designation: designations[0] || "",
+      designation: designations[0]?.name || "",
       role: "faculty",
       level: facultyRoleLevel,
+      dateOfJoining: "",
       experience: "0",
       status: "active",
-      hasPhd: false,
+      hasPhd: designations[0]?.phd ?? false,
     });
     setShowPassword(false);
     setShowConfirmPassword(false);
@@ -258,6 +282,19 @@ export default function Faculty() {
   };
 
   const openEdit = (member: FacultyMember) => {
+    const rawDesignation = member.designation || "";
+    const storedHasPhd = !!member.hasPhd;
+    const exactMatch = designations.find(
+      (d) => d.name === rawDesignation && d.phd === storedHasPhd,
+    );
+    const nameMatch =
+      exactMatch ?? designations.find((d) => d.name === rawDesignation);
+    const resolvedDesignation = nameMatch?.name ?? rawDesignation;
+    const resolvedHasPhd = exactMatch
+      ? storedHasPhd
+      : (nameMatch?.phd ?? storedHasPhd);
+
+    const joiningDate = member.dateOfJoining || "";
     setFormData({
       name: member.name,
       email: member.email,
@@ -265,15 +302,18 @@ export default function Faculty() {
       confirm_pass: "",
       college: lockedCollegeName || member.college,
       department: lockedDepartment || member.department,
-      designation: member.designation,
+      designation: resolvedDesignation,
       role: "faculty",
       level:
         member.level !== undefined && Number.isFinite(Number(member.level))
           ? Number(member.level)
           : facultyRoleLevel,
-      experience: String(member.experience || 0),
+      dateOfJoining: joiningDate,
+      experience: joiningDate
+        ? String(calculateExperience(joiningDate))
+        : String(member.experience || 0),
       status: member.isActive ? "active" : "inactive",
-      hasPhd: !!member.hasPhd,
+      hasPhd: resolvedHasPhd,
     });
     setEditingId(member.id);
     setIsAddingFaculty(true);
@@ -330,6 +370,7 @@ export default function Faculty() {
         designation: formData.designation,
         role: "faculty",
         level: Number(formData.level),
+        dateOfJoining: formData.dateOfJoining || undefined,
         experience: Number(formData.experience || 0),
         isActive: formData.status === "active",
         hasPhd: formData.hasPhd,
@@ -578,7 +619,11 @@ export default function Faculty() {
     }
 
     if (!formData.designation && designations.length > 0) {
-      setFormData((prev) => ({ ...prev, designation: designations[0] }));
+      setFormData((prev) => ({
+        ...prev,
+        designation: designations[0].name,
+        hasPhd: designations[0].phd,
+      }));
     }
   }, [
     branchOptions,
@@ -675,35 +720,63 @@ export default function Faculty() {
                 <div className="space-y-2">
                   <Label>Designation *</Label>
                   <Select
-                    value={formData.designation}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({ ...prev, designation: value }))
+                    value={
+                      formData.designation
+                        ? `${formData.designation}__${
+                            formData.hasPhd ? "phd" : "nophd"
+                          }`
+                        : ""
                     }
+                    onValueChange={(key) => {
+                      const opt = designations.find(
+                        (d) => `${d.name}__${d.phd ? "phd" : "nophd"}` === key,
+                      );
+                      if (opt)
+                        setFormData((prev) => ({
+                          ...prev,
+                          designation: opt.name,
+                          hasPhd: opt.phd,
+                        }));
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select designation" />
                     </SelectTrigger>
                     <SelectContent>
-                      {designations.map((item) => (
-                        <SelectItem key={item} value={item}>
-                          {item}
-                        </SelectItem>
-                      ))}
+                      {designations.map((d) => {
+                        const key = `${d.name}__${d.phd ? "phd" : "nophd"}`;
+                        return (
+                          <SelectItem key={key} value={key}>
+                            {d.name} {d.phd ? "(PhD)" : "(No PhD)"}
+                            {d.target ? ` — Target: ${d.target}` : ""}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Date of Joining *</Label>
+                  <Input
+                    type="date"
+                    max={new Date().toISOString().split("T")[0]}
+                    value={formData.dateOfJoining}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        dateOfJoining: e.target.value,
+                        experience: String(calculateExperience(e.target.value)),
+                      }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Experience (Years)</Label>
                   <Input
                     type="number"
-                    min={0}
                     value={formData.experience}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        experience: e.target.value,
-                      }))
-                    }
+                    disabled
+                    className="bg-muted"
                   />
                 </div>
 
@@ -733,22 +806,32 @@ export default function Faculty() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-center gap-2 md:pt-8">
-                  <input
-                    id="hasPhd"
-                    type="checkbox"
-                    checked={formData.hasPhd}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        hasPhd: e.target.checked,
-                      }))
-                    }
-                    className="h-4 w-4 rounded border-border"
-                  />
-                  <Label htmlFor="hasPhd" className="font-normal">
-                    Has PhD
-                  </Label>
+                <div className="space-y-2">
+                  <Label>Target Score</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      value={
+                        designations.find(
+                          (d) =>
+                            d.name === formData.designation &&
+                            d.phd === formData.hasPhd,
+                        )?.target || "—"
+                      }
+                      disabled
+                      className="bg-muted font-semibold"
+                    />
+                    {formData.designation && (
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full font-medium ${
+                          formData.hasPhd
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                            : "bg-muted text-muted-foreground border"
+                        }`}
+                      >
+                        {formData.hasPhd ? "PhD" : "No PhD"}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">

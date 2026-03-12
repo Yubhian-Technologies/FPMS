@@ -12,7 +12,7 @@ const normDesig = (s) =>
     .trim()
     .toLowerCase();
 
-const getDesignationTarget = async (college, designation) => {
+const getDesignationTarget = async (college, designation, hasPhd) => {
   if (!college || !designation) return "";
   try {
     const saDoc = await db
@@ -27,10 +27,15 @@ const getDesignationTarget = async (college, designation) => {
           .toLowerCase() === college.toLowerCase(),
     );
     if (!col) return "";
-    const des = (col.designations || []).find(
+    const candidates = (col.designations || []).filter(
       (d) => normDesig(d?.name) === normDesig(designation),
     );
-    return des?.target || "";
+    if (candidates.length === 0) return "";
+    if (hasPhd !== undefined && candidates.length > 1) {
+      const exact = candidates.find((d) => Boolean(d.phd) === Boolean(hasPhd));
+      if (exact) return exact.target || "";
+    }
+    return candidates[0].target || "";
   } catch (e) {
     return "";
   }
@@ -90,6 +95,7 @@ export const hodLogin = async (req, res) => {
     const designationTarget = await getDesignationTarget(
       hodData.college,
       hodData.designation,
+      hodData.hasPhd,
     );
 
     return res.status(200).json({
@@ -105,6 +111,7 @@ export const hodLogin = async (req, res) => {
         department: hodData.department || "",
         designation: hodData.designation || "",
         designationTarget,
+        hasPhd: Boolean(hodData.hasPhd ?? false),
       },
     });
   } catch (error) {
@@ -132,6 +139,7 @@ export const addFaculty = async (req, res) => {
       experience,
       isActive,
       hasPhd,
+      dateOfJoining,
     } = req.body;
 
     const normalizedName = String(name || "").trim();
@@ -233,6 +241,7 @@ export const addFaculty = async (req, res) => {
           isActive: Boolean(isActive),
           hasPhd: Boolean(hasPhd),
           role: "faculty",
+          ...(dateOfJoining ? { dateOfJoining: String(dateOfJoining) } : {}),
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
@@ -332,6 +341,7 @@ export const updateFaculty = async (req, res) => {
       experience,
       isActive,
       hasPhd,
+      dateOfJoining,
     } = req.body;
 
     const facultyRef = db.collection(USERS_COLLECTION).doc(id);
@@ -399,6 +409,8 @@ export const updateFaculty = async (req, res) => {
     if (experience !== undefined) updateData.experience = Number(experience);
     if (isActive !== undefined) updateData.isActive = Boolean(isActive);
     if (hasPhd !== undefined) updateData.hasPhd = Boolean(hasPhd);
+    if (dateOfJoining !== undefined)
+      updateData.dateOfJoining = String(dateOfJoining);
 
     const resolvedPassword = String(password ?? pass ?? "");
     const resolvedConfirmPassword = String(

@@ -86,8 +86,35 @@ export default function Dashboard() {
   const [userTarget, setUserTarget] = useState<string>(
     user?.designationTarget || "Not assigned",
   );
+  const [userDesignationPhd, setUserDesignationPhd] = useState<boolean | null>(
+    user?.hasPhd !== undefined ? Boolean(user.hasPhd) : null,
+  );
 
   const displayName = user?.name || user?.email || "User";
+
+  // Helper: derive "with PhD" / "without PhD" label for a staff member based on fetched designations
+  const getStaffPhdLabel = (staff: any): string | undefined => {
+    // Prefer the stored hasPhd on the staff record (set at login / edit time)
+    if (staff.hasPhd !== undefined) {
+      return staff.hasPhd ? "with PhD" : "without PhD";
+    }
+    const name = (staff.designation || "").trim().toLowerCase();
+    const target = String(staff.designationTarget || "");
+    if (!name) return undefined;
+    const matches = designations.filter(
+      (d: any) => (d.name || "").trim().toLowerCase() === name,
+    );
+    if (matches.length === 0) return undefined;
+    let m: any;
+    if (matches.length === 1) {
+      m = matches[0];
+    } else {
+      m =
+        matches.find((x: any) => String(x.target || "") === target) ||
+        matches[0];
+    }
+    return m?.phd ? "with PhD" : "without PhD";
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -183,11 +210,30 @@ export default function Dashboard() {
               // Resolve the logged-in user's own target by exact case-insensitive match
               const myDesig = (user?.designation || "").trim().toLowerCase();
               if (myDesig) {
-                const match = fetchedDesignations.find(
+                const matches = fetchedDesignations.filter(
                   (d: any) => (d.name || "").trim().toLowerCase() === myDesig,
                 );
+                let match: any = null;
+                if (matches.length === 1) {
+                  match = matches[0];
+                } else if (matches.length > 1) {
+                  // Prefer user.hasPhd for disambiguation; fall back to stored target
+                  if (user?.hasPhd !== undefined) {
+                    match =
+                      matches.find(
+                        (m: any) => Boolean(m.phd) === Boolean(user.hasPhd),
+                      ) || matches[0];
+                  } else {
+                    const storedTarget = String(user?.designationTarget || "");
+                    match =
+                      matches.find(
+                        (m: any) => String(m.target || "") === storedTarget,
+                      ) || matches[0];
+                  }
+                }
                 if (match?.target) {
                   setUserTarget(String(match.target));
+                  setUserDesignationPhd(Boolean(match.phd));
                 } else if (user?.designationTarget) {
                   setUserTarget(String(user.designationTarget));
                 }
@@ -339,7 +385,17 @@ export default function Dashboard() {
         {isHod && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
             {/* Score Overview */}
-            <ScoreOverview submissions={submissions} userTarget={userTarget} />
+            <ScoreOverview
+              submissions={submissions}
+              userTarget={userTarget}
+              targetLabel={
+                userDesignationPhd !== null
+                  ? userDesignationPhd
+                    ? "with PhD"
+                    : "without PhD"
+                  : undefined
+              }
+            />
 
             {/* Right Column */}
             <div className="space-y-6">
@@ -355,6 +411,16 @@ export default function Dashboard() {
                   </CardTitle>
                   <CardDescription>
                     {user?.designation || "Designation"}
+                    {userDesignationPhd === true && (
+                      <span className="ml-1 text-xs font-semibold text-primary">
+                        (PhD)
+                      </span>
+                    )}
+                    {userDesignationPhd === false && (
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        (No PhD)
+                      </span>
+                    )}
                   </CardDescription>
                 </CardHeader>
 
@@ -622,6 +688,9 @@ export default function Dashboard() {
                                                         staff.designationTarget ||
                                                         undefined
                                                       }
+                                                      targetLabel={getStaffPhdLabel(
+                                                        staff,
+                                                      )}
                                                     />
                                                   </div>
                                                 </AccordionContent>
@@ -1232,7 +1301,17 @@ export default function Dashboard() {
         <StatusCards role={user?.role || "faculty"} submissions={submissions} />
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <ScoreOverview submissions={submissions} userTarget={userTarget} />
+          <ScoreOverview
+            submissions={submissions}
+            userTarget={userTarget}
+            targetLabel={
+              userDesignationPhd !== null
+                ? userDesignationPhd
+                  ? "with PhD"
+                  : "without PhD"
+                : undefined
+            }
+          />
 
           {user && (
             <div className="space-y-6">
@@ -1248,6 +1327,16 @@ export default function Dashboard() {
                   </CardTitle>
                   <CardDescription>
                     {user.designation || "Designation"}
+                    {userDesignationPhd === true && (
+                      <span className="ml-1 text-xs font-semibold text-primary">
+                        (PhD)
+                      </span>
+                    )}
+                    {userDesignationPhd === false && (
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        (No PhD)
+                      </span>
+                    )}
                   </CardDescription>
                 </CardHeader>
 

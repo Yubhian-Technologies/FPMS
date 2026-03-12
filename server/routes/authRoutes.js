@@ -19,6 +19,7 @@ import {
   getApplicableForms,
   getCriteriaModulesTasks,
   getCommitteeDashboard,
+  changePassword,
 } from "../controllers/authController.js";
 import {
   createCollege,
@@ -45,7 +46,7 @@ authRouter.post("/colleges", committeeAuth, createCollege);
 authRouter.put("/colleges/:id", committeeAuth, updateCollege);
 authRouter.delete("/colleges/:id", committeeAuth, deleteCollege);
 authRouter.get("/roles", committeeAuth, getCommitteeRoles);
-authRouter.get('/dashboard-data',committeeAuth,getCommitteeDashboard);
+authRouter.get("/dashboard-data", committeeAuth, getCommitteeDashboard);
 authRouter.get(
   "/workflow-rules",
   committeeAuth,
@@ -71,5 +72,7 @@ authRouter.get("/appeals", committeeAuth, fetchAppealsForCommittee);
 authRouter.put("/appeals/:appealId", committeeAuth, verifyAppealByCommittee);
 authRouter.get("/hod-appeals", committeeAuth, fetchAllHodAppeals);
 authRouter.put("/hod-appeals/:appealId", committeeAuth, verifyHodAppeal);
+
+authRouter.post("/change-password", changePassword);
 
 export default authRouter;

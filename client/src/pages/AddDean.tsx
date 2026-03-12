@@ -53,12 +53,20 @@ interface Dean {
   level?: number;
   hasPhd?: boolean;
   designation?: string;
+  experience?: number;
+  dateOfJoining?: string;
 }
 
 interface CollegeDetails {
   id?: string;
   name: string;
   code?: string;
+}
+
+interface DesignationOption {
+  name: string;
+  target: string;
+  phd: boolean;
 }
 
 interface RoleOption {
@@ -82,7 +90,7 @@ export default function AddDean() {
   const [deanToDelete, setDeanToDelete] = useState<Dean | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [designations, setDesignations] = useState<string[]>([]);
+  const [designations, setDesignations] = useState<DesignationOption[]>([]);
 
   // Excel upload state
   const xlsxInputRef = useRef<HTMLInputElement>(null);
@@ -100,6 +108,14 @@ export default function AddDean() {
     }>
   >([]);
 
+  const calculateExperience = (dateStr: string): number => {
+    if (!dateStr) return 0;
+    const joining = new Date(dateStr);
+    const today = new Date();
+    const diffMs = today.getTime() - joining.getTime();
+    return Math.max(0, Math.floor(diffMs / (365.25 * 24 * 60 * 60 * 1000)));
+  };
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -110,6 +126,8 @@ export default function AddDean() {
     role: "",
     level: 0,
     hasPhd: false,
+    dateOfJoining: "",
+    experience: "",
   });
 
   const lockedCollegeName = collegeDetails?.name || "";
@@ -145,9 +163,19 @@ export default function AddDean() {
           ? res.data.data.designations
           : [];
 
-      const designationList = payload
-        .map((item: any) => String(item.name || item || "").trim())
-        .filter(Boolean);
+      const designationList: DesignationOption[] = payload
+        .map((item: any) => {
+          if (typeof item === "string")
+            return { name: item.trim(), target: "", phd: false };
+          if (typeof item === "object" && item !== null)
+            return {
+              name: String(item.name || item || "").trim(),
+              target: String(item.target || "").trim(),
+              phd: Boolean(item.phd),
+            };
+          return null;
+        })
+        .filter((item: any): item is DesignationOption => !!item?.name);
 
       setDesignations(designationList);
     } catch (err) {
@@ -252,7 +280,9 @@ export default function AddDean() {
       designation: "",
       role: defaultRole?.name || "",
       level: Number(defaultRole?.level ?? 0),
-      hasPhd: false,
+      hasPhd: designations[0]?.phd ?? false,
+      dateOfJoining: "",
+      experience: "",
     });
     setShowPassword(false);
     setShowConfirmPassword(false);
@@ -271,16 +301,35 @@ export default function AddDean() {
 
   const openEdit = (dean: Dean) => {
     const matchingRole = roleOptions.find((item) => item.name === dean.role);
+    const rawDesignation = dean.designation || "";
+    const storedHasPhd = !!dean.hasPhd;
+    const exactMatch = designations.find(
+      (d) => d.name === rawDesignation && d.phd === storedHasPhd,
+    );
+    const nameMatch =
+      exactMatch ?? designations.find((d) => d.name === rawDesignation);
+    const resolvedDesignation = nameMatch?.name ?? rawDesignation;
+    const resolvedHasPhd = exactMatch
+      ? storedHasPhd
+      : (nameMatch?.phd ?? storedHasPhd);
+
+    const joiningDate = dean.dateOfJoining || "";
     setFormData({
       name: dean.name,
       email: dean.email,
       pass: "",
       confirm_pass: "",
       college: lockedCollegeName || dean.college,
-      designation: dean.designation || "",
+      designation: resolvedDesignation,
       role: dean.role || availableRoleOptions[0]?.name || "",
       level: Number(dean.level ?? matchingRole?.level ?? 0),
-      hasPhd: !!dean.hasPhd,
+      hasPhd: resolvedHasPhd,
+      dateOfJoining: joiningDate,
+      experience: joiningDate
+        ? String(calculateExperience(joiningDate))
+        : dean.experience !== undefined
+          ? String(dean.experience)
+          : "",
     });
     setEditingId(dean.id);
     setIsAddingDean(true);
@@ -356,6 +405,9 @@ export default function AddDean() {
         level: Number(formData.level),
         designation: formData.designation,
         hasPhd: formData.hasPhd,
+        dateOfJoining: formData.dateOfJoining || undefined,
+        experience:
+          formData.experience !== "" ? Number(formData.experience) : undefined,
       };
 
       if (editingId) {
@@ -382,7 +434,7 @@ export default function AddDean() {
   const validateExcelRow = (
     row: Omit<(typeof excelRows)[0], "error">,
     currentRoleOptions: RoleOption[],
-    currentDesignations: string[],
+    currentDesignations: DesignationOption[],
     occupiedRoles: Set<string>,
   ): string => {
     let error = "";
@@ -404,7 +456,8 @@ export default function AddDean() {
     }
     if (row.designation.trim() && currentDesignations.length > 0) {
       const desigValid = currentDesignations.some(
-        (d) => d.trim().toLowerCase() === row.designation.trim().toLowerCase(),
+        (d) =>
+          d.name.trim().toLowerCase() === row.designation.trim().toLowerCase(),
       );
       if (!desigValid) error += "Designation not in allowed list. ";
     }
@@ -540,7 +593,7 @@ export default function AddDean() {
           college: lockedCollegeName,
           role: row.role,
           level: Number(matchingRole?.level ?? 0),
-          designation: row.designation || designations[0] || "",
+          designation: row.designation || designations[0]?.name || "",
           hasPhd: row.hasPhd,
         });
         successCount++;
@@ -742,26 +795,69 @@ export default function AddDean() {
                 <div className="space-y-2">
                   <Label>Designation *</Label>
                   <Select
-                    value={formData.designation}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, designation: value })
+                    value={
+                      formData.designation
+                        ? `${formData.designation}__${formData.hasPhd ? "phd" : "nophd"}`
+                        : ""
                     }
+                    onValueChange={(key) => {
+                      const opt = designations.find(
+                        (d) => `${d.name}__${d.phd ? "phd" : "nophd"}` === key,
+                      );
+                      if (opt)
+                        setFormData({
+                          ...formData,
+                          designation: opt.name,
+                          hasPhd: opt.phd,
+                        });
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select designation" />
                     </SelectTrigger>
                     <SelectContent>
-                      {designations.map((desig) => (
-                        <SelectItem key={desig} value={desig}>
-                          {desig}
-                        </SelectItem>
-                      ))}
+                      {designations.map((d) => {
+                        const key = `${d.name}__${d.phd ? "phd" : "nophd"}`;
+                        return (
+                          <SelectItem key={key} value={key}>
+                            {d.name} {d.phd ? "(PhD)" : "(No PhD)"}
+                            {d.target ? ` — Target: ${d.target}` : ""}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Level *</Label>
                   <Input value={String(formData.level)} disabled />
+                </div>
+                <div className="space-y-2">
+                  <Label>Date of Joining</Label>
+                  <Input
+                    type="date"
+                    max={new Date().toISOString().split("T")[0]}
+                    value={formData.dateOfJoining}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        dateOfJoining: e.target.value,
+                        experience: e.target.value
+                          ? String(calculateExperience(e.target.value))
+                          : "",
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Experience (Years)</Label>
+                  <Input
+                    type="number"
+                    value={formData.experience}
+                    disabled
+                    className="bg-muted"
+                    placeholder="Auto-calculated"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>
@@ -832,18 +928,31 @@ export default function AddDean() {
                     )}
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label>Has PhD</Label>
-                  <label className="flex items-center gap-2 rounded-md border px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.hasPhd}
-                      onChange={(e) =>
-                        setFormData({ ...formData, hasPhd: e.target.checked })
+                  <Label>Target Score</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      value={
+                        designations.find(
+                          (d) =>
+                            d.name === formData.designation &&
+                            d.phd === formData.hasPhd,
+                        )?.target || "—"
                       }
-                      className="h-4 w-4"
+                      disabled
+                      className="bg-muted font-semibold max-w-[180px]"
                     />
-                    <span className="text-sm">Dean has completed PhD</span>
-                  </label>
+                    {formData.designation && (
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full font-medium ${
+                          formData.hasPhd
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                            : "bg-muted text-muted-foreground border"
+                        }`}
+                      >
+                        {formData.hasPhd ? "PhD" : "No PhD"}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1100,7 +1209,7 @@ export default function AddDean() {
                           value={
                             designations.some(
                               (d) =>
-                                d.trim().toLowerCase() ===
+                                d.name.trim().toLowerCase() ===
                                 row.designation.trim().toLowerCase(),
                             )
                               ? row.designation
@@ -1120,9 +1229,11 @@ export default function AddDean() {
                             <SelectValue placeholder="Select designation" />
                           </SelectTrigger>
                           <SelectContent>
-                            {designations.map((d) => (
-                              <SelectItem key={d} value={d}>
-                                {d}
+                            {Array.from(
+                              new Set(designations.map((d) => d.name)),
+                            ).map((name) => (
+                              <SelectItem key={name} value={name}>
+                                {name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -1176,7 +1287,10 @@ export default function AddDean() {
               )}
               {designations.length > 0 && (
                 <p>
-                  <strong>Valid designations:</strong> {designations.join(", ")}
+                  <strong>Valid designations:</strong>{" "}
+                  {Array.from(new Set(designations.map((d) => d.name))).join(
+                    ", ",
+                  )}
                 </p>
               )}
             </div>

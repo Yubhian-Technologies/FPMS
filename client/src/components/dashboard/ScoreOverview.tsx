@@ -14,9 +14,14 @@ interface ScoreCategory {
 interface ScoreOverviewProps {
   submissions: any[];
   userTarget?: string | number; // from designation target
+  targetLabel?: string; // e.g. "with PhD" or "without PhD"
 }
 
-export function ScoreOverview({ submissions, userTarget }: ScoreOverviewProps) {
+export function ScoreOverview({
+  submissions,
+  userTarget,
+  targetLabel,
+}: ScoreOverviewProps) {
   console.log("ScoreOverview received submissions:", submissions);
   console.log("User Target:", userTarget);
 
@@ -27,19 +32,20 @@ export function ScoreOverview({ submissions, userTarget }: ScoreOverviewProps) {
     if (!critName) return;
 
     const claimed = Number(sub.claimedScore ?? 0);
-const reviewer = sub.reviewerScore != null ? Number(sub.reviewerScore) : null;
-const appeal = sub.appealScore != null ? Number(sub.appealScore) : null;
-const final = sub.finalScore != null ? Number(sub.finalScore) : null;
+    const reviewer =
+      sub.reviewerScore != null ? Number(sub.reviewerScore) : null;
+    const appeal = sub.appealScore != null ? Number(sub.appealScore) : null;
+    const final = sub.finalScore != null ? Number(sub.finalScore) : null;
 
-// Correct unified priority logic
-let displayScore =
-  appeal != null
-    ? appeal
-    : final != null
-    ? final
-    : reviewer != null
-    ? reviewer
-    : claimed;
+    // Correct unified priority logic
+    let displayScore =
+      appeal != null
+        ? appeal
+        : final != null
+          ? final
+          : reviewer != null
+            ? reviewer
+            : claimed;
     const isUsingClaimed = sub.finalScore == null && sub.claimedScore != null;
 
     const criteriaTotal = Number(sub.criteriaTotalMarks ?? sub.maxMarks ?? 0);
@@ -67,23 +73,33 @@ let displayScore =
   const displayCategories = Object.values(categoriesMap);
 
   const totalScore = displayCategories.reduce((sum, cat) => sum + cat.score, 0);
-  const maxTotalScore = displayCategories.reduce((sum, cat) => sum + cat.maxScore, 0);
-  const percentComplete = maxTotalScore > 0 ? Math.round((totalScore / maxTotalScore) * 100) : 0;
+  const maxTotalScore = displayCategories.reduce(
+    (sum, cat) => sum + cat.maxScore,
+    0,
+  );
+  // Progress ring always calculated out of 300
+  const TOTAL_MAX = 300;
+  const percentComplete = Math.min(
+    100,
+    Math.round((totalScore / TOTAL_MAX) * 100),
+  );
 
   // ─── TARGET LOGIC ───
-  const targetNum = typeof userTarget === "string" && userTarget !== "Not assigned"
-    ? Number(userTarget.trim())
-    : typeof userTarget === "number"
-    ? userTarget
-    : null;
+  const targetNum =
+    typeof userTarget === "string" && userTarget !== "Not assigned"
+      ? Number(userTarget.trim())
+      : typeof userTarget === "number"
+        ? userTarget
+        : null;
 
-  const targetStatus = targetNum !== null
-    ? totalScore >= targetNum
-      ? "achieved"   // green
-      : totalScore >= targetNum * 0.8
-      ? "near"      
-      : "below"    
-    : "no-target";
+  const targetStatus =
+    targetNum !== null
+      ? totalScore >= targetNum
+        ? "achieved" // green
+        : totalScore >= targetNum * 0.8
+          ? "near"
+          : "below"
+      : "no-target";
 
   const targetColor = {
     achieved: "text-green-600 dark:text-green-400",
@@ -117,7 +133,10 @@ let displayScore =
         {/* Circular Total with Target Status */}
         <div className="flex items-center justify-center py-6">
           <div className="relative flex h-48 w-48 items-center justify-center">
-            <svg className="absolute h-full w-full -rotate-90" viewBox="0 0 100 100">
+            <svg
+              className="absolute h-full w-full -rotate-90"
+              viewBox="0 0 100 100"
+            >
               <circle
                 cx="50"
                 cy="50"
@@ -135,10 +154,10 @@ let displayScore =
                   targetStatus === "achieved"
                     ? "hsl(var(--success))"
                     : targetStatus === "near"
-                    ? "hsl(var(--warning))"
-                    : targetStatus === "below"
-                    ? "hsl(var(--destructive))"
-                    : "hsl(var(--primary))"
+                      ? "hsl(var(--warning))"
+                      : targetStatus === "below"
+                        ? "hsl(var(--destructive))"
+                        : "hsl(var(--primary))"
                 }
                 strokeWidth="6"
                 strokeLinecap="round"
@@ -148,9 +167,13 @@ let displayScore =
             </svg>
 
             <div className="text-center">
-              <span className="text-4xl font-bold text-foreground">{totalScore}</span>
+              <span className="text-4xl font-bold text-foreground">
+                {totalScore}
+              </span>
               <span className="text-xl text-muted-foreground"> / 300</span>
-              <p className=" text-sm font-medium text-muted-foreground">Total Score</p>
+              <p className=" text-sm font-medium text-muted-foreground">
+                Total Score
+              </p>
 
               {/* Target Display */}
               {targetNum !== null ? (
@@ -158,6 +181,11 @@ let displayScore =
                   <p className={`text-base  font-semibold ${targetColor}`}>
                     Target: {targetNum}
                   </p>
+                  {targetLabel && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {targetLabel}
+                    </p>
+                  )}
                   <p className={`text-xs mt-1 ${targetColor}`}>
                     {targetStatus === "achieved" && "Goal Achieved ✓"}
                     {targetStatus === "near" && "Close to Target"}
@@ -176,24 +204,39 @@ let displayScore =
         {/* Bars */}
         <div className="space-y-4">
           {displayCategories.map((category) => {
-            const percent = category.maxScore > 0
-              ? Math.round((category.score / category.maxScore) * 100)
-              : 0;
+            const percent =
+              category.maxScore > 0
+                ? Math.round((category.score / category.maxScore) * 100)
+                : 0;
+
+            // Color based on proximity to max: <50% → red, 50-79% → amber, ≥80% → green
+            const barColor =
+              percent >= 80
+                ? "bg-green-500"
+                : percent >= 50
+                  ? "bg-amber-400"
+                  : "bg-red-500";
+
+            const textColor =
+              percent >= 80
+                ? "text-green-600 dark:text-green-400"
+                : percent >= 50
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-red-600 dark:text-red-400";
 
             return (
               <div key={category.name} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">{category.name}</span>
-                  <span className="text-muted-foreground">
+                  <span className={cn("font-semibold", textColor)}>
                     {category.score} / {category.maxScore}
-                    {category.usingClaimed}
                   </span>
                 </div>
-                <div className="relative h-2 overflow-hidden rounded-full bg-muted">
+                <div className="relative h-2.5 overflow-hidden rounded-full bg-muted">
                   <div
                     className={cn(
                       "h-full rounded-full transition-all duration-700 ease-out",
-                      category.color
+                      barColor,
                     )}
                     style={{ width: `${percent}%` }}
                   />
@@ -211,12 +254,21 @@ let displayScore =
 function getColorForCriteria(name: string): string {
   const lower = name.toLowerCase();
   if (lower.includes("teach")) return "bg-primary";
-  if (lower.includes("research") ) return "bg-red-500";
+  if (lower.includes("research")) return "bg-red-500";
   if (lower.includes("professional")) return "bg-yellow-500";
-  if (lower.includes("student") ) return "bg-green-500";
-  if (lower.includes("instit") ) return "bg-blue-500";
+  if (lower.includes("student")) return "bg-green-500";
+  if (lower.includes("instit")) return "bg-blue-500";
 
-  const colors = ["bg-primary", "bg-accent", "bg-blue-500", "bg-green-500", "bg-amber-500", "bg-purple-500"];
-  const index = Math.abs(name.split("").reduce((a, c) => a + c.charCodeAt(0), 0)) % colors.length;
+  const colors = [
+    "bg-primary",
+    "bg-accent",
+    "bg-blue-500",
+    "bg-green-500",
+    "bg-amber-500",
+    "bg-purple-500",
+  ];
+  const index =
+    Math.abs(name.split("").reduce((a, c) => a + c.charCodeAt(0), 0)) %
+    colors.length;
   return colors[index];
 }
