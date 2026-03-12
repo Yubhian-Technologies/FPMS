@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +22,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Search,
   Plus,
   Pencil,
@@ -29,10 +36,15 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { api } from "@/api/api";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
+import * as XLSX from "xlsx";
 
 interface FacultyMember {
   id: string;
@@ -75,6 +87,24 @@ export default function Faculty() {
   );
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Excel upload state
+  const xlsxInputRef = useRef<HTMLInputElement>(null);
+  const [isExcelDialogOpen, setIsExcelDialogOpen] = useState(false);
+  const [isBulkUploading, setIsBulkUploading] = useState(false);
+  const [excelRows, setExcelRows] = useState<
+    Array<{
+      name: string;
+      email: string;
+      pass: string;
+      department: string;
+      designation: string;
+      experience: number;
+      hasPhd: boolean;
+      status: string;
+      error?: string;
+    }>
+  >([]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -152,10 +182,10 @@ export default function Faculty() {
 
       console.log("[Faculty] Parsed designations:", designationList);
       setDesignations(
-  designationList
-    .map((item: any) => String(item.name || item || "").trim()) // <- use item.name
-    .filter(Boolean),
-);
+        designationList
+          .map((item: any) => String(item.name || item || "").trim()) // <- use item.name
+          .filter(Boolean),
+      );
     } catch (error) {
       console.error("[Faculty] Failed to fetch designations:", error);
       setDesignations([]);
@@ -326,6 +356,152 @@ export default function Faculty() {
     }
   };
 
+  const handleExcelFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+        const parsed = rows.map((row) => {
+          const name = String(row["name"] ?? row["Name"] ?? "").trim();
+          const email = String(row["email"] ?? row["Email"] ?? "").trim();
+          const pass = String(
+            row["pass"] ?? row["password"] ?? row["Password"] ?? "",
+          ).trim();
+          const department = String(
+            row["department"] ?? row["Department"] ?? lockedDepartment ?? "",
+          ).trim();
+          const designation = String(
+            row["designation"] ?? row["Designation"] ?? "",
+          ).trim();
+          const experience = Number(
+            row["experience"] ?? row["Experience"] ?? 0,
+          );
+          const hasPhdRaw =
+            row["hasPhd"] ??
+            row["hasphd"] ??
+            row["HasPhD"] ??
+            row["has_phd"] ??
+            false;
+          const hasPhd =
+            hasPhdRaw === true ||
+            String(hasPhdRaw).toLowerCase() === "yes" ||
+            String(hasPhdRaw).toLowerCase() === "true" ||
+            String(hasPhdRaw) === "1";
+          const statusRaw = String(row["status"] ?? row["Status"] ?? "active")
+            .trim()
+            .toLowerCase();
+          const status = statusRaw === "inactive" ? "inactive" : "active";
+
+          let error = "";
+          if (!name) error += "Name missing. ";
+          if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+            error += "Valid email required. ";
+          if (!pass || pass.length < 6) error += "Password must be ≥6 chars. ";
+          if (!designation) error += "Designation missing. ";
+
+          return {
+            name,
+            email,
+            pass,
+            department,
+            designation,
+            experience,
+            hasPhd,
+            status,
+            error: error.trim(),
+          };
+        });
+
+        // Check for duplicate emails against existing faculty
+        const existingEmails = new Set(
+          faculty.map((f) => f.email.trim().toLowerCase()),
+        );
+        // Check for duplicate emails within the Excel file itself
+        const seenInFile = new Set<string>();
+        const finalParsed = parsed.map((row) => {
+          const emailKey = row.email.trim().toLowerCase();
+          let extraError = "";
+          if (emailKey && existingEmails.has(emailKey)) {
+            extraError = "Email already exists in the system. ";
+          } else if (emailKey && seenInFile.has(emailKey)) {
+            extraError = "Duplicate email in this file. ";
+          }
+          if (emailKey) seenInFile.add(emailKey);
+          return extraError
+            ? {
+                ...row,
+                error: (row.error ? row.error + " " : "") + extraError.trim(),
+              }
+            : row;
+        });
+
+        if (finalParsed.length === 0) {
+          toast({
+            title: "No rows found in the Excel file",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        setExcelRows(finalParsed);
+        setIsExcelDialogOpen(true);
+      } catch {
+        toast({ title: "Failed to parse Excel file", variant: "destructive" });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleBulkUpload = async () => {
+    const validRows = excelRows.filter((r) => !r.error);
+    if (validRows.length === 0) {
+      toast({ title: "No valid rows to upload", variant: "destructive" });
+      return;
+    }
+
+    setIsBulkUploading(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const row of validRows) {
+      try {
+        await api.post("/api/hod/add-faculty", {
+          name: row.name,
+          email: row.email,
+          pass: row.pass,
+          confirm_pass: row.pass,
+          college: lockedCollegeName,
+          department: row.department || lockedDepartment,
+          designation: row.designation,
+          role: "faculty",
+          level: facultyRoleLevel,
+          experience: row.experience,
+          isActive: row.status === "active",
+          hasPhd: row.hasPhd,
+        });
+        successCount++;
+      } catch {
+        failCount++;
+      }
+    }
+
+    setIsBulkUploading(false);
+    setIsExcelDialogOpen(false);
+    setExcelRows([]);
+    if (xlsxInputRef.current) xlsxInputRef.current.value = "";
+    await fetchFaculty();
+
+    toast({
+      title: `Bulk upload complete`,
+      description: `${successCount} added${failCount > 0 ? `, ${failCount} failed` : ""}.`,
+      variant: failCount > 0 ? "destructive" : "default",
+    });
+  };
+
   const handleDelete = async (id: string) => {
     try {
       setIsDeleting(true);
@@ -424,9 +600,27 @@ export default function Faculty() {
               Add and manage faculty for your college
             </p>
           </div>
-          <Button onClick={startNewFaculty}>
-            <Plus className="mr-2 h-4 w-4" /> Add Faculty
-          </Button>
+          <div className="flex gap-2">
+            <input
+              ref={xlsxInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleExcelFile(file);
+              }}
+            />
+            <Button
+              variant="outline"
+              onClick={() => xlsxInputRef.current?.click()}
+            >
+              <FileSpreadsheet className="mr-2 h-4 w-4" /> Upload Excel
+            </Button>
+            <Button onClick={startNewFaculty}>
+              <Plus className="mr-2 h-4 w-4" /> Add Faculty
+            </Button>
+          </div>
         </div>
 
         {isAddingFaculty && (
@@ -754,6 +948,131 @@ export default function Faculty() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Excel Preview Dialog */}
+        <Dialog
+          open={isExcelDialogOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsExcelDialogOpen(false);
+              setExcelRows([]);
+              if (xlsxInputRef.current) xlsxInputRef.current.value = "";
+            }
+          }}
+        >
+          <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5" />
+                Excel Upload Preview
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="text-sm text-muted-foreground mb-2">
+              <span className="text-green-600 font-medium">
+                {excelRows.filter((r) => !r.error).length} valid
+              </span>
+              {" / "}
+              <span className="text-destructive font-medium">
+                {excelRows.filter((r) => r.error).length} invalid
+              </span>
+              {" rows. Only valid rows will be uploaded."}
+            </div>
+
+            <div className="overflow-auto flex-1 rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-6"></TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Designation</TableHead>
+                    <TableHead>Exp</TableHead>
+                    <TableHead>PhD</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Issues</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {excelRows.map((row, idx) => (
+                    <TableRow
+                      key={idx}
+                      className={row.error ? "bg-destructive/5" : ""}
+                    >
+                      <TableCell>
+                        {row.error ? (
+                          <XCircle className="h-4 w-4 text-destructive" />
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        )}
+                      </TableCell>
+                      <TableCell>{row.name || "—"}</TableCell>
+                      <TableCell>{row.email || "—"}</TableCell>
+                      <TableCell>
+                        {row.department || lockedDepartment || "—"}
+                      </TableCell>
+                      <TableCell>{row.designation || "—"}</TableCell>
+                      <TableCell>{row.experience}</TableCell>
+                      <TableCell>{row.hasPhd ? "Yes" : "No"}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            row.status === "active" ? "default" : "secondary"
+                          }
+                        >
+                          {row.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-destructive text-xs">
+                        {row.error || ""}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="mt-3 p-3 rounded-md bg-muted text-xs text-muted-foreground">
+              <strong>Expected columns:</strong> name, email, pass (password),
+              department, designation, experience, hasPhd (yes/no/true/false),
+              status (active/inactive)
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsExcelDialogOpen(false);
+                  setExcelRows([]);
+                  if (xlsxInputRef.current) xlsxInputRef.current.value = "";
+                }}
+                disabled={isBulkUploading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleBulkUpload}
+                disabled={
+                  isBulkUploading ||
+                  excelRows.filter((r) => !r.error).length === 0
+                }
+              >
+                {isBulkUploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload {excelRows.filter((r) => !r.error).length} Faculty
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <DeleteConfirmationDialog
           open={!!facultyToDelete}

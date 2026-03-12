@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Plus,
   Pencil,
   Trash2,
@@ -27,7 +34,12 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { toast } from "@/hooks/use-toast";
 import { api } from "@/api/api";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
@@ -68,34 +80,50 @@ export default function AddHod() {
   const [hodRoleLevel, setHodRoleLevel] = useState(0);
   const [designations, setDesignations] = useState<string[]>([]);
 
-const fetchDesignations = async () => {
-  try {
-    const res = await api.get("/api/admin/designations");
-    const payload = res.data?.data;
+  // Excel upload state
+  const xlsxInputRef = useRef<HTMLInputElement>(null);
+  const [isExcelDialogOpen, setIsExcelDialogOpen] = useState(false);
+  const [isBulkUploading, setIsBulkUploading] = useState(false);
+  const [excelRows, setExcelRows] = useState<
+    Array<{
+      name: string;
+      email: string;
+      pass: string;
+      department: string;
+      designation: string;
+      hasPhd: boolean;
+      error?: string;
+    }>
+  >([]);
 
-    const list: any[] = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.designations)
-        ? payload.designations
-        : [];
+  const fetchDesignations = async () => {
+    try {
+      const res = await api.get("/api/admin/designations");
+      const payload = res.data?.data;
 
-    // Convert objects to strings (use name or title)
-    const normalized = list
-      .map((item) => {
-        if (typeof item === "string") return item.trim();
-        if (typeof item === "object" && item !== null)
-          return String(item.name || item.title || "").trim();
-        return "";
-      })
-      .filter(Boolean);
+      const list: any[] = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.designations)
+          ? payload.designations
+          : [];
 
-    setDesignations(normalized);
-    console.log("Designations fetched:", normalized);
-  } catch (err) {
-    console.error("Failed to fetch designations", err);
-    setDesignations([]);
-  }
-};
+      // Convert objects to strings (use name or title)
+      const normalized = list
+        .map((item) => {
+          if (typeof item === "string") return item.trim();
+          if (typeof item === "object" && item !== null)
+            return String(item.name || item.title || "").trim();
+          return "";
+        })
+        .filter(Boolean);
+
+      setDesignations(normalized);
+      console.log("Designations fetched:", normalized);
+    } catch (err) {
+      console.error("Failed to fetch designations", err);
+      setDesignations([]);
+    }
+  };
 
   const [formData, setFormData] = useState({
     name: "",
@@ -165,18 +193,18 @@ const fetchDesignations = async () => {
     try {
       const res = await api.get("/api/admin/all-hods");
       const data = Array.isArray(res.data?.data) ? res.data.data : [];
-     const normalized = data.map((item: any) => ({
-  ...item,
-  level:
-    item.level !== undefined && Number.isFinite(Number(item.level))
-      ? Number(item.level)
-      : undefined,
-  hasPhd: item.hasPhd ?? item.hasPhD ?? false,
-  designation:
-    item.designation && typeof item.designation === "object"
-      ? item.designation.name || item.designation.title || ""
-      : item.designation || "",
-}));
+      const normalized = data.map((item: any) => ({
+        ...item,
+        level:
+          item.level !== undefined && Number.isFinite(Number(item.level))
+            ? Number(item.level)
+            : undefined,
+        hasPhd: item.hasPhd ?? item.hasPhD ?? false,
+        designation:
+          item.designation && typeof item.designation === "object"
+            ? item.designation.name || item.designation.title || ""
+            : item.designation || "",
+      }));
       setHods(normalized);
     } catch {
       toast({ title: "Failed to load HODs", variant: "destructive" });
@@ -256,27 +284,30 @@ const fetchDesignations = async () => {
   };
 
   const openEdit = (hod: Hod) => {
-  setFormData({
-    name: hod.name,
-    email: hod.email,
-    pass: "",
-    confirm_pass: "",
-    college: lockedCollegeName || hod.college,
-    department: hod.department || "",
-    designation:
-  typeof hod.designation === "string"
-    ? hod.designation
-    : hod.designation?.name || hod.designation?.title || designations[0] || "",
-    role: "hod",
-    level:
-      hod.level !== undefined && Number.isFinite(Number(hod.level))
-        ? Number(hod.level)
-        : hodRoleLevel,
-    hasPhd: !!hod.hasPhd,
-  });
-  setEditingId(hod.id);
-  setIsAddingHod(true);
-};
+    setFormData({
+      name: hod.name,
+      email: hod.email,
+      pass: "",
+      confirm_pass: "",
+      college: lockedCollegeName || hod.college,
+      department: hod.department || "",
+      designation:
+        typeof hod.designation === "string"
+          ? hod.designation
+          : (hod.designation as any)?.name ||
+            (hod.designation as any)?.title ||
+            designations[0] ||
+            "",
+      role: "hod",
+      level:
+        hod.level !== undefined && Number.isFinite(Number(hod.level))
+          ? Number(hod.level)
+          : hodRoleLevel,
+      hasPhd: !!hod.hasPhd,
+    });
+    setEditingId(hod.id);
+    setIsAddingHod(true);
+  };
 
   const handleSave = async () => {
     const resolvedCollege = lockedCollegeName || formData.college;
@@ -372,6 +403,227 @@ const fetchDesignations = async () => {
     }
   };
 
+  const validateExcelRow = (
+    row: Omit<(typeof excelRows)[0], "error">,
+    currentBranches: string[],
+    currentDesignations: string[],
+    occupiedDepts: Set<string>,
+  ): string => {
+    let error = "";
+    if (!row.name.trim()) error += "Name missing. ";
+    if (!row.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(row.email))
+      error += "Valid email required. ";
+    if (!row.pass || row.pass.length < 6)
+      error += "Password must be ≥6 chars. ";
+    if (!row.department.trim()) {
+      error += "Department missing. ";
+    } else {
+      const normalizedDept = row.department.trim().toLowerCase();
+      const deptValid = currentBranches.some(
+        (b) => b.trim().toLowerCase() === normalizedDept,
+      );
+      if (!deptValid) error += "Department not in college branches. ";
+      else if (occupiedDepts.has(normalizedDept))
+        error += "Department already has an HOD. ";
+    }
+    if (row.designation.trim() && currentDesignations.length > 0) {
+      const desigValid = currentDesignations.some(
+        (d) => d.trim().toLowerCase() === row.designation.trim().toLowerCase(),
+      );
+      if (!desigValid) error += "Designation not in allowed list. ";
+    }
+    return error.trim();
+  };
+
+  const updateExcelRow = (
+    idx: number,
+    updates: Partial<Omit<(typeof excelRows)[0], "error">>,
+  ) => {
+    setExcelRows((prev) => {
+      const updated = [...prev];
+      const newRow = { ...updated[idx], ...updates };
+      newRow.error = validateExcelRow(
+        newRow,
+        branchOptions,
+        designations,
+        occupiedDepartmentsForCollege,
+      );
+      updated[idx] = newRow;
+      return updated;
+    });
+  };
+
+  const deleteExcelRow = (idx: number) => {
+    setExcelRows((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleExcelFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+        const parsed = rows.map((row) => {
+          const name = String(row["name"] ?? row["Name"] ?? "").trim();
+          const email = String(row["email"] ?? row["Email"] ?? "").trim();
+          const pass = String(
+            row["pass"] ?? row["password"] ?? row["Password"] ?? "",
+          ).trim();
+          const department = String(
+            row["department"] ?? row["Department"] ?? "",
+          ).trim();
+          const designation = String(
+            row["designation"] ?? row["Designation"] ?? "",
+          ).trim();
+          const hasPhdRaw =
+            row["hasPhd"] ??
+            row["hasphd"] ??
+            row["HasPhD"] ??
+            row["has_phd"] ??
+            false;
+          const hasPhd =
+            hasPhdRaw === true ||
+            String(hasPhdRaw).toLowerCase() === "yes" ||
+            String(hasPhdRaw).toLowerCase() === "true" ||
+            String(hasPhdRaw) === "1";
+
+          let error = "";
+          if (!name) error += "Name missing. ";
+          if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+            error += "Valid email required. ";
+          if (!pass || pass.length < 6) error += "Password must be ≥6 chars. ";
+          if (!department) error += "Department missing. ";
+
+          const base = { name, email, pass, department, designation, hasPhd };
+          return {
+            ...base,
+            error: validateExcelRow(
+              base,
+              branchOptions,
+              designations,
+              occupiedDepartmentsForCollege,
+            ),
+          };
+        });
+
+        if (parsed.length === 0) {
+          toast({
+            title: "No rows found in the Excel file",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Check for duplicate emails / departments against existing HODs
+        const existingEmails = new Set(
+          hods.map((h) => h.email.trim().toLowerCase()),
+        );
+        const existingDepts = new Set(
+          hods
+            .filter((h) =>
+              normalizedLockedCollege
+                ? String(h.college || "")
+                    .trim()
+                    .toLowerCase() === normalizedLockedCollege
+                : true,
+            )
+            .map((h) =>
+              String(h.department || "")
+                .trim()
+                .toLowerCase(),
+            )
+            .filter(Boolean),
+        );
+        // Track duplicates within the Excel file itself
+        const seenEmailsInFile = new Set<string>();
+        const seenDeptsInFile = new Set<string>();
+        const finalParsed = parsed.map((row) => {
+          const emailKey = row.email.trim().toLowerCase();
+          const deptKey = row.department.trim().toLowerCase();
+          let extraError = "";
+
+          // Email checks
+          if (emailKey && existingEmails.has(emailKey)) {
+            extraError += "Email already exists in the system. ";
+          } else if (emailKey && seenEmailsInFile.has(emailKey)) {
+            extraError += "Duplicate email in this file. ";
+          }
+          if (emailKey) seenEmailsInFile.add(emailKey);
+
+          // Department checks (only if dept is otherwise valid — no point double-reporting)
+          if (deptKey && !row.error?.includes("Department not in college")) {
+            if (existingDepts.has(deptKey)) {
+              extraError += "Department already has an HOD. ";
+            } else if (seenDeptsInFile.has(deptKey)) {
+              extraError += "Duplicate department in this file. ";
+            }
+          }
+          if (deptKey) seenDeptsInFile.add(deptKey);
+
+          return extraError
+            ? {
+                ...row,
+                error: (row.error ? row.error + " " : "") + extraError.trim(),
+              }
+            : row;
+        });
+
+        setExcelRows(finalParsed);
+        setIsExcelDialogOpen(true);
+      } catch {
+        toast({ title: "Failed to parse Excel file", variant: "destructive" });
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleBulkUpload = async () => {
+    const validRows = excelRows.filter((r) => !r.error);
+    if (validRows.length === 0) {
+      toast({ title: "No valid rows to upload", variant: "destructive" });
+      return;
+    }
+
+    setIsBulkUploading(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const row of validRows) {
+      try {
+        await api.post("/api/admin/add-hod", {
+          name: row.name,
+          email: row.email,
+          pass: row.pass,
+          confirm_pass: row.pass,
+          college: lockedCollegeName,
+          department: row.department,
+          designation: row.designation || designations[0] || "",
+          role: "hod",
+          level: hodRoleLevel,
+          hasPhd: row.hasPhd,
+        });
+        successCount++;
+      } catch {
+        failCount++;
+      }
+    }
+
+    setIsBulkUploading(false);
+    setIsExcelDialogOpen(false);
+    setExcelRows([]);
+    if (xlsxInputRef.current) xlsxInputRef.current.value = "";
+    await fetchHods();
+
+    toast({
+      title: "Bulk upload complete",
+      description: `${successCount} added${failCount > 0 ? `, ${failCount} failed` : ""}.`,
+      variant: failCount > 0 ? "destructive" : "default",
+    });
+  };
+
   const handleDelete = async (id: string) => {
     try {
       setIsDeleting(true);
@@ -457,9 +709,27 @@ const fetchDesignations = async () => {
             <p className="text-muted-foreground">Add and manage HODs</p>
           </div>
           {!isAddingHod && (
-            <Button onClick={startNewHod}>
-              <Plus className="mr-2 h-4 w-4" /> Add HOD
-            </Button>
+            <div className="flex gap-2">
+              <input
+                ref={xlsxInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleExcelFile(file);
+                }}
+              />
+              <Button
+                variant="outline"
+                onClick={() => xlsxInputRef.current?.click()}
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4" /> Upload Excel
+              </Button>
+              <Button onClick={startNewHod}>
+                <Plus className="mr-2 h-4 w-4" /> Add HOD
+              </Button>
+            </div>
           )}
         </div>
 
@@ -530,26 +800,26 @@ const fetchDesignations = async () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-  <Label>Designation *</Label>
-  <Select
-    value={formData.designation}
-    onValueChange={(value) =>
-      setFormData({ ...formData, designation: value })
-    }
-    disabled={designations.length === 0}
-  >
-    <SelectTrigger>
-      <SelectValue placeholder="Select designation" />
-    </SelectTrigger>
-    <SelectContent>
-  {designations.map((desig) => (
-    <SelectItem key={desig} value={desig}>
-      {desig}
-    </SelectItem>
-  ))}
-</SelectContent>
-  </Select>
-</div>
+                  <Label>Designation *</Label>
+                  <Select
+                    value={formData.designation}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, designation: value })
+                    }
+                    disabled={designations.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select designation" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {designations.map((desig) => (
+                        <SelectItem key={desig} value={desig}>
+                          {desig}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="space-y-2">
                   <Label>Role *</Label>
                   <Input value="hod" disabled />
@@ -758,6 +1028,274 @@ const fetchDesignations = async () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Excel Preview Dialog */}
+        <Dialog
+          open={isExcelDialogOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsExcelDialogOpen(false);
+              setExcelRows([]);
+              if (xlsxInputRef.current) xlsxInputRef.current.value = "";
+            }
+          }}
+        >
+          <DialogContent className="max-w-6xl max-h-[85vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5" />
+                Excel Upload Preview — Edit rows before uploading
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="text-sm text-muted-foreground mb-2">
+              <span className="text-green-600 font-medium">
+                {excelRows.filter((r) => !r.error).length} valid
+              </span>
+              {" / "}
+              <span className="text-destructive font-medium">
+                {excelRows.filter((r) => r.error).length} invalid
+              </span>
+              {" rows. Fix any issues inline, then upload valid rows."}
+            </div>
+
+            <div className="overflow-auto flex-1 rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-8"></TableHead>
+                    <TableHead className="min-w-[130px]">Name</TableHead>
+                    <TableHead className="min-w-[170px]">Email</TableHead>
+                    <TableHead className="min-w-[140px]">Password</TableHead>
+                    <TableHead className="min-w-[170px]">
+                      Dept/Branch *
+                    </TableHead>
+                    <TableHead className="min-w-[180px]">Designation</TableHead>
+                    <TableHead className="w-16">PhD</TableHead>
+                    <TableHead className="min-w-[160px]">Issues</TableHead>
+                    <TableHead className="w-10"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {excelRows.map((row, idx) => (
+                    <TableRow
+                      key={idx}
+                      className={
+                        row.error
+                          ? "bg-destructive/5"
+                          : "bg-green-50/40 dark:bg-green-950/10"
+                      }
+                    >
+                      <TableCell className="align-top pt-3">
+                        {row.error ? (
+                          <XCircle className="h-4 w-4 text-destructive" />
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        )}
+                      </TableCell>
+
+                      {/* Name */}
+                      <TableCell>
+                        <Input
+                          className="h-8 text-xs"
+                          value={row.name}
+                          onChange={(e) =>
+                            updateExcelRow(idx, { name: e.target.value })
+                          }
+                        />
+                      </TableCell>
+
+                      {/* Email */}
+                      <TableCell>
+                        <Input
+                          className="h-8 text-xs"
+                          value={row.email}
+                          onChange={(e) =>
+                            updateExcelRow(idx, { email: e.target.value })
+                          }
+                        />
+                      </TableCell>
+
+                      {/* Password */}
+                      <TableCell>
+                        <Input
+                          className="h-8 text-xs"
+                          type="password"
+                          value={row.pass}
+                          onChange={(e) =>
+                            updateExcelRow(idx, { pass: e.target.value })
+                          }
+                          placeholder="≥6 chars"
+                        />
+                      </TableCell>
+
+                      {/* Department — must match fetched branches & not be occupied */}
+                      <TableCell>
+                        <Select
+                          value={
+                            branchOptions.some(
+                              (b) =>
+                                b.trim().toLowerCase() ===
+                                row.department.trim().toLowerCase(),
+                            )
+                              ? row.department
+                              : ""
+                          }
+                          onValueChange={(val) =>
+                            updateExcelRow(idx, { department: val })
+                          }
+                        >
+                          <SelectTrigger
+                            className={`h-8 text-xs ${
+                              row.error?.includes("Department") ||
+                              row.error?.includes("HOD")
+                                ? "border-destructive"
+                                : ""
+                            }`}
+                          >
+                            <SelectValue placeholder="Select branch" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {branchOptions.map((b) => {
+                              const isOccupied =
+                                occupiedDepartmentsForCollege.has(
+                                  b.trim().toLowerCase(),
+                                );
+                              return (
+                                <SelectItem
+                                  key={b}
+                                  value={b}
+                                  disabled={isOccupied}
+                                >
+                                  {b}
+                                  {isOccupied ? " (occupied)" : ""}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+
+                      {/* Designation — must match fetched designations */}
+                      <TableCell>
+                        <Select
+                          value={
+                            designations.some(
+                              (d) =>
+                                d.trim().toLowerCase() ===
+                                row.designation.trim().toLowerCase(),
+                            )
+                              ? row.designation
+                              : ""
+                          }
+                          onValueChange={(val) =>
+                            updateExcelRow(idx, { designation: val })
+                          }
+                        >
+                          <SelectTrigger
+                            className={`h-8 text-xs ${
+                              row.error?.includes("Designation")
+                                ? "border-destructive"
+                                : ""
+                            }`}
+                          >
+                            <SelectValue placeholder="Select designation" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {designations.map((d) => (
+                              <SelectItem key={d} value={d}>
+                                {d}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+
+                      {/* PhD */}
+                      <TableCell className="text-center align-top pt-3">
+                        <input
+                          type="checkbox"
+                          checked={row.hasPhd}
+                          onChange={(e) =>
+                            updateExcelRow(idx, { hasPhd: e.target.checked })
+                          }
+                          className="h-4 w-4"
+                        />
+                      </TableCell>
+
+                      {/* Issues */}
+                      <TableCell className="text-destructive text-xs align-top pt-3">
+                        {row.error || (
+                          <span className="text-green-600">Ready</span>
+                        )}
+                      </TableCell>
+
+                      {/* Delete row */}
+                      <TableCell className="align-top pt-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => deleteExcelRow(idx)}
+                          disabled={isBulkUploading}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="mt-3 p-3 rounded-md bg-muted text-xs text-muted-foreground space-y-1">
+              {branchOptions.length > 0 && (
+                <p>
+                  <strong>Valid branches:</strong> {branchOptions.join(", ")}
+                </p>
+              )}
+              {designations.length > 0 && (
+                <p>
+                  <strong>Valid designations:</strong> {designations.join(", ")}
+                </p>
+              )}
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsExcelDialogOpen(false);
+                  setExcelRows([]);
+                  if (xlsxInputRef.current) xlsxInputRef.current.value = "";
+                }}
+                disabled={isBulkUploading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleBulkUpload}
+                disabled={
+                  isBulkUploading ||
+                  excelRows.filter((r) => !r.error).length === 0
+                }
+              >
+                {isBulkUploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload {excelRows.filter((r) => !r.error).length} HODs
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <DeleteConfirmationDialog
           open={!!hodToDelete}
