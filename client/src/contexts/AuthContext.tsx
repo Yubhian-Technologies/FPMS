@@ -1,9 +1,10 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api } from "@/api/api";
 
 type Role =
   | "committee"
   | "principle"
+  | "admin"
   | "hod"
   | "dean"
   | "faculty"
@@ -32,22 +33,36 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+const normalizeStoredUser = (user: User): User => {
+  const normalizedRole =
+    String(user.role || "").trim().toLowerCase() === "admin"
+      ? "principle"
+      : user.role;
+
+  return {
+    ...user,
+    role: normalizedRole,
+    college: user.college ?? "",
+  };
+};
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     const token = localStorage.getItem("token");
+    const hasUsableToken = token && token !== "undefined" && token !== "null";
 
-    if (storedUser && token) {
-      const parsed: User = JSON.parse(storedUser);
+    if (storedUser && hasUsableToken) {
+      const parsed = normalizeStoredUser(JSON.parse(storedUser) as User);
+      localStorage.setItem("user", JSON.stringify(parsed));
       setUser(parsed);
       api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
       // Self-heal: if principle has no college stored, fetch it from server
-      const isPrinciple =
-        parsed.role === "principle" || parsed.role === ("admin" as any);
+      const isPrinciple = parsed.role === "principle";
       if (isPrinciple && !parsed.college) {
         api
           .get("/api/admin/college-details")
@@ -63,6 +78,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     }
 
+    if (storedUser && !hasUsableToken) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      delete api.defaults.headers.common["Authorization"];
+    }
+
     setIsLoading(false);
   }, []);
 
@@ -75,15 +96,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         email,
         password,
       });
-      if (unified.data?.success) {
+      if (unified.data?.success && unified.data?.token) {
+        const normalizedUser = normalizeStoredUser(unified.data.user);
         localStorage.setItem("token", unified.data.token);
-        localStorage.setItem("user", JSON.stringify(unified.data.user));
+        localStorage.setItem("user", JSON.stringify(normalizedUser));
 
         api.defaults.headers.common["Authorization"] =
           `Bearer ${unified.data.token}`;
-        setUser(unified.data.user);
+        setUser(normalizedUser);
 
-        return unified.data.user;
+        return normalizedUser;
       }
     } catch (err) {}
 
@@ -98,21 +120,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     for (const ep of endpoints) {
       try {
         const res = await api.post(ep.url, { email, password });
-        if (res.data.success) {
+        if (res.data.success && res.data?.token) {
           console.log("Login successful for role:", ep.role);
-          const userWithCollege = {
-            ...res.data.user,
-            college: res.data.user?.college ?? "",
-          };
-          res.data.user = userWithCollege;
+          const normalizedUser = normalizeStoredUser(res.data.user);
           localStorage.setItem("token", res.data.token);
-          localStorage.setItem("user", JSON.stringify(res.data.user));
+          localStorage.setItem("user", JSON.stringify(normalizedUser));
 
           api.defaults.headers.common["Authorization"] =
             `Bearer ${res.data.token}`;
-          setUser(res.data.user);
+          setUser(normalizedUser);
 
-          return res.data.user;
+          return normalizedUser;
         }
       } catch (err) {}
     }
