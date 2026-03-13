@@ -10,9 +10,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { GraduationCap, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import vishnuLogo from "@/assets/vishnu.png";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -65,8 +66,12 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/50 to-background p-4">
       <div className="w-full max-w-md space-y-8 animate-fade-in">
         <div className="text-center bg-white mt-5 ">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl gradient-primary shadow-lg p-5 mt-5">
-            <GraduationCap className="h-8 w-8 text-primary-foreground" />
+          <div className="inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-lg p-1 mt-5 border">
+            <img
+              src={vishnuLogo}
+              alt="Vishnu Logo"
+              className="h-full w-full rounded-xl object-contain"
+            />
           </div>
           <h1 className="mt-4 font-display text-3xl font-bold text-foreground">
             FPMS

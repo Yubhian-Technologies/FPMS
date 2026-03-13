@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
+import vishnuLogo from "@/assets/vishnu.png";
 import {
   GraduationCap,
   Target,
@@ -76,8 +77,12 @@ export default function Index() {
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary">
-              <GraduationCap className="h-5 w-5 text-primary-foreground" />
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white p-1 shadow-sm">
+              <img
+                src={vishnuLogo}
+                alt="Vishnu Logo"
+                className="h-full w-full rounded-lg object-contain"
+              />
             </div>
             <span className="font-display text-xl font-bold">FPMS</span>
           </div>

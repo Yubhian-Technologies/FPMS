@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { api } from "@/api/api";
+import vishnuLogo from "@/assets/vishnu.png";
 import {
   LayoutDashboard,
   FileText,
@@ -11,7 +12,6 @@ import {
   ClipboardCheck,
   BarChart3,
   Briefcase,
-  GraduationCap,
   MessageSquare,
   Building2,
   ChevronDown,
@@ -306,8 +306,12 @@ export function AppSidebar() {
         <div className="flex h-full flex-col overflow-y-auto">
           {" "}
           <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary">
-              <GraduationCap className="h-5 w-5 text-sidebar-primary-foreground" />
+            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-white p-0.5">
+              <img
+                src={vishnuLogo}
+                alt="Vishnu Logo"
+                className="h-full w-full rounded-md object-contain"
+              />
             </div>
             <div>
               <h1 className="font-display text-lg font-bold text-sidebar-foreground">
