@@ -22,6 +22,140 @@ const isPrincipalRole = (value) =>
 const isCommitteeRole = (value) =>
   normalizeRoleForWorkflow(value) === "committee";
 
+const parseBearerToken = (authorizationHeader) => {
+  const value = String(authorizationHeader || "").trim();
+  if (!value.toLowerCase().startsWith("bearer ")) return "";
+  return value.slice(7).trim();
+};
+
+const resolveReviewerScope = async (req) => {
+  const scope = {
+    userId: String(
+      req.user?.uid || req.user?.id || req.headers["x-user-id"] || "",
+    ).trim(),
+    userEmail: String(req.user?.email || req.headers["x-user-email"] || "")
+      .trim()
+      .toLowerCase(),
+    userRole: normalizeRoleForWorkflow(
+      req.user?.role || req.headers["x-user-role"] || "",
+    ),
+    college: String(req.user?.college || req.headers["x-college"] || "").trim(),
+    department: String(
+      req.user?.department || req.headers["x-department"] || "",
+    ).trim(),
+  };
+
+  const token = parseBearerToken(req.headers?.authorization);
+  if (token) {
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(token);
+
+      if (!scope.userId) scope.userId = String(decodedToken?.uid || "").trim();
+      if (!scope.userEmail) {
+        scope.userEmail = String(decodedToken?.email || "")
+          .trim()
+          .toLowerCase();
+      }
+      if (!scope.userRole) {
+        scope.userRole = normalizeRoleForWorkflow(
+          decodedToken?.role || decodedToken?.claims?.role || "",
+        );
+      }
+      if (!scope.college) {
+        scope.college = String(
+          decodedToken?.college || decodedToken?.claims?.college || "",
+        ).trim();
+      }
+      if (!scope.department) {
+        scope.department = String(
+          decodedToken?.department || decodedToken?.claims?.department || "",
+        ).trim();
+      }
+    } catch (error) {
+      console.warn("resolveReviewerScope: token decode failed", error?.message);
+    }
+  }
+
+  const fillScopeFromUsersDoc = (userData = {}) => {
+    if (!scope.userRole) {
+      scope.userRole = normalizeRoleForWorkflow(userData.role || "");
+    }
+    if (!scope.college) scope.college = String(userData.college || "").trim();
+    if (!scope.department) {
+      scope.department = String(userData.department || "").trim();
+    }
+  };
+
+  if (
+    scope.userId &&
+    (!scope.college || !scope.department || !scope.userRole)
+  ) {
+    try {
+      const userDoc = await db.collection("users").doc(scope.userId).get();
+      if (userDoc.exists) fillScopeFromUsersDoc(userDoc.data() || {});
+    } catch (error) {
+      console.warn(
+        "resolveReviewerScope: users doc lookup failed",
+        error?.message,
+      );
+    }
+  }
+
+  if (
+    scope.userEmail &&
+    (!scope.college || !scope.department || !scope.userRole)
+  ) {
+    try {
+      const usersByEmail = await db
+        .collection("users")
+        .where("email", "==", scope.userEmail)
+        .limit(1)
+        .get();
+
+      if (!usersByEmail.empty) {
+        fillScopeFromUsersDoc(usersByEmail.docs[0].data() || {});
+      }
+    } catch (error) {
+      console.warn(
+        "resolveReviewerScope: users email lookup failed",
+        error?.message,
+      );
+    }
+  }
+
+  if (isPrincipalRole(scope.userRole) && !scope.college) {
+    try {
+      if (scope.userId) {
+        const adminDoc = await db.collection("admins").doc(scope.userId).get();
+        if (adminDoc.exists) {
+          scope.college = String(adminDoc.data()?.college || "").trim();
+        }
+      }
+
+      if (!scope.college && scope.userEmail) {
+        const adminsByEmail = await db
+          .collection("admins")
+          .where("email", "==", scope.userEmail)
+          .limit(1)
+          .get();
+
+        if (!adminsByEmail.empty) {
+          scope.college = String(
+            adminsByEmail.docs[0].data()?.college || "",
+          ).trim();
+        }
+      }
+    } catch (error) {
+      console.warn(
+        "resolveReviewerScope: admins lookup failed",
+        error?.message,
+      );
+    }
+  }
+
+  return scope;
+};
+
 const loadWorkflowRules = async () => {
   let superAdminDoc = await db.collection("superadmin").doc("config").get();
 
@@ -40,6 +174,113 @@ const loadWorkflowRules = async () => {
   return Array.isArray(superAdminDoc.data()?.workflowRules)
     ? superAdminDoc.data().workflowRules
     : [];
+};
+
+const getCollegeDeadlineByName = async (collegeName) => {
+  const normalizedCollege = String(collegeName || "")
+    .trim()
+    .toLowerCase();
+  if (!normalizedCollege) return null;
+
+  let superAdminDoc = await db.collection("superadmin").doc("config").get();
+
+  if (!superAdminDoc.exists) {
+    superAdminDoc = await db.collection("superadmin").doc("root").get();
+  }
+
+  if (!superAdminDoc.exists) {
+    const snapshot = await db.collection("superadmin").limit(1).get();
+    if (!snapshot.empty) superAdminDoc = snapshot.docs[0];
+  }
+
+  if (!superAdminDoc.exists) return null;
+
+  const data = superAdminDoc.data() || {};
+  const colleges = Array.isArray(data.colleges) ? data.colleges : [];
+  const college = colleges.find(
+    (item) =>
+      String(item?.name || "")
+        .trim()
+        .toLowerCase() === normalizedCollege,
+  );
+
+  const rawDeadline = college?.deadline;
+  if (!rawDeadline) return null;
+
+  const deadlineDate = new Date(rawDeadline);
+  if (Number.isNaN(deadlineDate.getTime())) return null;
+
+  return deadlineDate;
+};
+
+const autoAcceptOverdueReviewedSubmissions = async ({ userId, college }) => {
+  const resolvedUserId = String(userId || "").trim();
+  const resolvedCollege = String(college || "").trim();
+
+  if (!resolvedUserId || !resolvedCollege) {
+    return { updatedCount: 0 };
+  }
+
+  const deadlineDate = await getCollegeDeadlineByName(resolvedCollege);
+  if (!deadlineDate) {
+    return { updatedCount: 0 };
+  }
+
+  const now = new Date();
+  if (now.getTime() <= deadlineDate.getTime()) {
+    return { updatedCount: 0 };
+  }
+
+  const userSubmissionsSnapshot = await db
+    .collection("submissions")
+    .where("userId", "==", resolvedUserId)
+    .get();
+
+  const overdueReviewedDocs = userSubmissionsSnapshot.docs.filter((doc) => {
+    const data = doc.data() || {};
+    return String(data.status || "").toLowerCase() === "reviewed";
+  });
+
+  if (overdueReviewedDocs.length === 0) {
+    return { updatedCount: 0 };
+  }
+
+  const batch = db.batch();
+  let totalAutoAcceptedScore = 0;
+
+  overdueReviewedDocs.forEach((doc) => {
+    const data = doc.data() || {};
+    const reviewerScore = Number(data.reviewerScore);
+    const safeScore = Number.isFinite(reviewerScore) ? reviewerScore : 0;
+    totalAutoAcceptedScore += safeScore;
+
+    batch.update(doc.ref, {
+      status: "accepted",
+      finalScore: safeScore,
+      autoAccepted: true,
+      autoAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+
+  await batch.commit();
+
+  if (totalAutoAcceptedScore > 0) {
+    await db
+      .collection("users")
+      .doc(resolvedUserId)
+      .set(
+        {
+          totalScore: admin.firestore.FieldValue.increment(
+            totalAutoAcceptedScore,
+          ),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+  }
+
+  return { updatedCount: overdueReviewedDocs.length };
 };
 
 const getEffectiveAppealRoleIds = (submission, workflowRules = []) => {
@@ -351,6 +592,9 @@ export const updateSubmission = async (req, res) => {
 export const getMySubmissions = async (req, res) => {
   try {
     const userId = req.user?.uid || req.user?.id || req.headers["x-user-id"];
+    let userCollege = String(
+      req.user?.college || req.headers["x-college"] || "",
+    ).trim();
     const { formId, criteriaId } = req.query;
 
     if (!userId) {
@@ -360,6 +604,22 @@ export const getMySubmissions = async (req, res) => {
     }
 
     console.log("Fetching submissions for userId:", userId);
+
+    if (!userCollege && userId) {
+      try {
+        const userDoc = await db.collection("users").doc(String(userId)).get();
+        if (userDoc.exists) {
+          userCollege = String(userDoc.data()?.college || "").trim();
+        }
+      } catch (error) {
+        console.warn("getMySubmissions: failed to resolve user college", error);
+      }
+    }
+
+    await autoAcceptOverdueReviewedSubmissions({
+      userId: String(userId || ""),
+      college: userCollege,
+    });
 
     let query = db.collection("submissions").where("userId", "==", userId);
 
@@ -434,18 +694,19 @@ export const getMySubmissions = async (req, res) => {
 // Get review queue (HOD/Committee)
 export const getReviewQueue = async (req, res) => {
   try {
-    const userRole = (
-      req.user?.role ||
-      req.headers["x-user-role"] ||
-      ""
-    ).toLowerCase();
-    const college = req.user?.college || req.headers["x-college"];
-    const department = req.user?.department || req.headers["x-department"];
+    const { userRole, college, department } = await resolveReviewerScope(req);
 
     if (!userRole) {
       return res
         .status(401)
         .json({ success: false, message: "User role not found" });
+    }
+
+    if (isPrincipalRole(userRole) && !college) {
+      return res.status(403).json({
+        success: false,
+        message: "Principal college not found. Please login again.",
+      });
     }
 
     let query = db
@@ -454,7 +715,13 @@ export const getReviewQueue = async (req, res) => {
       .where("submitToRoleIds", "array-contains", userRole);
 
     if (college) query = query.where("college", "==", college);
-    if (department) query = query.where("department", "==", department);
+    if (
+      department &&
+      !isCommitteeRole(userRole) &&
+      !isPrincipalRole(userRole)
+    ) {
+      query = query.where("department", "==", department);
+    }
 
     const snapshot = await query.get();
     const submissions = snapshot.docs.map((doc) => ({
@@ -486,14 +753,8 @@ export const getReviewQueue = async (req, res) => {
 // Get reviewed submissions (HOD/Committee)
 export const getReviewedSubmissions = async (req, res) => {
   try {
-    const userId = req.user?.uid || req.user?.id || req.headers["x-user-id"];
-    const userRole = (
-      req.user?.role ||
-      req.headers["x-user-role"] ||
-      ""
-    ).toLowerCase();
-    const college = req.user?.college || req.headers["x-college"];
-    const department = req.user?.department || req.headers["x-department"];
+    const { userId, userRole, college, department } =
+      await resolveReviewerScope(req);
 
     if (!userId || !userRole) {
       return res
@@ -501,11 +762,24 @@ export const getReviewedSubmissions = async (req, res) => {
         .json({ success: false, message: "User not authenticated" });
     }
 
+    if (isPrincipalRole(userRole) && !college) {
+      return res.status(403).json({
+        success: false,
+        message: "Principal college not found. Please login again.",
+      });
+    }
+
     // Fetch all submissions reviewed by this user (regardless of current status)
     let query = db.collection("submissions").where("reviewerId", "==", userId);
 
     if (college) query = query.where("college", "==", college);
-    if (department) query = query.where("department", "==", department);
+    if (
+      department &&
+      !isCommitteeRole(userRole) &&
+      !isPrincipalRole(userRole)
+    ) {
+      query = query.where("department", "==", department);
+    }
 
     const snapshot = await query.get();
     const submissions = snapshot.docs.map((doc) => ({
@@ -711,14 +985,7 @@ export const acceptReview = async (req, res) => {
 // Get appeal queue
 export const getAppealQueue = async (req, res) => {
   try {
-    const rawUserRole = (
-      req.user?.role ||
-      req.headers["x-user-role"] ||
-      ""
-    ).toLowerCase();
-    const userRole = normalizeRoleForWorkflow(rawUserRole);
-    const college = req.user?.college || req.headers["x-college"];
-    const department = req.user?.department || req.headers["x-department"];
+    const { userRole, college, department } = await resolveReviewerScope(req);
 
     console.log(
       `[getAppealQueue] User role: ${userRole}, College: ${college}, Department: ${department}`,
@@ -728,6 +995,13 @@ export const getAppealQueue = async (req, res) => {
       return res
         .status(401)
         .json({ success: false, message: "User role not found" });
+    }
+
+    if (isPrincipalRole(userRole) && !college) {
+      return res.status(403).json({
+        success: false,
+        message: "Principal college not found. Please login again.",
+      });
     }
 
     let query = db.collection("submissions").where("status", "==", "appealed");
@@ -816,9 +1090,12 @@ export const reviewAppeal = async (req, res) => {
   try {
     const { id } = req.params;
     const { appealerScore, appealerReason } = req.body;
-    const appealerId =
-      req.user?.uid || req.user?.id || req.headers["x-user-id"];
-    const appealerRole = req.user?.role || req.headers["x-user-role"];
+    const {
+      userId: appealerId,
+      userRole: appealerRole,
+      college: reviewerCollege,
+    } = await resolveReviewerScope(req);
+    const normalizedAppealerRole = normalizeRoleForWorkflow(appealerRole);
 
     if (appealerScore === undefined) {
       return res
@@ -835,18 +1112,54 @@ export const reviewAppeal = async (req, res) => {
         .json({ success: false, message: "Appeal not found" });
     }
 
+    const submissionData = doc.data() || {};
+    const appealToRoleIds = Array.isArray(submissionData.appealToRoleIds)
+      ? submissionData.appealToRoleIds
+      : [];
+    const normalizedAppealRoles = appealToRoleIds.map((role) =>
+      normalizeRoleForWorkflow(role),
+    );
+
+    if (
+      !normalizedAppealerRole ||
+      !normalizedAppealRoles.includes(normalizedAppealerRole)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to review this appeal",
+      });
+    }
+
+    if (isPrincipalRole(normalizedAppealerRole)) {
+      if (!reviewerCollege) {
+        return res.status(403).json({
+          success: false,
+          message: "Principal college not found. Please login again.",
+        });
+      }
+
+      if (
+        String(submissionData.college || "").trim() !==
+        String(reviewerCollege || "").trim()
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only review appeals from your own college",
+        });
+      }
+    }
+
     await docRef.update({
       status: "appeal-resolved",
       appealerScore: Number(appealerScore),
       appealerReason: appealerReason || "",
       appealerId: appealerId || null,
-      appealerRole: appealerRole || null,
+      appealerRole: normalizedAppealerRole || null,
       finalScore: Number(appealerScore),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
     // Update user's total score in users collection
-    const submissionData = doc.data();
     const facultyUserId = submissionData.userId;
     if (
       facultyUserId &&

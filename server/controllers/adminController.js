@@ -240,6 +240,8 @@ export const addDean = async (req, res) => {
       .trim()
       .toLowerCase();
     const normalizedCollege = String(college || "").trim();
+    const principalCollege = String(req.admin?.college || "").trim();
+    const resolvedCollege = principalCollege || normalizedCollege;
     const normalizedDepartment = String(department || "").trim();
     const normalizedDesignation = String(designation || "").trim();
     const resolvedPassword = String(password ?? pass ?? "");
@@ -253,7 +255,7 @@ export const addDean = async (req, res) => {
       !normalizedName ||
       !normalizedEmail ||
       !resolvedPassword ||
-      !normalizedCollege ||
+      !resolvedCollege ||
       !normalizedDesignation ||
       !normalizedRole
     ) {
@@ -315,7 +317,7 @@ export const addDean = async (req, res) => {
     await auth.setCustomUserClaims(userRecord.uid, {
       role: normalizedRole,
       level: normalizedLevel,
-      college: normalizedCollege,
+      college: resolvedCollege,
       department: normalizedDepartment,
       designation: normalizedDesignation,
       dean: true,
@@ -334,7 +336,7 @@ export const addDean = async (req, res) => {
           password: hashedPassword,
           department: normalizedDepartment,
           designation: normalizedDesignation,
-          college: normalizedCollege,
+          college: resolvedCollege,
           hasPhd: Boolean(hasPhd),
           role: normalizedRole,
           level: normalizedLevel,
@@ -1091,7 +1093,9 @@ export const updateDean = async (req, res) => {
       updateData.department = String(department || "").trim();
     const normalizedDesignation =
       designation !== undefined ? String(designation).trim() : undefined;
-    if (college) updateData.college = String(college).trim();
+    if (college) {
+      updateData.college = String(req.admin?.college || college).trim();
+    }
     if (role !== undefined) {
       const normalizedRole = normalizeDeanRole(role);
       if (!normalizedRole || !isDeanRole(normalizedRole)) {

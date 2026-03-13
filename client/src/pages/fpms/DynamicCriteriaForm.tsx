@@ -25,6 +25,7 @@ import { api } from "@/api/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Clock } from "lucide-react";
+import { resolveEvidenceLink } from "@/lib/utils";
 
 interface TaskItem {
   id: string;
@@ -188,7 +189,7 @@ export default function DynamicCriteriaForm() {
 
       // Sync workflow statuses after initializing progress
       await syncWorkflowStatuses();
-      
+
       // Fetch deadline
       await fetchDeadline();
     } catch (error: any) {
@@ -216,12 +217,12 @@ export default function DynamicCriteriaForm() {
       if (res.data.success && res.data.data.deadline) {
         const deadlineStr = res.data.data.deadline;
         setDeadline(deadlineStr);
-        
+
         const due = new Date(deadlineStr);
         const now = new Date();
         const diffTime = due.getTime() - now.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
+
         setDaysRemaining(diffDays);
         setIsDeadlinePassed(diffDays < 0);
       }
@@ -437,24 +438,24 @@ export default function DynamicCriteriaForm() {
   };
 
   const isTaskFrozen = (taskId: string) => {
-  const status = getTaskStatus(taskId);
+    const status = getTaskStatus(taskId);
 
-  // Fully locked after reviewer action
-  if (
-    status === "reviewed" ||
-    status === "accepted" ||
-    status === "appealed" ||
-    status === "appeal-resolved"
-  ) {
-    return true;
-  }
+    // Fully locked after reviewer action
+    if (
+      status === "reviewed" ||
+      status === "accepted" ||
+      status === "appealed" ||
+      status === "appeal-resolved"
+    ) {
+      return true;
+    }
 
-  if (status === "submitted" && !editingTasks[taskId]) {
-    return true;
-  }
+    if (status === "submitted" && !editingTasks[taskId]) {
+      return true;
+    }
 
-  return false;
-};
+    return false;
+  };
 
   const isModuleFrozen = (moduleItem: ModuleItem) =>
     moduleItem.tasks.every((task) => isTaskFrozen(task.id));
@@ -529,74 +530,69 @@ export default function DynamicCriteriaForm() {
       };
 
       if (!progress.evidenceUrl) {
-  toast({
-    title: "Evidence required",
-    description: "Please provide evidence before submitting.",
-    variant: "destructive",
-  });
-  return;
-}
+        toast({
+          title: "Evidence required",
+          description: "Please provide evidence before submitting.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       setSubmittingTaskId(task.id);
-      
+
       const formData = new FormData();
 
-formData.append("formId", formId || "");
-formData.append("formTitle", payload?.formTitle || "");
-formData.append("criteriaId", criteriaId || "");
-formData.append(
-  "criteriaName",
-  payload?.criteria?.criteriaName || ""
-);
-formData.append("moduleId", moduleItem.id);
-formData.append("moduleName", moduleItem.moduleName);
-formData.append("criteriaTotalMarks", String(payload?.criteria?.totalMarks || 0));
-formData.append("moduleTotalMarks",   String(moduleItem.totalMarks || 0));
-formData.append("taskId", task.id);
-formData.append("taskName", task.title);
-formData.append("maxMarks", String(task.marks || 0));
-formData.append("claimedScore", String(progress.claimedScore));
-formData.append("description", progress.description || "");
+      formData.append("formId", formId || "");
+      formData.append("formTitle", payload?.formTitle || "");
+      formData.append("criteriaId", criteriaId || "");
+      formData.append("criteriaName", payload?.criteria?.criteriaName || "");
+      formData.append("moduleId", moduleItem.id);
+      formData.append("moduleName", moduleItem.moduleName);
+      formData.append(
+        "criteriaTotalMarks",
+        String(payload?.criteria?.totalMarks || 0),
+      );
+      formData.append("moduleTotalMarks", String(moduleItem.totalMarks || 0));
+      formData.append("taskId", task.id);
+      formData.append("taskName", task.title);
+      formData.append("maxMarks", String(task.marks || 0));
+      formData.append("claimedScore", String(progress.claimedScore));
+      formData.append("description", progress.description || "");
 
-// 🔥 IMPORTANT PART
-if (progress.evidenceUrl instanceof File) {
-  formData.append("evidence", progress.evidenceUrl);
-} else {
-  formData.append("evidence", progress.evidenceUrl || "");
-}
+      // 🔥 IMPORTANT PART
+      if (progress.evidenceUrl instanceof File) {
+        formData.append("evidence", progress.evidenceUrl);
+      } else {
+        formData.append("evidence", progress.evidenceUrl || "");
+      }
 
-let submitRes;
+      let submitRes;
 
-const existingSubmissionId = taskSubmissionIds[task.id];
+      const existingSubmissionId = taskSubmissionIds[task.id];
 
-if (existingSubmissionId) {
-  // 🔄 UPDATE existing submission
-  submitRes = await api.put(
-    `/api/submissions/${existingSubmissionId}/update`,
-    formData,
-    {
-      headers: { "Content-Type": "multipart/form-data" },
-    }
-  );
+      if (existingSubmissionId) {
+        // 🔄 UPDATE existing submission
+        submitRes = await api.put(
+          `/api/submissions/${existingSubmissionId}/update`,
+          formData,
+          {
+            headers: { "Content-Type": "multipart/form-data" },
+          },
+        );
 
-  toast({
-    title: "Task updated successfully",
-  });
+        toast({
+          title: "Task updated successfully",
+        });
+      } else {
+        // 🆕 FIRST TIME SUBMIT
+        submitRes = await api.post("/api/submissions/submit", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
 
-} else {
-  // 🆕 FIRST TIME SUBMIT
-  submitRes = await api.post(
-    "/api/submissions/submit",
-    formData,
-    {
-      headers: { "Content-Type": "multipart/form-data" },
-    }
-  );
-
-  toast({
-    title: "Task submitted successfully",
-  });
-}
+        toast({
+          title: "Task submitted successfully",
+        });
+      }
 
       const submissionData = submitRes.data?.data;
       const submitToRoleIds = Array.isArray(submissionData?.submitToRoleIds)
@@ -896,28 +892,36 @@ if (existingSubmissionId) {
     >
       <div className="space-y-6">
         {deadline && (
-          <Card className={`border-l-4 ${isDeadlinePassed ? 'border-l-red-500 bg-red-50' : 'border-l-amber-500 bg-amber-50'}`}>
+          <Card
+            className={`border-l-4 ${isDeadlinePassed ? "border-l-red-500 bg-red-50" : "border-l-amber-500 bg-amber-50"}`}
+          >
             <CardContent className="p-4 flex items-center justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-4">
-                <Clock className={`h-5 w-5 ${isDeadlinePassed ? 'text-red-600' : 'text-amber-600'}`} />
+                <Clock
+                  className={`h-5 w-5 ${isDeadlinePassed ? "text-red-600" : "text-amber-600"}`}
+                />
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Submission Deadline</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Submission Deadline
+                  </p>
                   <p className="text-sm font-semibold">
                     {new Date(deadline).toLocaleDateString("en-IN", {
                       weekday: "long",
                       year: "numeric",
                       month: "long",
-                      day: "numeric"
+                      day: "numeric",
                     })}
                   </p>
                 </div>
               </div>
               <div className="text-right">
                 {daysRemaining !== null && (
-                  <div className={`text-sm font-bold ${isDeadlinePassed ? 'text-red-600' : 'text-amber-700'}`}>
+                  <div
+                    className={`text-sm font-bold ${isDeadlinePassed ? "text-red-600" : "text-amber-700"}`}
+                  >
                     {isDeadlinePassed
-                      ? `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) !== 1 ? 's' : ''} overdue - Submission Locked`
-                      : `${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining`}
+                      ? `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) !== 1 ? "s" : ""} overdue - Submission Locked`
+                      : `${daysRemaining} day${daysRemaining !== 1 ? "s" : ""} remaining`}
                   </div>
                 )}
               </div>
@@ -1034,6 +1038,10 @@ if (existingSubmissionId) {
                     evidenceUrl: "",
                     description: "",
                   };
+                  const frozenEvidenceLink =
+                    typeof progress.evidenceUrl === "string"
+                      ? resolveEvidenceLink(progress.evidenceUrl)
+                      : null;
                   const taskStatus = getTaskStatus(task.id);
                   const taskFrozen = isTaskFrozen(task.id);
 
@@ -1165,61 +1173,66 @@ if (existingSubmissionId) {
                           </div>
 
                           <div>
-  <label className="text-sm font-medium block mb-1.5">
-    Evidence (Upload File or Paste Link)
-  </label>
+                            <label className="text-sm font-medium block mb-1.5">
+                              Evidence (Upload File or Paste Link)
+                            </label>
 
-  {taskFrozen ? (
-  <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-    {typeof progress.evidenceUrl === "string" &&
-    progress.evidenceUrl ? (
-      <button
-        type="button"
-        onClick={() => window.open(progress.evidenceUrl as string, "_blank")}
-        className=" bg-blue-900 p-1 text-white  hover:bg-blue-600"
-      >
-        View Evidence
-      </button>
-    ) : progress.evidenceUrl instanceof File ? (
-      <span>File Uploaded</span>
-    ) : (
-      <span>No evidence provided</span>
-    )}
-  </div>
-) : (
-    <>
-      {/* File Upload */}
-      <Input
-        type="file"
-        className="w-full mb-2"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) {
-            updateTaskProgress(task.id, {
-              evidenceUrl: file,
-            });
-          }
-        }}
-      />
+                            {taskFrozen ? (
+                              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                                {frozenEvidenceLink ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      window.open(
+                                        frozenEvidenceLink,
+                                        "_blank",
+                                        "noopener,noreferrer",
+                                      )
+                                    }
+                                    className=" bg-blue-900 p-1 text-white  hover:bg-blue-600"
+                                  >
+                                    View Evidence
+                                  </button>
+                                ) : progress.evidenceUrl instanceof File ? (
+                                  <span>File Uploaded</span>
+                                ) : (
+                                  <span>No evidence provided</span>
+                                )}
+                              </div>
+                            ) : (
+                              <>
+                                {/* File Upload */}
+                                <Input
+                                  type="file"
+                                  className="w-full mb-2"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      updateTaskProgress(task.id, {
+                                        evidenceUrl: file,
+                                      });
+                                    }
+                                  }}
+                                />
 
-      {/* OR Link */}
-      <Input
-        value={
-          typeof progress.evidenceUrl === "string"
-            ? progress.evidenceUrl
-            : ""
-        }
-        className="w-full"
-        onChange={(e) =>
-          updateTaskProgress(task.id, {
-            evidenceUrl: e.target.value,
-          })
-        }
-        placeholder="Or paste supporting link"
-      />
-    </>
-  )}
-</div>
+                                {/* OR Link */}
+                                <Input
+                                  value={
+                                    typeof progress.evidenceUrl === "string"
+                                      ? progress.evidenceUrl
+                                      : ""
+                                  }
+                                  className="w-full"
+                                  onChange={(e) =>
+                                    updateTaskProgress(task.id, {
+                                      evidenceUrl: e.target.value,
+                                    })
+                                  }
+                                  placeholder="Or paste supporting link"
+                                />
+                              </>
+                            )}
+                          </div>
 
                           <div className="md:col-span-2">
                             <label className="text-sm font-medium block mb-1.5">
@@ -1327,49 +1340,63 @@ if (existingSubmissionId) {
                                 </Button>
                               </>
                             ) : taskStatus === "pending" ? (
-  <Button
-    onClick={() => submitTask(moduleItem, task)}
-    disabled={submittingTaskId === task.id || isDeadlinePassed}
-  >
-    {submittingTaskId === task.id ? (
-      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-    ) : null}
-    {submittingTaskId === task.id
-      ? "Submitting..."
-      : isDeadlinePassed
-      ? "Deadline Passed"
-      : "Submit Task"}
-  </Button>
-) : taskStatus === "submitted" ? (
-  editingTasks[task.id] ? (
-    <Button
-      onClick={() => {
-        submitTask(moduleItem, task);
-        setEditingTasks((prev) => ({ ...prev, [task.id]: false }));
-      }}
-      disabled={submittingTaskId === task.id || isDeadlinePassed}
-    >
-      {submittingTaskId === task.id ? (
-        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-      ) : null}
-      {submittingTaskId === task.id
-        ? "Updating..."
-        : isDeadlinePassed
-        ? "Deadline Passed"
-        : "Update Task"}
-    </Button>
-  ) : (
-    <Button
-      variant="outline"
-      onClick={() =>
-        setEditingTasks((prev) => ({ ...prev, [task.id]: true }))
-      }
-      disabled={isDeadlinePassed}
-    >
-      {isDeadlinePassed ? "Deadline Passed" : "Edit"}
-    </Button>
-  )
-) : (
+                              <Button
+                                onClick={() => submitTask(moduleItem, task)}
+                                disabled={
+                                  submittingTaskId === task.id ||
+                                  isDeadlinePassed
+                                }
+                              >
+                                {submittingTaskId === task.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                ) : null}
+                                {submittingTaskId === task.id
+                                  ? "Submitting..."
+                                  : isDeadlinePassed
+                                    ? "Deadline Passed"
+                                    : "Submit Task"}
+                              </Button>
+                            ) : taskStatus === "submitted" ? (
+                              editingTasks[task.id] ? (
+                                <Button
+                                  onClick={() => {
+                                    submitTask(moduleItem, task);
+                                    setEditingTasks((prev) => ({
+                                      ...prev,
+                                      [task.id]: false,
+                                    }));
+                                  }}
+                                  disabled={
+                                    submittingTaskId === task.id ||
+                                    isDeadlinePassed
+                                  }
+                                >
+                                  {submittingTaskId === task.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                  ) : null}
+                                  {submittingTaskId === task.id
+                                    ? "Updating..."
+                                    : isDeadlinePassed
+                                      ? "Deadline Passed"
+                                      : "Update Task"}
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="outline"
+                                  onClick={() =>
+                                    setEditingTasks((prev) => ({
+                                      ...prev,
+                                      [task.id]: true,
+                                    }))
+                                  }
+                                  disabled={isDeadlinePassed}
+                                >
+                                  {isDeadlinePassed
+                                    ? "Deadline Passed"
+                                    : "Edit"}
+                                </Button>
+                              )
+                            ) : (
                               <Badge className="bg-gray-600 text-white px-4 py-2">
                                 {taskStatus === "accepted"
                                   ? "Accepted"
@@ -1464,7 +1491,9 @@ if (existingSubmissionId) {
             <Button
               onClick={handleAppealSubmit}
               disabled={
-                appealingTaskId !== null || !appealFormData.reason.trim() || isDeadlinePassed
+                appealingTaskId !== null ||
+                !appealFormData.reason.trim() ||
+                isDeadlinePassed
               }
             >
               {appealingTaskId ? (

@@ -9,6 +9,31 @@ const isPrincipalRole = (value) => {
   );
 };
 
+const isVicePrincipalRole = (value) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+
+  return (
+    normalized === "vice principle" ||
+    normalized === "vice principal" ||
+    normalized === "vice-principal" ||
+    normalized === "viceprincipal" ||
+    normalized === "viceprinciple"
+  );
+};
+
+const isPrincipalOrVicePrincipalRole = (value) =>
+  isPrincipalRole(value) || isVicePrincipalRole(value);
+
+const normalizeAdminRole = (value) => {
+  if (isPrincipalRole(value)) return "principle";
+  if (isVicePrincipalRole(value)) return "vice principle";
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+};
+
 export const adminAuth = async (req, res, next) => {
   const isDev = process.env.NODE_ENV !== "production";
 
@@ -23,7 +48,7 @@ export const adminAuth = async (req, res, next) => {
 
     if (userId && userEmail && userRole) {
       // If college is empty for a principle, look it up from the admins collection
-      if (!userCollege && isPrincipalRole(userRole)) {
+      if (!userCollege && isPrincipalOrVicePrincipalRole(userRole)) {
         try {
           const snap = await db
             .collection("admins")
@@ -42,7 +67,7 @@ export const adminAuth = async (req, res, next) => {
         uid: userId,
         email: userEmail,
         name: userName || userEmail,
-        role: userRole,
+        role: normalizeAdminRole(userRole),
         college: userCollege,
         department: userDepartment,
       };
@@ -65,14 +90,19 @@ export const adminAuth = async (req, res, next) => {
   try {
     const decodedFirebase = await auth.verifyIdToken(token);
     const firebaseRole = decodedFirebase.role || decodedFirebase.claims?.role;
-    const isPrincipal =
-      isPrincipalRole(firebaseRole) ||
-      Boolean(decodedFirebase.principal || decodedFirebase.claims?.principal);
+    const isPrincipal = isPrincipalOrVicePrincipalRole(firebaseRole);
+    const hasPrincipalOrViceClaim = Boolean(
+      decodedFirebase.principal ||
+      decodedFirebase.vicePrincipal ||
+      decodedFirebase.claims?.principal ||
+      decodedFirebase.claims?.vicePrincipal,
+    );
+    const isAuthorizedAdmin = isPrincipal || hasPrincipalOrViceClaim;
 
-    if (!isPrincipal) {
+    if (!isAuthorizedAdmin) {
       return res.status(403).json({
         success: false,
-        message: "Principal access only",
+        message: "Principal/Vice Principal access only",
       });
     }
 
@@ -122,7 +152,7 @@ export const adminAuth = async (req, res, next) => {
       id: decodedFirebase.uid,
       uid: decodedFirebase.uid,
       email: decodedFirebase.email,
-      role: "principle",
+      role: normalizeAdminRole(firebaseRole),
       college: adminCollege,
       department:
         decodedFirebase.department ||
