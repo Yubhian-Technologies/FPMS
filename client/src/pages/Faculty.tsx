@@ -186,7 +186,7 @@ export default function Faculty() {
 
   const fetchDesignations = async () => {
     try {
-      const res = await api.get("/api/admin/designations");
+      const res = await api.get("/api/colleges/designations");
       const payload = res.data?.data;
       const designationList = Array.isArray(payload)
         ? payload
