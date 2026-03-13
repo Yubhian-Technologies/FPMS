@@ -1,6 +1,69 @@
 import admin from "firebase-admin";
 import { db } from "../config/firebase.js";
 
+const normalizeRoleForWorkflow = (value) => {
+  const role = String(value || "")
+    .trim()
+    .toLowerCase();
+
+  if (role === "principal" || role === "principle" || role === "admin") {
+    return "principle";
+  }
+
+  if (role === "committee" || role === "commitee") {
+    return "committee";
+  }
+
+  return role;
+};
+
+const isPrincipalRole = (value) =>
+  normalizeRoleForWorkflow(value) === "principle";
+const isCommitteeRole = (value) =>
+  normalizeRoleForWorkflow(value) === "committee";
+
+const loadWorkflowRules = async () => {
+  let superAdminDoc = await db.collection("superadmin").doc("config").get();
+
+  if (!superAdminDoc.exists) {
+    superAdminDoc = await db.collection("superadmin").doc("root").get();
+  }
+
+  if (!superAdminDoc.exists) {
+    const snapshot = await db.collection("superadmin").limit(1).get();
+    if (!snapshot.empty) {
+      superAdminDoc = snapshot.docs[0];
+    }
+  }
+
+  if (!superAdminDoc.exists) return [];
+  return Array.isArray(superAdminDoc.data()?.workflowRules)
+    ? superAdminDoc.data().workflowRules
+    : [];
+};
+
+const getEffectiveAppealRoleIds = (submission, workflowRules = []) => {
+  const submitterRole = normalizeRoleForWorkflow(submission?.userRole || "");
+
+  const matchingRule = workflowRules.find(
+    (rule) => normalizeRoleForWorkflow(rule?.role) === submitterRole,
+  );
+
+  const fromRule = Array.isArray(matchingRule?.appealToRoles)
+    ? matchingRule.appealToRoles
+    : [];
+  const fromSubmission = Array.isArray(submission?.appealToRoleIds)
+    ? submission.appealToRoleIds
+    : [];
+
+  const source = fromRule.length > 0 ? fromRule : fromSubmission;
+  return Array.from(
+    new Set(
+      source.map((role) => normalizeRoleForWorkflow(role)).filter(Boolean),
+    ),
+  );
+};
+
 // Submit a task (Faculty)
 export const submitTask = async (req, res) => {
   try {
@@ -17,7 +80,7 @@ export const submitTask = async (req, res) => {
       claimedScore,
       evidence,
       description,
-      criteriaTotalMarks,   
+      criteriaTotalMarks,
       moduleTotalMarks,
     } = req.body;
 
@@ -68,14 +131,11 @@ export const submitTask = async (req, res) => {
     }
     let finalEvidence = "";
 
-
-if (req.file) {
-  
-  finalEvidence = req.file.path; 
-} else {
- 
-  finalEvidence = evidence || "";
-}
+    if (req.file) {
+      finalEvidence = req.file.path;
+    } else {
+      finalEvidence = evidence || "";
+    }
 
     // Get workflow rules for this user role
     let workflowRules = [];
@@ -186,7 +246,7 @@ if (req.file) {
       description: description || "",
       maxMarks: Number(maxMarks || 0),
       criteriaTotalMarks: Number(criteriaTotalMarks || 0),
-      moduleTotalMarks:   Number(moduleTotalMarks   || 0),
+      moduleTotalMarks: Number(moduleTotalMarks || 0),
       reviewerScore: null,
       reviewerReason: null,
       isAppealed: false,
@@ -221,13 +281,10 @@ if (req.file) {
 
 export const updateSubmission = async (req, res) => {
   try {
-    const { id } = req.params;   // submission ID from URL
+    const { id } = req.params; // submission ID from URL
     const { description, claimedScore } = req.body;
 
-    const userId =
-      req.user?.uid ||
-      req.user?.id ||
-      req.headers["x-user-id"];
+    const userId = req.user?.uid || req.user?.id || req.headers["x-user-id"];
 
     if (!id) {
       return res.status(400).json({
@@ -273,9 +330,7 @@ export const updateSubmission = async (req, res) => {
     await docRef.update({
       description: description ?? data.description,
       claimedScore:
-        claimedScore !== undefined
-          ? Number(claimedScore)
-          : data.claimedScore,
+        claimedScore !== undefined ? Number(claimedScore) : data.claimedScore,
       evidence: finalEvidence,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -284,7 +339,6 @@ export const updateSubmission = async (req, res) => {
       success: true,
       message: "Submission updated successfully",
     });
-
   } catch (error) {
     console.error("updateSubmission error:", error);
     return res.status(500).json({
@@ -337,7 +391,7 @@ export const getMySubmissions = async (req, res) => {
         department: data.department || null,
         claimedScore: data.claimedScore || null,
         criteriaTotalMarks: data.criteriaTotalMarks || null,
-  moduleTotalMarks: data.moduleTotalMarks || null,
+        moduleTotalMarks: data.moduleTotalMarks || null,
         evidence: data.evidence || null,
         description: data.description || null,
         maxMarks: data.maxMarks || null,
@@ -563,10 +617,17 @@ export const raiseAppeal = async (req, res) => {
       });
     }
 
+    const workflowRules = await loadWorkflowRules();
+    const effectiveAppealToRoleIds = getEffectiveAppealRoleIds(
+      data,
+      workflowRules,
+    );
+
     await docRef.update({
       status: "appealed",
       isAppealed: true,
       appealReason,
+      appealToRoleIds: effectiveAppealToRoleIds,
       appealRequestedScore: appealRequestedScore
         ? Number(appealRequestedScore)
         : data.claimedScore,
@@ -576,7 +637,7 @@ export const raiseAppeal = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Appeal submitted successfully",
-      data: { appealToRoleIds: data.appealToRoleIds || [] },
+      data: { appealToRoleIds: effectiveAppealToRoleIds },
     });
   } catch (error) {
     console.error("raiseAppeal error:", error);
@@ -650,11 +711,12 @@ export const acceptReview = async (req, res) => {
 // Get appeal queue
 export const getAppealQueue = async (req, res) => {
   try {
-    const userRole = (
+    const rawUserRole = (
       req.user?.role ||
       req.headers["x-user-role"] ||
       ""
     ).toLowerCase();
+    const userRole = normalizeRoleForWorkflow(rawUserRole);
     const college = req.user?.college || req.headers["x-college"];
     const department = req.user?.department || req.headers["x-department"];
 
@@ -668,19 +730,63 @@ export const getAppealQueue = async (req, res) => {
         .json({ success: false, message: "User role not found" });
     }
 
-    let query = db
-      .collection("submissions")
-      .where("status", "==", "appealed")
-      .where("appealToRoleIds", "array-contains", userRole);
+    let query = db.collection("submissions").where("status", "==", "appealed");
 
-    if (college) query = query.where("college", "==", college);
-    if (department) query = query.where("department", "==", department);
+    if (isPrincipalRole(userRole) && college) {
+      query = query.where("college", "==", college);
+    } else if (!isCommitteeRole(userRole)) {
+      if (college) query = query.where("college", "==", college);
+      if (department) query = query.where("department", "==", department);
+    }
 
     const snapshot = await query.get();
-    const appeals = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const workflowRules = await loadWorkflowRules();
+
+    const mappedAppeals = snapshot.docs.map((doc) => {
+      const data = doc.data() || {};
+      const currentAppealToRoleIds = Array.isArray(data.appealToRoleIds)
+        ? data.appealToRoleIds
+        : [];
+      const effectiveAppealToRoleIds = getEffectiveAppealRoleIds(
+        data,
+        workflowRules,
+      );
+
+      const currentNormalized = Array.from(
+        new Set(
+          currentAppealToRoleIds
+            .map((role) => normalizeRoleForWorkflow(role))
+            .filter(Boolean),
+        ),
+      ).sort();
+      const effectiveNormalized = [...effectiveAppealToRoleIds].sort();
+      const shouldSyncAppealToRoles =
+        JSON.stringify(currentNormalized) !==
+        JSON.stringify(effectiveNormalized);
+
+      return {
+        id: doc.id,
+        ...data,
+        appealToRoleIds: effectiveAppealToRoleIds,
+        shouldSyncAppealToRoles,
+      };
+    });
+
+    const appeals = mappedAppeals.filter((item) =>
+      item.appealToRoleIds.includes(userRole),
+    );
+
+    await Promise.all(
+      appeals
+        .filter((item) => item.shouldSyncAppealToRoles)
+        .map(async (item) => {
+          const docRef = db.collection("submissions").doc(item.id);
+          await docRef.update({
+            appealToRoleIds: item.appealToRoleIds,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }),
+    );
 
     console.log(
       `[getAppealQueue] Found ${appeals.length} appeals for role: ${userRole}`,

@@ -1878,6 +1878,8 @@ export const updateSubmissionAppealWorkflowRules = async (req, res) => {
       }))
       .filter((item) => item.role);
 
+    const allowedAppealRoleKeys = new Set(["committee", "principle"]);
+
     const hasInvalidRole = normalizedRules.some(
       (item) =>
         !roleNames.has(item.role) ||
@@ -1889,6 +1891,19 @@ export const updateSubmissionAppealWorkflowRules = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Workflow rules contain invalid roles",
+      });
+    }
+
+    const hasInvalidAppealReviewer = normalizedRules.some((item) =>
+      item.appealToRoles.some(
+        (role) => !allowedAppealRoleKeys.has(normalizeRoleKey(role)),
+      ),
+    );
+
+    if (hasInvalidAppealReviewer) {
+      return res.status(400).json({
+        success: false,
+        message: "Appeal roles can only include Principal or Committee",
       });
     }
 

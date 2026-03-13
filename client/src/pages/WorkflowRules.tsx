@@ -36,6 +36,31 @@ interface WorkflowRule {
   appealToRole?: string;
 }
 
+const normalizeRoleKey = (value: string) => {
+  const cleaned = String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+  if (
+    cleaned === "principal" ||
+    cleaned === "principle" ||
+    cleaned === "admin"
+  ) {
+    return "principle";
+  }
+
+  if (cleaned === "committee" || cleaned === "commitee") {
+    return "committee";
+  }
+
+  return cleaned;
+};
+
+const isAllowedAppealReviewerRole = (value: string) => {
+  const key = normalizeRoleKey(value);
+  return key === "principle" || key === "committee";
+};
+
 export default function WorkflowRules() {
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [rules, setRules] = useState<WorkflowRule[]>([]);
@@ -50,6 +75,11 @@ export default function WorkflowRules() {
           String(a.name).localeCompare(String(b.name)),
       ),
     [roles],
+  );
+
+  const appealReviewerRoles = useMemo(
+    () => sortedRoles.filter((role) => isAllowedAppealReviewerRole(role.name)),
+    [sortedRoles],
   );
 
   const buildRules = (
@@ -71,9 +101,15 @@ export default function WorkflowRules() {
             ? [String(existing?.submitToRole || "").trim()]
             : [],
         appealToRoles: Array.isArray(existing?.appealToRoles)
-          ? existing.appealToRoles
+          ? existing.appealToRoles.filter((value) =>
+              isAllowedAppealReviewerRole(value),
+            )
           : String(existing?.appealToRole || "").trim()
-            ? [String(existing?.appealToRole || "").trim()]
+            ? isAllowedAppealReviewerRole(
+                String(existing?.appealToRole || "").trim(),
+              )
+              ? [String(existing?.appealToRole || "").trim()]
+              : []
             : [],
       };
     });
@@ -111,9 +147,11 @@ export default function WorkflowRules() {
       appealToRoles: Array.isArray(item.appealToRoles)
         ? item.appealToRoles
             .map((value: string) => String(value || "").trim())
-            .filter(Boolean)
+            .filter((value: string) => isAllowedAppealReviewerRole(value))
         : String(item.appealToRole || "").trim()
-          ? [String(item.appealToRole || "").trim()]
+          ? isAllowedAppealReviewerRole(String(item.appealToRole || "").trim())
+            ? [String(item.appealToRole || "").trim()]
+            : []
           : [],
     }));
 
@@ -275,7 +313,7 @@ export default function WorkflowRules() {
                                 Select appeal roles
                               </DropdownMenuLabel>
                               <DropdownMenuSeparator />
-                              {sortedRoles
+                              {appealReviewerRoles
                                 .filter((role) => role.name !== item.role)
                                 .map((role) => (
                                   <DropdownMenuCheckboxItem
