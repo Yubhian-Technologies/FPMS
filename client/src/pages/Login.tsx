@@ -67,27 +67,27 @@ export default function Login() {
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/50 to-background flex flex-col">
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md space-y-8 animate-fade-in">
-          <div className="text-center bg-white mt-5 ">
-            <div className="inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-lg p-1 mt-5 border">
+          <div className="text-center py-8">
+            <div className="inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-lg p-1 border mb-8">
               <img
                 src={vishnuLogo}
                 alt="Vishnu Logo"
                 className="h-full w-full rounded-xl object-contain"
               />
             </div>
-            <h1 className="mt-4 font-display text-3xl font-bold text-foreground">
+            {/* <h1 className="mt-4 font-display text-3xl font-bold text-foreground">
               FPMS
             </h1>
             <p className="mt-1 text-muted-foreground">
               Faculty Performance Management System
-            </p>
+            </p> */}
 
             <Card className="border-border/50 shadow-xl">
               <CardHeader className="space-y-1">
                 <CardTitle className="text-2xl font-display">Sign in</CardTitle>
-                <CardDescription>
+                {/* <CardDescription>
                   Enter your credentials to access the system
-                </CardDescription>
+                </CardDescription> */}
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">

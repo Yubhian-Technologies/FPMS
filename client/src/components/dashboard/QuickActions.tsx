@@ -25,7 +25,7 @@ const actions: QuickAction[] = [
     description: "View your Appeal",
     icon: Edit,
     variant: "outline",
-    href: "/appeals",
+    href: "/my-appeals",
   },
 ];
 
