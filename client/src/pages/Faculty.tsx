@@ -40,9 +40,11 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   XCircle,
+  Download,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { api } from "@/api/api";
+import { downloadDemoExcel, excelHeaders } from "@/lib/excelUtils";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
 import * as XLSX from "xlsx";
 
@@ -656,6 +658,14 @@ export default function Faculty() {
                 if (file) handleExcelFile(file);
               }}
             />
+            <Button
+              variant="outline"
+              onClick={() =>
+                downloadDemoExcel("faculty_template.xlsx", excelHeaders.faculty)
+              }
+            >
+              <Download className="mr-2 h-4 w-4" /> Download Template
+            </Button>
             <Button
               variant="outline"
               onClick={() => xlsxInputRef.current?.click()}
