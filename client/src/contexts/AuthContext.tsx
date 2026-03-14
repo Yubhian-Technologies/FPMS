@@ -72,6 +72,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     password: string,
   ): Promise<User | null> => {
     try {
+      // Try unified login first (fastest)
       const unified = await api.post("/api/committee/unified-login", {
         email,
         password,
@@ -86,8 +87,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         return unified.data.user;
       }
-    } catch (err) {}
+    } catch (err) {
+      // If unified login fails, continue to role-specific endpoints
+    }
 
+    // Try specific role endpoints only if unified login fails
     const endpoints = [
       { role: "faculty", url: "/api/faculty/login" },
       { role: "hod", url: "/api/hod/login" },
@@ -100,7 +104,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       try {
         const res = await api.post(ep.url, { email, password });
         if (res.data.success) {
-          console.log("Login successful for role:", ep.role);
           const userWithCollege = {
             ...res.data.user,
             college: res.data.user?.college ?? "",
@@ -115,7 +118,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
           return res.data.user;
         }
-      } catch (err) {}
+      } catch (err) {
+        // Continue to next endpoint
+        continue;
+      }
     }
 
     return null;
