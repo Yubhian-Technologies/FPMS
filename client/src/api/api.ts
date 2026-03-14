@@ -1,7 +1,14 @@
 import axios from "axios";
 
+// Use environment variable or fallback to Railway URL
+const backendUrl =
+  import.meta.env.VITE_BACKEND_URL ||
+  "https://truthful-tranquility-production.up.railway.app";
+
+console.log("[API Config] Backend URL:", backendUrl);
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_BACKEND_URL,
+  baseURL: backendUrl,
 });
 
 api.interceptors.request.use((config) => {

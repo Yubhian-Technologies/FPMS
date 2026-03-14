@@ -1,4 +1,4 @@
-import "dotenv/config";  
+import "dotenv/config";
 
 import express from "express";
 import cors from "cors";
@@ -25,10 +25,34 @@ import submissionRouter from "./routes/submissionRoutes.js";
 import collegeRouter from "./routes/collegeRoutes.js";
 import formRouter from "./routes/formsRoutes.js";
 
-
-
 const app = express();
-app.use(cors());
+
+// CORS Configuration - Allow frontend from Vercel and localhost
+const allowedOrigins = [
+  "https://fpms-wheat.vercel.app",
+  "http://localhost:3000",
+  "http://localhost:5000",
+  "http://localhost:8080",
+];
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "x-user-id",
+      "x-user-email",
+      "x-user-name",
+      "x-user-role",
+      "x-college",
+      "x-department",
+    ],
+  }),
+);
+
 app.use(express.json());
 
 app.get("/api", (req, res) => {
@@ -52,8 +76,8 @@ app.use("/api/module3", module3Router);
 app.use("/api/module4", module4Router);
 app.use("/api/superadmin", superadminRouter);
 app.use("/api/submissions", submissionRouter);
-app.use('/api/colleges',collegeRouter);
-app.use('/api/forms',formRouter);
+app.use("/api/colleges", collegeRouter);
+app.use("/api/forms", formRouter);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
