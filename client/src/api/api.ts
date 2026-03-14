@@ -18,6 +18,13 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
+    console.log("[API Request] Token found, setting Authorization header");
+  } else {
+    console.warn("[API Request] ⚠️ NO TOKEN FOUND in localStorage");
+    console.log(
+      "[API Request] Available localStorage keys:",
+      Object.keys(localStorage),
+    );
   }
 
   // Add user info to headers for simplified auth
@@ -31,10 +38,30 @@ api.interceptors.request.use((config) => {
       config.headers["x-user-role"] = user.role || "faculty";
       config.headers["x-college"] = user.college || "";
       config.headers["x-department"] = user.department || "";
+      console.log("[API Request] User headers set:", {
+        role: user.role,
+        email: user.email,
+        id: user.uid || user.id,
+      });
     } catch (e) {
       console.error("Failed to parse user data:", e);
     }
+  } else {
+    console.warn("[API Request] ⚠️ NO USER found in localStorage");
   }
 
+  console.log("[API Request] Final headers:", config.headers);
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      console.error("🔴 [API] 401 Unauthorized - Auth failed");
+      console.log("Token in localStorage:", !!localStorage.getItem("token"));
+      console.log("User in localStorage:", !!localStorage.getItem("user"));
+    }
+    return Promise.reject(error);
+  },
+);
