@@ -625,7 +625,7 @@ function Index() {
       </section>
 
       {/* Interactive Role-Based Forms Section */}
-      <section className="py-24 bg-gradient-to-b from-background via-primary/5 to-background relative overflow-hidden">
+      {/* <section className="py-24 bg-gradient-to-b from-background via-primary/5 to-background relative overflow-hidden">
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-0 right-1/4 h-96 w-96 rounded-full bg-primary/5 blur-3xl" />
           <div className="absolute bottom-0 left-1/4 h-96 w-96 rounded-full bg-secondary/5 blur-3xl" />
@@ -644,15 +644,15 @@ function Index() {
             </p>
           </div>
 
-          {/* Role Tabs */}
+         
           <div className="max-w-6xl mx-auto">
             <RoleBasedFormsShowcase />
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* Modules Section */}
-      {/* <section className="py-20 bg-muted/30">
+      <section className="py-20 bg-muted/30">
         <div className="container">
           <div className="text-center mb-12">
             <h2 className="font-display text-3xl font-bold">
@@ -688,7 +688,7 @@ function Index() {
             </div>
           </div>
         </div>
-      </section> */}
+      </section>
 
       {/* Features Section */}
       <section className="py-20">
