@@ -306,11 +306,11 @@ export default function Index() {
 
             {/* Animated Stats Section */}
             <div className="mt-20 animate-slide-up" style={{ animationDelay: "0.5s" }}>
-              <div className="grid grid-cols-3 gap-4 md:gap-8">
+              <div className="grid grid-cols-2 gap-4 md:gap-8">
                 {[
                   { value: 300, label: "Total Points", icon: Target },
                   { value: 5, label: "Evaluation Modules", icon: ClipboardCheck },
-                  { value: 5, label: "User Roles", icon: Users },
+                  
                 ].map((stat, index) => (
                   <div
                     key={stat.label}
