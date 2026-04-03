@@ -30,6 +30,7 @@ const app = express();
 // CORS Configuration - Allow frontend from Vercel and localhost
 const allowedOrigins = [
   "https://www.vishnufpms.in",
+  "https://vishnufpms.in",
   "http://localhost:3000",
   "http://localhost:5000",
   "http://localhost:8080",
