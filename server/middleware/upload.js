@@ -9,7 +9,7 @@ const storage = new CloudinaryStorage({
     resource_type: "auto",
     use_filename: true,
     unique_filename: true,
-    allowed_formats: ["jpg", "png", "pdf", "doc", "docx", "jpeg"],
+    allowed_formats: ["jpg", "png", "pdf", "doc", "docx", "jpeg", "html", "txt", "xlsx", "xls", "ppt", "pptx"],
   }),
 });
 
