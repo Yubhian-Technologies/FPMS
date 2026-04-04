@@ -6,7 +6,7 @@ const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => ({
     folder: "task_evidence",
-    resource_type: "auto",            
+    resource_type: "auto",
     use_filename: true,
     unique_filename: true,
     allowed_formats: ["jpg", "png", "pdf", "doc", "docx", "jpeg"],
@@ -16,6 +16,10 @@ const storage = new CloudinaryStorage({
 const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    console.log("Multer fileFilter - file received:", file.originalname, file.mimetype);
+    cb(null, true);
+  }
 });
 
 export default upload;
