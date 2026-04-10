@@ -519,7 +519,7 @@ function Index() {
             {/* Main Heading with Animation */}
             <div className="animate-slide-down">
               <h1 className="font-display text-2xl sm:text-3xl md:text-6xl font-bold tracking-tight leading-tight">
-                <span className=" ">Vishnu Educational </span>
+                <span className=" "> Sri Vishnu Educational </span>
                 <span className="text-primary ">Society</span>
               </h1>
             </div>

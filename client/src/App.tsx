@@ -8,7 +8,7 @@ import { FPMSProvider } from "@/contexts/FPMSContext";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import FPMSForm from "./pages/FPMSForm";
+
 import Review from "./pages/Review";
 import Reports from "./pages/Reports";
 import Faculty from "./pages/Faculty";
@@ -56,16 +56,16 @@ const normalizeRoleForAccess = (role?: string) => {
     .toLowerCase();
 
   if (value.startsWith("dean")) return "dean";
-  if (value === "principal" || value === "principle" || value === "admin") {
-    return "principle";
+  if (value === "principal" || value === "principal" || value === "admin") {
+    return "principal";
   }
   if (
     value === "vice principal" ||
-    value === "vice principle" ||
+    value === "vice principal" ||
     value === "vice-principal" ||
     value === "viceprincipal"
   ) {
-    return "vice principle";
+    return "vice principal";
   }
 
   return value;
@@ -124,14 +124,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/fpms-form"
-        element={
-          <ProtectedRoute allowedRoles={["faculty"]}>
-            <FPMSForm />
-          </ProtectedRoute>
-        }
-      />
+   
       <Route
         path="/review"
         element={
@@ -140,8 +133,8 @@ function AppRoutes() {
               "hod",
               "committee",
               "dean",
-              "vice principle",
-              "principle",
+              "vice principal",
+              "principal",
             ]}
           >
             <Review />
@@ -152,7 +145,7 @@ function AppRoutes() {
         path="/appeal-review"
         element={
           <ProtectedRoute
-            allowedRoles={["dean", "vice principle", "principle", "committee"]}
+            allowedRoles={["dean", "vice principal", "principal", "committee"]}
           >
             <AppealReview />
           </ProtectedRoute>
@@ -161,7 +154,7 @@ function AppRoutes() {
       <Route
         path="/reports"
         element={
-          <ProtectedRoute allowedRoles={["hod", "committee", "principle"]}>
+          <ProtectedRoute allowedRoles={["hod", "committee", "principal"]}>
             <Reports />
           </ProtectedRoute>
         }
@@ -177,7 +170,7 @@ function AppRoutes() {
       <Route
         path="/designations"
         element={
-          <ProtectedRoute allowedRoles={["principle"]}>
+          <ProtectedRoute allowedRoles={["principal"]}>
             <Designations />
           </ProtectedRoute>
         }
@@ -185,7 +178,7 @@ function AppRoutes() {
       <Route
         path="/departments"
         element={
-          <ProtectedRoute allowedRoles={["committee", "principle"]}>
+          <ProtectedRoute allowedRoles={["committee", "principal"]}>
             <Departments />
           </ProtectedRoute>
         }

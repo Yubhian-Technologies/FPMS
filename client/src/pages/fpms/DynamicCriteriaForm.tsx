@@ -529,13 +529,19 @@ export default function DynamicCriteriaForm() {
         description: "",
       };
 
-      if (!progress.evidenceUrl) {
+      const existingSubmissionId = taskSubmissionIds[task.id];
+
+      if (Number(progress.claimedScore || 0) > 0 && !progress.evidenceUrl) {
         toast({
           title: "Evidence required",
-          description: "Please provide evidence before submitting.",
+          description:
+            "Please provide evidence when claiming a score greater than 0.",
           variant: "destructive",
         });
-        return;
+        if (existingSubmissionId) {
+          await syncWorkflowStatuses();
+        }
+        return false;
       }
 
       setSubmittingTaskId(task.id);
@@ -567,8 +573,6 @@ export default function DynamicCriteriaForm() {
       }
 
       let submitRes;
-
-      const existingSubmissionId = taskSubmissionIds[task.id];
 
       if (existingSubmissionId) {
         // 🔄 UPDATE existing submission
@@ -616,6 +620,7 @@ export default function DynamicCriteriaForm() {
           ? `Submitted to ${submitToRoleIds.join(", ")} for review.`
           : "Task submitted to workflow.",
       });
+      return true;
     } catch (error: any) {
       toast({
         title: "Task submission failed",
@@ -624,6 +629,10 @@ export default function DynamicCriteriaForm() {
           "Unable to submit task. Please try again.",
         variant: "destructive",
       });
+      if (taskSubmissionIds[task.id]) {
+        await syncWorkflowStatuses();
+      }
+      return false;
     } finally {
       setSubmittingTaskId(null);
     }
@@ -1359,8 +1368,14 @@ export default function DynamicCriteriaForm() {
                             ) : taskStatus === "submitted" ? (
                               editingTasks[task.id] ? (
                                 <Button
-                                  onClick={() => {
-                                    submitTask(moduleItem, task);
+                                  onClick={async () => {
+                                    const success = await submitTask(
+                                      moduleItem,
+                                      task,
+                                    );
+                                    if (!success) {
+                                      return;
+                                    }
                                     setEditingTasks((prev) => ({
                                       ...prev,
                                       [task.id]: false,

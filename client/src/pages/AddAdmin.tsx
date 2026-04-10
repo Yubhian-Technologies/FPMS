@@ -119,9 +119,23 @@ export default function AddPrincipal() {
     );
   };
 
+  const formatRoleForUi = (value: string) => {
+    const normalized = normalizeRole(value);
+    if (normalized === "principle") return "principal";
+    if (
+      normalized === "vice principle" ||
+      normalized === "vice-principal" ||
+      normalized === "viceprincipal"
+    ) {
+      return "vice principal";
+    }
+    return String(value || "");
+  };
+
   const principalRoleOption =
     roleOptions.find((item) => isPrincipalRole(item.name)) ?? null;
   const lockedRoleName = principalRoleOption?.name || "principle";
+  const lockedRoleDisplayName = formatRoleForUi(lockedRoleName);
   const lockedRoleLevel = Number(principalRoleOption?.level ?? 1);
 
   const occupiedCollegeNames = new Set(
@@ -471,7 +485,7 @@ export default function AddPrincipal() {
                 </div>
                 <div className="space-y-2">
                   <Label>Role *</Label>
-                  <Input value={lockedRoleName} disabled />
+                  <Input value={lockedRoleDisplayName} disabled />
                 </div>
                 <div className="space-y-2">
                   <Label>Level *</Label>
@@ -661,7 +675,11 @@ export default function AddPrincipal() {
                       <TableCell>{principal.email}</TableCell>
                       <TableCell>{principal.phone || "-"}</TableCell>
                       <TableCell>{principal.college}</TableCell>
-                      <TableCell>{principal.role || "-"}</TableCell>
+                      <TableCell>
+                        {principal.role
+                          ? formatRoleForUi(principal.role)
+                          : "-"}
+                      </TableCell>
                       <TableCell>{principal.level ?? "-"}</TableCell>
                       <TableCell>{principal.experience ?? "-"}</TableCell>
                       <TableCell>{principal.hasPhD ? "Yes" : "No"}</TableCell>

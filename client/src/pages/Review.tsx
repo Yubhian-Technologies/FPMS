@@ -163,7 +163,7 @@ export default function Review() {
 
   const isHOD = (user?.role || "").toLowerCase() === "hod";
   const isCommittee = user?.role === "committee";
-  const isPrinciple = user?.role === "principle";
+  const isprincipal = user?.role === "principal";
   const canReview = user?.role && user.role !== "faculty";
 
   const fetchQueue = async () => {
@@ -883,8 +883,8 @@ export default function Review() {
       ) : isCommittee ? (
         // Committee: College → Role+Dept → Faculty → Criteria
         renderCommitteeView()
-      ) : isPrinciple ? (
-        // Principle/VP: Role+Dept → Faculty → Criteria
+      ) : isprincipal ? (
+        // principal/VP: Role+Dept → Faculty → Criteria
         renderGroupTier(
           groupByKey(
             filteredItems,

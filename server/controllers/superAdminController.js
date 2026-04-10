@@ -66,6 +66,39 @@ const toStringArray = (value) => {
   return value.map((item) => String(item || "").trim()).filter(Boolean);
 };
 
+const normalizeCollegeName = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+const findUsersByCollege = async (college) => {
+  const candidates = new Set(
+    [college?.name, college?.code, college?.id]
+      .map((value) => normalizeCollegeName(value))
+      .filter(Boolean),
+  );
+
+  if (!candidates.size) return [];
+
+  // Read all users once and match against known college identifiers.
+  const allUsersSnapshot = await usersCollectionRef().get();
+  return allUsersSnapshot.docs.filter((doc) => {
+    const data = doc.data() || {};
+
+    const userCollegeValues = [
+      data.college,
+      data.collegeName,
+      data.collegeCode,
+      data.collegeId,
+    ]
+      .map((value) => normalizeCollegeName(value))
+      .filter(Boolean);
+
+    return userCollegeValues.some((value) => candidates.has(value));
+  });
+};
+
 const formsCollectionRef = () => db.collection("fpmsForms");
 const criteriaCollectionRef = (formId) =>
   formsCollectionRef().doc(formId).collection("criteria");
@@ -633,13 +666,67 @@ export const deleteCollege = async (req, res) => {
     const { id } = req.params;
 
     const { docRef, colleges } = await getSuperadminData();
-    const exists = colleges.some((item) => item.id === id);
+    const targetCollege = colleges.find((item) => item.id === id);
 
-    if (!exists) {
+    if (!targetCollege) {
       return res
         .status(404)
         .json({ success: false, message: "College not found" });
     }
+
+    const collegeName = String(targetCollege.name || "").trim();
+
+    const matchedUserDocs = await findUsersByCollege(targetCollege);
+    console.log("[deleteCollege] target college:", {
+      id: targetCollege.id,
+      name: targetCollege.name,
+      code: targetCollege.code,
+      matchedUsers: matchedUserDocs.length,
+    });
+    let deletedAuthCount = 0;
+    let authUserNotFoundCount = 0;
+    let missingUidCount = 0;
+    const failedAuthDeletes = [];
+
+    for (const userDoc of matchedUserDocs) {
+      const userData = userDoc.data() || {};
+      const uid = String(userData.uid || userDoc.id || "").trim();
+
+      if (!uid) {
+        missingUidCount += 1;
+        continue;
+      }
+
+      try {
+        await auth.deleteUser(uid);
+        deletedAuthCount += 1;
+      } catch (error) {
+        if (error?.code === "auth/user-not-found") {
+          authUserNotFoundCount += 1;
+        } else {
+          failedAuthDeletes.push({
+            uid,
+            message: String(error?.message || "Unknown auth delete error"),
+          });
+        }
+      }
+    }
+
+    if (matchedUserDocs.length) {
+      const deleteUserOps = matchedUserDocs.map((doc) => ({
+        type: "delete",
+        ref: doc.ref,
+      }));
+      await applyBatchOps(deleteUserOps);
+    }
+
+    console.log("[deleteCollege] user cleanup summary:", {
+      usersDeleted: matchedUserDocs.length,
+      authUsersDeleted: deletedAuthCount,
+      authUsersNotFound: authUserNotFoundCount,
+      usersMissingUid: missingUidCount,
+      authDeleteFailures: failedAuthDeletes.length,
+    });
 
     await docRef.set(
       {
@@ -651,7 +738,19 @@ export const deleteCollege = async (req, res) => {
 
     return res
       .status(200)
-      .json({ success: true, message: "College deleted successfully" });
+      .json({
+        success: true,
+        message: "College deleted successfully",
+        data: {
+          collegeId: id,
+          collegeName,
+          usersDeleted: matchedUserDocs.length,
+          authUsersDeleted: deletedAuthCount,
+          authUsersNotFound: authUserNotFoundCount,
+          usersMissingUid: missingUidCount,
+          authDeleteFailures: failedAuthDeletes,
+        },
+      });
   } catch (error) {
     console.error("Delete college error:", error);
     return res.status(500).json({ success: false, message: "Server error" });

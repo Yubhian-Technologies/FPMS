@@ -109,9 +109,23 @@ export default function AddVicePrincipal() {
     );
   };
 
+  const formatRoleForUi = (value: string) => {
+    const normalized = normalizeRole(value);
+    if (normalized === "principle") return "principal";
+    if (
+      normalized === "vice principle" ||
+      normalized === "vice-principal" ||
+      normalized === "viceprincipal"
+    ) {
+      return "vice principal";
+    }
+    return String(value || "");
+  };
+
   const vicePrincipalRoleOption =
     roleOptions.find((item) => isVicePrincipalRole(item.name)) ?? null;
   const lockedRoleName = vicePrincipalRoleOption?.name || "vice principle";
+  const lockedRoleDisplayName = formatRoleForUi(lockedRoleName);
   const lockedRoleLevel = Number(vicePrincipalRoleOption?.level ?? 1);
 
   const occupiedCollegeNames = new Set(
@@ -456,7 +470,7 @@ export default function AddVicePrincipal() {
                 </div>
                 <div className="space-y-2">
                   <Label>Role *</Label>
-                  <Input value={lockedRoleName} disabled />
+                  <Input value={lockedRoleDisplayName} disabled />
                 </div>
                 <div className="space-y-2">
                   <Label>Level *</Label>
@@ -648,7 +662,11 @@ export default function AddVicePrincipal() {
                       <TableCell>{vicePrincipal.email}</TableCell>
                       <TableCell>{vicePrincipal.phone || "-"}</TableCell>
                       <TableCell>{vicePrincipal.college}</TableCell>
-                      <TableCell>{vicePrincipal.role || "-"}</TableCell>
+                      <TableCell>
+                        {vicePrincipal.role
+                          ? formatRoleForUi(vicePrincipal.role)
+                          : "-"}
+                      </TableCell>
                       <TableCell>{vicePrincipal.level ?? "-"}</TableCell>
                       <TableCell>{vicePrincipal.experience ?? "-"}</TableCell>
                       <TableCell>
