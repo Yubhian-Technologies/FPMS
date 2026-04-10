@@ -676,9 +676,7 @@ export default function AddPrincipal() {
                       <TableCell>{principal.phone || "-"}</TableCell>
                       <TableCell>{principal.college}</TableCell>
                       <TableCell>
-                        {principal.role
-                          ? formatRoleForUi(principal.role)
-                          : "-"}
+                        {principal.role ? formatRoleForUi(principal.role) : "-"}
                       </TableCell>
                       <TableCell>{principal.level ?? "-"}</TableCell>
                       <TableCell>{principal.experience ?? "-"}</TableCell>

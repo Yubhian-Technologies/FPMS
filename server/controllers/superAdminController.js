@@ -572,7 +572,14 @@ export const getColleges = async (req, res) => {
 
 export const createCollege = async (req, res) => {
   try {
-    const { name, location, code, isActive = true, branches = [],deadline  } = req.body;
+    const {
+      name,
+      location,
+      code,
+      isActive = true,
+      branches = [],
+      deadline,
+    } = req.body;
 
     if (!name || !location || !code) {
       return res.status(400).json({
@@ -635,7 +642,8 @@ export const updateCollege = async (req, res) => {
     if (code !== undefined) updates.code = String(code).trim().toUpperCase();
     if (isActive !== undefined) updates.isActive = Boolean(isActive);
     if (branches !== undefined) updates.branches = toStringArray(branches);
-    if (deadline !== undefined) updates.deadline = deadline ? new Date(deadline).toISOString() : null; 
+    if (deadline !== undefined)
+      updates.deadline = deadline ? new Date(deadline).toISOString() : null;
 
     const nextColleges = [...colleges];
     nextColleges[index] = {
@@ -736,21 +744,19 @@ export const deleteCollege = async (req, res) => {
       { merge: true },
     );
 
-    return res
-      .status(200)
-      .json({
-        success: true,
-        message: "College deleted successfully",
-        data: {
-          collegeId: id,
-          collegeName,
-          usersDeleted: matchedUserDocs.length,
-          authUsersDeleted: deletedAuthCount,
-          authUsersNotFound: authUserNotFoundCount,
-          usersMissingUid: missingUidCount,
-          authDeleteFailures: failedAuthDeletes,
-        },
-      });
+    return res.status(200).json({
+      success: true,
+      message: "College deleted successfully",
+      data: {
+        collegeId: id,
+        collegeName,
+        usersDeleted: matchedUserDocs.length,
+        authUsersDeleted: deletedAuthCount,
+        authUsersNotFound: authUserNotFoundCount,
+        usersMissingUid: missingUidCount,
+        authDeleteFailures: failedAuthDeletes,
+      },
+    });
   } catch (error) {
     console.error("Delete college error:", error);
     return res.status(500).json({ success: false, message: "Server error" });
