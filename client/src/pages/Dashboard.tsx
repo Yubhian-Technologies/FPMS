@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { api } from "@/api/api";
 import jsPDF from "jspdf";
+import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
@@ -81,6 +82,9 @@ export default function Dashboard() {
   const [selectedCriteria, setSelectedCriteria] = useState<string>("All");
   const [selectedModule, setSelectedModule] = useState<string>("All");
   const [staffList, setStaffList] = useState<any[]>([]);
+  const [roleFormColumnsByRole, setRoleFormColumnsByRole] = useState<
+    Record<string, string[]>
+  >({});
 
   const [filteredData, setFilteredData] = useState<any[]>([]);
   const [userTarget, setUserTarget] = useState<string>(
@@ -152,6 +156,34 @@ export default function Dashboard() {
           });
           if (res.data.success) setCommitteeData(res.data.data);
           setStaffList(res.data.data.staff || []);
+        } else if (user.role === "internal committee") {
+          try {
+            const res = await api.get("/api/admin/college-dashboard", {
+              headers: {
+                "x-user-id": user.uid,
+                "x-user-role": user.role,
+                "x-college": user.college || "",
+              },
+            });
+            if (res.data.success) setCommitteeData(res.data.data);
+            setStaffList(res.data.data.staff || []);
+          } catch {
+            const res = await api.get("/api/auth/dashboard-data", {
+              headers: { "x-user-id": user.uid, "x-user-role": user.role },
+            });
+            const allStaff = res.data?.data?.staff || [];
+            const myCollege = String(user.college || "")
+              .trim()
+              .toLowerCase();
+            const filtered = allStaff.filter(
+              (s: any) =>
+                String(s.college || "")
+                  .trim()
+                  .toLowerCase() === myCollege,
+            );
+            setCommitteeData({ staff: filtered });
+            setStaffList(filtered);
+          }
         } else if (
           user.role === "principle" ||
           user.role === "vice principle"
@@ -262,6 +294,75 @@ export default function Dashboard() {
     fetchData();
   }, [user]);
 
+  useEffect(() => {
+    const loadRoleFormColumns = async () => {
+      if (user?.role !== "internal committee") {
+        setRoleFormColumnsByRole({});
+        return;
+      }
+
+      const uniqueRoles = Array.from(
+        new Set(
+          staffList
+            .map((staff: any) =>
+              String(staff.role || "")
+                .trim()
+                .toLowerCase(),
+            )
+            .filter(Boolean),
+        ),
+      );
+
+      if (uniqueRoles.length === 0) {
+        setRoleFormColumnsByRole({});
+        return;
+      }
+
+      try {
+        const entries = await Promise.all(
+          uniqueRoles.map(async (roleName) => {
+            const res = await api.get("/api/auth/forms", {
+              params: { role: roleName },
+              headers: {
+                "x-user-role": user.role,
+                "x-user-id": user.uid,
+              },
+            });
+
+            const forms = Array.isArray(res.data?.data) ? res.data.data : [];
+            const columns = Array.from(
+              new Set(
+                forms.flatMap((form: any) => {
+                  const criteria = Array.isArray(form.criteria)
+                    ? form.criteria
+                        .map((c: any) => String(c.criteriaName || "").trim())
+                        .filter(Boolean)
+                    : [];
+
+                  if (criteria.length > 0) return criteria;
+
+                  const formTitle = String(form.formTitle || "").trim();
+                  return formTitle ? [formTitle] : [];
+                }),
+              ),
+            ) as string[];
+
+            columns.sort((a, b) => a.localeCompare(b));
+
+            return [roleName, columns] as [string, string[]];
+          }),
+        );
+
+        setRoleFormColumnsByRole(Object.fromEntries(entries));
+      } catch (error) {
+        console.error("[Dashboard] Failed to load role form columns:", error);
+        setRoleFormColumnsByRole({});
+      }
+    };
+
+    loadRoleFormColumns();
+  }, [user?.role, user?.uid, staffList]);
+
   const applyFilter = () => {
     if (!committeeData) return;
 
@@ -296,6 +397,267 @@ export default function Dashboard() {
           <Clock className="h-6 w-6 animate-spin" />
           <span>Loading dashboard...</span>
         </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (user?.role === "internal committee") {
+    const collegeScopedStaff = staffList.filter(
+      (staff: any) =>
+        String(staff.college || "")
+          .trim()
+          .toLowerCase() ===
+        String(user.college || "")
+          .trim()
+          .toLowerCase(),
+    );
+
+    const getScoreColumnKey = (sub: any) => {
+      const criteria = String(sub?.criteriaName || "").trim();
+      if (criteria) return criteria;
+
+      const form = String(sub?.formTitle || "").trim();
+      if (form) return form;
+
+      return "Unspecified";
+    };
+
+    const formTitles = Array.from(
+      new Set(
+        collegeScopedStaff.flatMap((staff: any) =>
+          (staff.submissions || [])
+            .map((sub: any) => getScoreColumnKey(sub))
+            .filter(Boolean),
+        ),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
+
+    const roleDefinedColumns = Object.values(roleFormColumnsByRole).flat();
+    const allScoreColumns = Array.from(
+      new Set([...formTitles, ...roleDefinedColumns]),
+    ).sort((a, b) => a.localeCompare(b));
+
+    const tableRows: Array<{
+      name: string;
+      email: string;
+      role: string;
+      formScores: Record<string, number>;
+      targetScore: number;
+      achievedScore: number;
+    }> = collegeScopedStaff.map((staff: any) => {
+      const submissions = Array.isArray(staff.submissions)
+        ? staff.submissions
+        : [];
+      const formScores: Record<string, number> = {};
+
+      allScoreColumns.forEach((title) => {
+        formScores[title] = submissions
+          .filter((sub: any) => getScoreColumnKey(sub) === title)
+          .reduce(
+            (sum: number, sub: any) =>
+              sum +
+              Number(
+                sub.finalScore ?? sub.reviewerScore ?? sub.claimedScore ?? 0,
+              ),
+            0,
+          );
+      });
+
+      const achievedScore = submissions.reduce(
+        (sum: number, sub: any) =>
+          sum +
+          Number(sub.finalScore ?? sub.reviewerScore ?? sub.claimedScore ?? 0),
+        0,
+      );
+
+      return {
+        name: String(staff.name || ""),
+        email: String(staff.email || ""),
+        role: String(staff.role || ""),
+        formScores,
+        targetScore: Number(staff.designationTarget || 0),
+        achievedScore,
+      };
+    });
+
+    const rowsByRole = tableRows.reduce(
+      (acc, row) => {
+        const roleName = row.role || "Unknown Role";
+        if (!acc[roleName]) acc[roleName] = [];
+        acc[roleName].push(row);
+        return acc;
+      },
+      {} as Record<string, Array<(typeof tableRows)[number]>>,
+    );
+
+    const sortedRoleNames = Object.keys(rowsByRole).sort((a, b) =>
+      a.localeCompare(b),
+    );
+
+    const visibleRoleNames = sortedRoleNames.filter((roleName) => {
+      const roleSpecificColumns =
+        roleFormColumnsByRole[String(roleName || "").toLowerCase()] || [];
+      return roleSpecificColumns.length > 0;
+    });
+
+    const visibleScoreColumns = Array.from(
+      new Set(
+        visibleRoleNames.flatMap(
+          (roleName) =>
+            roleFormColumnsByRole[String(roleName || "").toLowerCase()] || [],
+        ),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
+
+    const exportInternalCommitteeExcel = () => {
+      const workbook = XLSX.utils.book_new();
+
+      visibleRoleNames.forEach((roleName) => {
+        const roleKey = String(roleName || "").toLowerCase();
+        const roleColumns = roleFormColumnsByRole[roleKey] || [];
+        const roleRows = (rowsByRole[roleName] || []).map((row) => {
+          const base: Record<string, string | number> = {
+            Name: row.name,
+            Email: row.email,
+            Role: row.role,
+          };
+
+          roleColumns.forEach((title) => {
+            base[`${title} Score`] = Number(row.formScores[title] || 0);
+          });
+
+          base["Target Score"] = row.targetScore;
+          base["Achieved Score"] = row.achievedScore;
+          return base;
+        });
+
+        if (roleRows.length === 0) return;
+
+        const worksheet = XLSX.utils.json_to_sheet(roleRows);
+        const safeSheetName = String(roleName || "Role")
+          .replace(/[\\/?*\[\]:]/g, "-")
+          .slice(0, 31);
+
+        XLSX.utils.book_append_sheet(
+          workbook,
+          worksheet,
+          safeSheetName || "Role",
+        );
+      });
+
+      if ((workbook.SheetNames || []).length === 0) return;
+
+      XLSX.writeFile(workbook, "internal-committee-college-users.xlsx");
+    };
+
+    return (
+      <DashboardLayout
+        title={`${displayName}'s Dashboard`}
+        subtitle="Internal Committee View"
+      >
+        <Card className="shadow-sm rounded-xl overflow-hidden mt-4 mb-10">
+          <CardHeader className="flex flex-row items-center justify-between bg-gradient-to-r from-primary/5 to-primary/10">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-xl font-bold">
+                <Building className="h-5 w-5 text-primary" />
+                College Users Overview
+              </CardTitle>
+              <CardDescription className="text-muted-foreground mt-1">
+                {user.college || "Your college"} only
+              </CardDescription>
+            </div>
+            <Button variant="outline" onClick={exportInternalCommitteeExcel}>
+              Export Excel
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {visibleRoleNames.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8">
+                No roles with configured FPMS forms found for your college.
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {visibleRoleNames.map((roleName) => {
+                  const roleRows = rowsByRole[roleName] || [];
+                  const roleSpecificColumns =
+                    roleFormColumnsByRole[
+                      String(roleName || "").toLowerCase()
+                    ] || [];
+                  const visibleColumns = roleSpecificColumns;
+                  return (
+                    <Card
+                      key={roleName}
+                      className="overflow-hidden border shadow-sm"
+                    >
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base capitalize">
+                          {roleName}
+                        </CardTitle>
+                        <CardDescription>
+                          {roleRows.length} user{roleRows.length > 1 ? "s" : ""}
+                        </CardDescription>
+                      </CardHeader>
+
+                      <CardContent className="p-0 overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-muted/40">
+                              <th className="text-left px-4 py-3 font-medium">
+                                Name
+                              </th>
+                              <th className="text-left px-4 py-3 font-medium">
+                                Email
+                              </th>
+                              {visibleColumns.map((title) => (
+                                <th
+                                  key={`${roleName}-${title}`}
+                                  className="text-left px-4 py-3 font-medium whitespace-nowrap"
+                                >
+                                  {title} Score
+                                </th>
+                              ))}
+                              <th className="text-left px-4 py-3 font-medium whitespace-nowrap">
+                                Target Score
+                              </th>
+                              <th className="text-left px-4 py-3 font-medium whitespace-nowrap">
+                                Achieved Score
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {roleRows.map((row, index) => (
+                              <tr
+                                key={`${roleName}-${row.email}-${index}`}
+                                className="border-b last:border-b-0"
+                              >
+                                <td className="px-4 py-3">{row.name || "-"}</td>
+                                <td className="px-4 py-3">
+                                  {row.email || "-"}
+                                </td>
+                                {visibleColumns.map((title) => (
+                                  <td
+                                    key={`${roleName}-${row.email}-${title}`}
+                                    className="px-4 py-3"
+                                  >
+                                    {Number(row.formScores[title] || 0)}
+                                  </td>
+                                ))}
+                                <td className="px-4 py-3">{row.targetScore}</td>
+                                <td className="px-4 py-3">
+                                  {row.achievedScore}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </DashboardLayout>
     );
   }
@@ -353,6 +715,154 @@ export default function Dashboard() {
       if (sub.status === "appealed") personalAppealed++;
     });
 
+    const exportCommitteeCollegeWiseExcel = () => {
+      if (user?.role !== "committee") return;
+
+      const getScoreColumnKey = (sub: any) => {
+        const criteria = String(sub?.criteriaName || "").trim();
+        if (criteria) return criteria;
+
+        const form = String(sub?.formTitle || "").trim();
+        if (form) return form;
+
+        return "Unspecified";
+      };
+
+      const colleges = Array.from(
+        new Set(
+          staffList.map((staff: any) =>
+            String(staff.college || "Unknown College").trim(),
+          ),
+        ),
+      ).sort((a, b) => a.localeCompare(b));
+
+      const toSafeSheetName = (rawName: string) =>
+        (
+          String(rawName || "Role")
+            .replace(/[\\/?*\[\]:]/g, "-")
+            .trim() || "Role"
+        ).slice(0, 31);
+
+      const toSafeFilePart = (rawName: string) =>
+        String(rawName || "College")
+          .replace(/[<>:"/\\|?*]/g, "-")
+          .replace(/\s+/g, " ")
+          .trim() || "College";
+
+      colleges.forEach((collegeName) => {
+        const workbook = XLSX.utils.book_new();
+        const collegeStaff = staffList.filter(
+          (staff: any) =>
+            String(staff.college || "Unknown College").trim() === collegeName,
+        );
+
+        if (collegeStaff.length === 0) return;
+
+        const rolesInCollege = Array.from(
+          new Set(
+            collegeStaff
+              .map((staff: any) => String(staff.role || "Unknown Role").trim())
+              .filter(Boolean),
+          ),
+        ).sort((a, b) => a.localeCompare(b));
+
+        const usedSheetNames = new Set<string>();
+        const toUniqueSheetName = (rawName: string) => {
+          const base = toSafeSheetName(rawName);
+          if (!usedSheetNames.has(base)) {
+            usedSheetNames.add(base);
+            return base;
+          }
+
+          let index = 2;
+          while (index < 1000) {
+            const suffix = ` (${index})`;
+            const candidate = `${base.slice(0, 31 - suffix.length)}${suffix}`;
+            if (!usedSheetNames.has(candidate)) {
+              usedSheetNames.add(candidate);
+              return candidate;
+            }
+            index++;
+          }
+
+          return `Role-${Date.now()}`.slice(0, 31);
+        };
+
+        rolesInCollege.forEach((roleName) => {
+          const roleStaff = collegeStaff.filter(
+            (staff: any) =>
+              String(staff.role || "Unknown Role").trim() === roleName,
+          );
+
+          if (roleStaff.length === 0) return;
+
+          const scoreColumns = Array.from(
+            new Set(
+              roleStaff.flatMap((staff: any) =>
+                (staff.submissions || [])
+                  .map((sub: any) => getScoreColumnKey(sub))
+                  .filter(Boolean),
+              ),
+            ),
+          ).sort((a, b) => a.localeCompare(b));
+
+          const rowsForExcel = roleStaff.map((staff: any) => {
+            const submissions = Array.isArray(staff.submissions)
+              ? staff.submissions
+              : [];
+            const base: Record<string, string | number> = {
+              Name: String(staff.name || ""),
+              Email: String(staff.email || ""),
+              Role: String(staff.role || ""),
+              College: collegeName,
+            };
+
+            scoreColumns.forEach((title) => {
+              base[`${title} Score`] = submissions
+                .filter((sub: any) => getScoreColumnKey(sub) === title)
+                .reduce(
+                  (sum: number, sub: any) =>
+                    sum +
+                    Number(
+                      sub.finalScore ??
+                        sub.reviewerScore ??
+                        sub.claimedScore ??
+                        0,
+                    ),
+                  0,
+                );
+            });
+
+            base["Target Score"] = Number(staff.designationTarget || 0);
+            base["Achieved Score"] = submissions.reduce(
+              (sum: number, sub: any) =>
+                sum +
+                Number(
+                  sub.finalScore ?? sub.reviewerScore ?? sub.claimedScore ?? 0,
+                ),
+              0,
+            );
+
+            return base;
+          });
+
+          if (rowsForExcel.length === 0) return;
+
+          const worksheet = XLSX.utils.json_to_sheet(rowsForExcel);
+          XLSX.utils.book_append_sheet(
+            workbook,
+            worksheet,
+            toUniqueSheetName(roleName),
+          );
+        });
+
+        if ((workbook.SheetNames || []).length === 0) return;
+
+        const fileCollegeName = toSafeFilePart(collegeName);
+        XLSX.writeFile(workbook, `committee-${fileCollegeName}-users.xlsx`);
+      });
+    };
+
     return (
       <DashboardLayout
         title={`${displayName}'s Dashboard`}
@@ -367,7 +877,7 @@ export default function Dashboard() {
         }
       >
         {user?.role !== "committee" && (
-          <div className="mb-6">
+          <div className="mb-8">
             <DeadlineAlert />
           </div>
         )}
@@ -383,7 +893,7 @@ export default function Dashboard() {
         />
 
         {isHod && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
             {/* Score Overview */}
             <ScoreOverview
               submissions={submissions}
@@ -445,7 +955,7 @@ export default function Dashboard() {
         {isHod && (
           <>
             {/* Recent Activity */}
-            <div className="mt-8 mb-8">
+            <div className="mt-10 mb-10">
               <RecentActivity
                 submissions={
                   isHod
@@ -456,7 +966,7 @@ export default function Dashboard() {
             </div>
 
             {/* FPMS Section */}
-            <div className="mt-8 mb-8 space-y-4">
+            <div className="mt-10 mb-10 space-y-4">
               <div>
                 <h2 className="text-xl font-semibold text-foreground">
                   FPMS Categories
@@ -477,24 +987,36 @@ export default function Dashboard() {
           </>
         )}
 
-        <Card className="shadow-sm rounded-xl overflow-hidden mt-6 mb-6">
-          <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10">
-            <CardTitle className="flex items-center gap-2 text-xl font-bold">
-              <Building className="h-5 w-5 text-primary" />
-              {isHod
-                ? "Department Staff Overview"
-                : "College → Role → Staff Overview"}
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">
-              {isHod
-                ? "Browse staff members in your department and their submissions"
-                : "Browse institutions, roles, staff, and their detailed submissions with counts"}
-            </CardDescription>
+        <Card className="shadow-sm rounded-xl overflow-hidden mt-8 mb-10">
+          <CardHeader className="flex flex-row items-center justify-between bg-gradient-to-r from-primary/5 to-primary/10">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-xl font-bold">
+                <Building className="h-5 w-5 text-primary" />
+                {isHod
+                  ? "Department Staff Overview"
+                  : "College → Role → Staff Overview"}
+              </CardTitle>
+              <CardDescription className="text-muted-foreground">
+                {isHod
+                  ? "Browse staff members in your department and their submissions"
+                  : "Browse institutions, roles, staff, and their detailed submissions with counts"}
+              </CardDescription>
+            </div>
+            {user?.role === "committee" && (
+              <Button
+                variant="outline"
+                onClick={exportCommitteeCollegeWiseExcel}
+              >
+                Export Excel
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             <Accordion type="single" collapsible className="divide-y">
               {Object.entries(groupedData).map(([collegeName, roles]: any) => {
-                const collegeStaffCount = Object.values(roles).reduce(
+                const collegeStaffCount = (
+                  Object.values(roles) as any[]
+                ).reduce(
                   (sum: number, staffArray: any) => sum + staffArray.length,
                   0,
                 );
@@ -732,8 +1254,10 @@ export default function Dashboard() {
                                                                 modules,
                                                               ).length;
                                                             const criteriaSubsCount =
-                                                              Object.values(
-                                                                modules,
+                                                              (
+                                                                Object.values(
+                                                                  modules,
+                                                                ) as any[]
                                                               ).reduce(
                                                                 (
                                                                   sum: number,
@@ -957,7 +1481,7 @@ export default function Dashboard() {
         {["committee", "principle", "vice principle"].includes(
           user?.role || "",
         ) && (
-          <div className="mt-8 mb-6 bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden">
+          <div className="mt-10 mb-10 bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden">
             {/* Header */}
             <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-100">
               <div className="flex items-center gap-3">
@@ -1165,7 +1689,7 @@ export default function Dashboard() {
         )}
 
         {filteredData.length > 0 && (
-          <div className="mt-6 mb-6 bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden">
+          <div className="mt-8 mb-10 bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden">
             {/* Header */}
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
               <div className="flex items-center gap-3">

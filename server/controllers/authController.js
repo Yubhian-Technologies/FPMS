@@ -116,6 +116,10 @@ const normalizeRoleKey = (value) => {
     return "committee";
   }
 
+  if (cleaned === "internalcommittee" || cleaned === "internalcommitee") {
+    return "internalcommittee";
+  }
+
   if (cleaned === "viceprincipal" || cleaned === "viceprinciple") {
     return "viceprinciple";
   }
@@ -1794,7 +1798,7 @@ export const getSubmissionAppealWorkflowRules = async (req, res) => {
       : [];
 
     const roleNames = new Set(
-      roles.map((item) => String(item?.name || "").trim()).filter(Boolean),
+      roles.map((item) => normalizeRoleKey(item?.name || "")).filter(Boolean),
     );
 
     const normalizeRoleList = (value, fallbackValue) => {
@@ -1816,13 +1820,15 @@ export const getSubmissionAppealWorkflowRules = async (req, res) => {
         submitToRoles: normalizeRoleList(
           item?.submitToRoles,
           item?.submitToRole,
-        ).filter((role) => roleNames.has(role)),
+        ).filter((role) => roleNames.has(normalizeRoleKey(role))),
         appealToRoles: normalizeRoleList(
           item?.appealToRoles,
           item?.appealToRole,
-        ).filter((role) => roleNames.has(role)),
+        ).filter((role) => roleNames.has(normalizeRoleKey(role))),
       }))
-      .filter((item) => item.role && roleNames.has(item.role));
+      .filter(
+        (item) => item.role && roleNames.has(normalizeRoleKey(item.role)),
+      );
 
     return res.status(200).json({ success: true, data: result });
   } catch (error) {
@@ -1848,7 +1854,7 @@ export const updateSubmissionAppealWorkflowRules = async (req, res) => {
 
     const roles = Array.isArray(data.roles) ? data.roles : [];
     const roleNames = new Set(
-      roles.map((item) => String(item?.name || "").trim()).filter(Boolean),
+      roles.map((item) => normalizeRoleKey(item?.name || "")).filter(Boolean),
     );
 
     const normalizeRoleList = (value, fallbackValue) => {
@@ -1878,13 +1884,21 @@ export const updateSubmissionAppealWorkflowRules = async (req, res) => {
       }))
       .filter((item) => item.role);
 
-    const allowedAppealRoleKeys = new Set(["committee", "principle"]);
+    const allowedAppealRoleKeys = new Set([
+      "committee",
+      "principle",
+      "internalcommittee",
+    ]);
 
     const hasInvalidRole = normalizedRules.some(
       (item) =>
-        !roleNames.has(item.role) ||
-        item.submitToRoles.some((role) => !roleNames.has(role)) ||
-        item.appealToRoles.some((role) => !roleNames.has(role)),
+        !roleNames.has(normalizeRoleKey(item.role)) ||
+        item.submitToRoles.some(
+          (role) => !roleNames.has(normalizeRoleKey(role)),
+        ) ||
+        item.appealToRoles.some(
+          (role) => !roleNames.has(normalizeRoleKey(role)),
+        ),
     );
 
     if (hasInvalidRole) {
@@ -1903,7 +1917,8 @@ export const updateSubmissionAppealWorkflowRules = async (req, res) => {
     if (hasInvalidAppealReviewer) {
       return res.status(400).json({
         success: false,
-        message: "Appeal roles can only include Principal or Committee",
+        message:
+          "Appeal roles can only include Principal, Committee, or Internal Committee",
       });
     }
 
@@ -1942,6 +1957,25 @@ export const getApplicableForms = async (req, res) => {
       role = normalizeRoleValue(req.headers["x-user-role"]);
       console.log(
         "[getApplicableForms] DEV MODE - Using x-user-role header:",
+        role,
+      );
+    }
+
+    const requesterRole = role;
+    const requestedRole = normalizeRoleValue(req.query?.role || "");
+    const canOverrideRole = [
+      "committee",
+      "principle",
+      "vice principle",
+      "internal committee",
+    ].includes(String(requesterRole || ""));
+
+    if (requestedRole && canOverrideRole) {
+      role = requestedRole;
+      console.log(
+        "[getApplicableForms] Role override applied. Requester:",
+        requesterRole,
+        "| Target role:",
         role,
       );
     }

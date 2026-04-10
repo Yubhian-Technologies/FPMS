@@ -50,12 +50,26 @@ export const adminAuth = async (req, res, next) => {
       // If college is empty for a principle, look it up from the admins collection
       if (!userCollege && isPrincipalOrVicePrincipalRole(userRole)) {
         try {
-          const snap = await db
+          const normalizedEmail = String(userEmail).trim().toLowerCase();
+
+          const adminSnap = await db
             .collection("admins")
-            .where("email", "==", String(userEmail).trim().toLowerCase())
+            .where("email", "==", normalizedEmail)
             .limit(1)
             .get();
-          if (!snap.empty) userCollege = snap.docs[0].data()?.college || "";
+          if (!adminSnap.empty) {
+            userCollege = adminSnap.docs[0].data()?.college || "";
+          }
+
+          if (!userCollege) {
+            const userSnap = await db
+              .collection("users")
+              .where("email", "==", normalizedEmail)
+              .limit(1)
+              .get();
+            if (!userSnap.empty)
+              userCollege = userSnap.docs[0].data()?.college || "";
+          }
         } catch (e) {
           console.error("[adminAuth] DEV college lookup failed:", e.message);
         }
@@ -132,16 +146,29 @@ export const adminAuth = async (req, res, next) => {
           adminCollege = adminDoc.data()?.college || "";
         }
         if (!adminCollege && decodedFirebase.email) {
+          const normalizedEmail = String(decodedFirebase.email)
+            .trim()
+            .toLowerCase();
           const snap = await db
             .collection("admins")
-            .where(
-              "email",
-              "==",
-              String(decodedFirebase.email).trim().toLowerCase(),
-            )
+            .where("email", "==", normalizedEmail)
             .limit(1)
             .get();
           if (!snap.empty) adminCollege = snap.docs[0].data()?.college || "";
+        }
+
+        if (!adminCollege && decodedFirebase.email) {
+          const normalizedEmail = String(decodedFirebase.email)
+            .trim()
+            .toLowerCase();
+          const userSnapByEmail = await db
+            .collection("users")
+            .where("email", "==", normalizedEmail)
+            .limit(1)
+            .get();
+          if (!userSnapByEmail.empty) {
+            adminCollege = userSnapByEmail.docs[0].data()?.college || "";
+          }
         }
       } catch (e) {
         console.error("[adminAuth] PROD college lookup failed:", e.message);

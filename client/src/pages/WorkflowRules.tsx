@@ -53,12 +53,18 @@ const normalizeRoleKey = (value: string) => {
     return "committee";
   }
 
+  if (cleaned === "internalcommittee" || cleaned === "internalcommitee") {
+    return "internal committee";
+  }
+
   return cleaned;
 };
 
 const isAllowedAppealReviewerRole = (value: string) => {
   const key = normalizeRoleKey(value);
-  return key === "principle" || key === "committee";
+  return (
+    key === "principle" || key === "committee" || key === "internal committee"
+  );
 };
 
 export default function WorkflowRules() {

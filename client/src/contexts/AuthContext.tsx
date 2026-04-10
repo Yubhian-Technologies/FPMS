@@ -3,7 +3,9 @@ import { api } from "@/api/api";
 
 type Role =
   | "committee"
+  | "internal committee"
   | "principle"
+  | "vice principle"
   | "hod"
   | "dean"
   | "faculty"
@@ -15,6 +17,7 @@ interface User {
   name: string;
   email: string;
   role: Role;
+  level?: number;
   college?: string;
   department?: string;
   designation?: string;

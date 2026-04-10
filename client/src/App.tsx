@@ -36,6 +36,7 @@ import AppealHod from "./pages/AppealHod";
 import CommitteeReview from "./pages/CommitteeReview";
 import AddDean from "./pages/AddDean";
 import AddHod from "./pages/AddHod";
+import AddInternalCommittee from "./pages/AddInternalCommittee";
 import DeanTeachingLearning from "./pages/dean-forms/DeanTeachingLearning";
 import DeanBTeachingLearning from "./pages/deanb-forms/DeanBTeachingLearning";
 import DeanAppeals from "./pages/DeanAppeal";
@@ -56,12 +57,15 @@ const normalizeRoleForAccess = (role?: string) => {
     .toLowerCase();
 
   if (value.startsWith("dean")) return "dean";
-  if (value === "principal" || value === "principal" || value === "admin") {
+  if (value === "principal" || value === "principle" || value === "admin") {
     return "principal";
+  }
+  if (value === "internal committee" || value === "internal commitee") {
+    return "internal committee";
   }
   if (
     value === "vice principal" ||
-    value === "vice principal" ||
+    value === "vice principle" ||
     value === "vice-principal" ||
     value === "viceprincipal"
   ) {
@@ -124,7 +128,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-   
+
       <Route
         path="/review"
         element={
@@ -145,7 +149,13 @@ function AppRoutes() {
         path="/appeal-review"
         element={
           <ProtectedRoute
-            allowedRoles={["dean", "vice principal", "principal", "committee"]}
+            allowedRoles={[
+              "dean",
+              "vice principal",
+              "principal",
+              "committee",
+              "internal committee",
+            ]}
           >
             <AppealReview />
           </ProtectedRoute>
@@ -240,6 +250,14 @@ function AppRoutes() {
       ></Route>
       <Route path="/add-dean" element={<AddDean></AddDean>}></Route>
       <Route path="/add-hod" element={<AddHod></AddHod>}></Route>
+      <Route
+        path="/add-internal-committee"
+        element={
+          <ProtectedRoute allowedRoles={["principal"]}>
+            <AddInternalCommittee />
+          </ProtectedRoute>
+        }
+      ></Route>
       <Route
         path="/fpms/hodb-teaching"
         element={
