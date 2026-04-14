@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Footer } from "@/components/layout/Footer";
 import vishnuLogo from "@/assets/vishnu.png";
+import { formatRoleLabel } from "@/lib/utils";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -41,7 +42,7 @@ export default function Login() {
       if (user) {
         toast({
           title: "Login successful",
-          description: `Welcome ${user.role.toUpperCase()}!`,
+          description: `Welcome ${formatRoleLabel(user.role)}!`,
         });
 
         navigate("/dashboard", { replace: true });

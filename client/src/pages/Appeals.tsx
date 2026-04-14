@@ -15,6 +15,7 @@ import {
 import { api } from "@/api/api";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { formatRoleLabel } from "@/lib/utils";
 
 interface AppealFormData {
   module: string;
@@ -366,7 +367,9 @@ const Appeals = () => {
                 {user.name}
               </h2>
               <h2 className="text-sm text-gray-600">{user.email}</h2>
-              <h2 className="text-sm text-gray-600 capitalize">{user.role}</h2>
+              <h2 className="text-sm text-gray-600 capitalize">
+                {formatRoleLabel(user.role)}
+              </h2>
             </div>
             {facultyAppeals.map((a) => {
               const isExpanded = expandedAppealIds.includes(a.id);

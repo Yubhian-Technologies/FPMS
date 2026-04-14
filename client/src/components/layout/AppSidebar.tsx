@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { cn } from "@/lib/utils";
+import { cn, formatRoleLabel } from "@/lib/utils";
 import { api } from "@/api/api";
 import vishnuLogo from "@/assets/vishnu.png";
 import {
@@ -436,7 +436,7 @@ export function AppSidebar() {
                   {displayName}
                 </p>
                 <p className="text-xs text-sidebar-foreground/60 capitalize">
-                  {user.role}
+                  {formatRoleLabel(user.role)}
                 </p>
               </div>
               <Button

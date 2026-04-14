@@ -23,6 +23,7 @@ import { Trash2, Plus, Save, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/api/api";
 import DeleteConfirmationDialog from "@/components/DeleteConfirmationDialog";
+import { formatRoleLabel } from "@/lib/utils";
 
 interface Role {
   id: string;
@@ -282,7 +283,9 @@ export default function RoleManagement() {
                 <TableBody>
                   {roles.map((role) => (
                     <TableRow key={role.id}>
-                      <TableCell className="font-medium">{role.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {formatRoleLabel(role.name)}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="secondary">Level {role.level}</Badge>
                       </TableCell>
@@ -324,7 +327,7 @@ export default function RoleManagement() {
               if (!open && !deletingRoleId) setRoleToDelete(null);
             }}
             title="Delete role?"
-            description={`This will permanently delete ${roleToDelete?.name || "this role"}.`}
+            description={`This will permanently delete ${formatRoleLabel(roleToDelete?.name) || "this role"}.`}
             confirmText="Delete"
             isLoading={!!deletingRoleId}
             onConfirm={() => {

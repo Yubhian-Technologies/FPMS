@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User, Mail, Building, GraduationCap, Briefcase } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatRoleLabel } from "@/lib/utils";
 
 interface UserProfileProps {
   user: {
@@ -54,7 +54,7 @@ export function UserProfile({ user }: UserProfileProps) {
             "mt-1.5 px-3 py-1 text-sm font-medium bg-slate-100 text-black",
           )}
         >
-          {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+          {formatRoleLabel(user.role)}
         </Badge>
       </CardHeader>
 
