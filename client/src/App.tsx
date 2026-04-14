@@ -8,7 +8,7 @@ import { FPMSProvider } from "@/contexts/FPMSContext";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import FPMSForm from "./pages/FPMSForm";
+
 import Review from "./pages/Review";
 import Reports from "./pages/Reports";
 import Faculty from "./pages/Faculty";
@@ -36,6 +36,7 @@ import AppealHod from "./pages/AppealHod";
 import CommitteeReview from "./pages/CommitteeReview";
 import AddDean from "./pages/AddDean";
 import AddHod from "./pages/AddHod";
+import AddInternalCommittee from "./pages/AddInternalCommittee";
 import DeanTeachingLearning from "./pages/dean-forms/DeanTeachingLearning";
 import DeanBTeachingLearning from "./pages/deanb-forms/DeanBTeachingLearning";
 import DeanAppeals from "./pages/DeanAppeal";
@@ -57,7 +58,10 @@ const normalizeRoleForAccess = (role?: string) => {
 
   if (value.startsWith("dean")) return "dean";
   if (value === "principal" || value === "principle" || value === "admin") {
-    return "principle";
+    return "principal";
+  }
+  if (value === "internal committee" || value === "internal commitee") {
+    return "internal committee";
   }
   if (
     value === "vice principal" ||
@@ -65,7 +69,7 @@ const normalizeRoleForAccess = (role?: string) => {
     value === "vice-principal" ||
     value === "viceprincipal"
   ) {
-    return "vice principle";
+    return "vice principal";
   }
 
   return value;
@@ -124,14 +128,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/fpms-form"
-        element={
-          <ProtectedRoute allowedRoles={["faculty"]}>
-            <FPMSForm />
-          </ProtectedRoute>
-        }
-      />
+
       <Route
         path="/review"
         element={
@@ -140,8 +137,8 @@ function AppRoutes() {
               "hod",
               "committee",
               "dean",
-              "vice principle",
-              "principle",
+              "vice principal",
+              "principal",
             ]}
           >
             <Review />
@@ -152,7 +149,13 @@ function AppRoutes() {
         path="/appeal-review"
         element={
           <ProtectedRoute
-            allowedRoles={["dean", "vice principle", "principle", "committee"]}
+            allowedRoles={[
+              "dean",
+              "vice principal",
+              "principal",
+              "committee",
+              "internal committee",
+            ]}
           >
             <AppealReview />
           </ProtectedRoute>
@@ -161,7 +164,7 @@ function AppRoutes() {
       <Route
         path="/reports"
         element={
-          <ProtectedRoute allowedRoles={["hod", "committee", "principle"]}>
+          <ProtectedRoute allowedRoles={["hod", "committee", "principal"]}>
             <Reports />
           </ProtectedRoute>
         }
@@ -177,7 +180,7 @@ function AppRoutes() {
       <Route
         path="/designations"
         element={
-          <ProtectedRoute allowedRoles={["principle"]}>
+          <ProtectedRoute allowedRoles={["principal"]}>
             <Designations />
           </ProtectedRoute>
         }
@@ -185,7 +188,7 @@ function AppRoutes() {
       <Route
         path="/departments"
         element={
-          <ProtectedRoute allowedRoles={["committee", "principle"]}>
+          <ProtectedRoute allowedRoles={["committee", "principal"]}>
             <Departments />
           </ProtectedRoute>
         }
@@ -247,6 +250,14 @@ function AppRoutes() {
       ></Route>
       <Route path="/add-dean" element={<AddDean></AddDean>}></Route>
       <Route path="/add-hod" element={<AddHod></AddHod>}></Route>
+      <Route
+        path="/add-internal-committee"
+        element={
+          <ProtectedRoute allowedRoles={["principal"]}>
+            <AddInternalCommittee />
+          </ProtectedRoute>
+        }
+      ></Route>
       <Route
         path="/fpms/hodb-teaching"
         element={

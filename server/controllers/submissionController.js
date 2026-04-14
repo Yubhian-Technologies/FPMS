@@ -14,6 +14,10 @@ const normalizeRoleForWorkflow = (value) => {
     return "committee";
   }
 
+  if (role === "internal committee" || role === "internal commitee") {
+    return "internal committee";
+  }
+
   return role;
 };
 
@@ -21,6 +25,8 @@ const isPrincipalRole = (value) =>
   normalizeRoleForWorkflow(value) === "principle";
 const isCommitteeRole = (value) =>
   normalizeRoleForWorkflow(value) === "committee";
+const isInternalCommitteeRole = (value) =>
+  normalizeRoleForWorkflow(value) === "internal committee";
 
 const parseBearerToken = (authorizationHeader) => {
   const value = String(authorizationHeader || "").trim();
@@ -1008,6 +1014,8 @@ export const getAppealQueue = async (req, res) => {
 
     if (isPrincipalRole(userRole) && college) {
       query = query.where("college", "==", college);
+    } else if (isInternalCommitteeRole(userRole) && college) {
+      query = query.where("college", "==", college);
     } else if (!isCommitteeRole(userRole)) {
       if (college) query = query.where("college", "==", college);
       if (department) query = query.where("department", "==", department);
@@ -1130,11 +1138,14 @@ export const reviewAppeal = async (req, res) => {
       });
     }
 
-    if (isPrincipalRole(normalizedAppealerRole)) {
+    if (
+      isPrincipalRole(normalizedAppealerRole) ||
+      isInternalCommitteeRole(normalizedAppealerRole)
+    ) {
       if (!reviewerCollege) {
         return res.status(403).json({
           success: false,
-          message: "Principal college not found. Please login again.",
+          message: "Reviewer college not found. Please login again.",
         });
       }
 

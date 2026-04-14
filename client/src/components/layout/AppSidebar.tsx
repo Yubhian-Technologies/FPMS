@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { cn } from "@/lib/utils";
+import { cn, formatRoleLabel } from "@/lib/utils";
 import { api } from "@/api/api";
 import vishnuLogo from "@/assets/vishnu.png";
 import {
@@ -53,6 +53,10 @@ const normalizeRoleForAccess = (role?: string) => {
     return "vice principle";
   }
 
+  if (value === "internal committee" || value === "internal commitee") {
+    return "internal committee";
+  }
+
   return value;
 };
 
@@ -92,6 +96,7 @@ const getNavItems = (
         "faculty",
         "hod",
         "committee",
+        "internal committee",
         "principle",
         "dean",
         "vice principle",
@@ -143,6 +148,12 @@ const getNavItems = (
     },
     {
       icon: ClipboardCheck,
+      label: "Add Internal Committee",
+      href: "/add-internal-committee",
+      roles: ["principle"],
+    },
+    {
+      icon: ClipboardCheck,
       label: "Review Submissions",
       href: "/review",
       roles: ["hod", "committee", "dean", "vice principle", "principle"],
@@ -151,7 +162,7 @@ const getNavItems = (
       icon: ClipboardCheck,
       label: "Review Appeals",
       href: "/appeal-review",
-      roles: ["vice principle", "principle", "committee"],
+      roles: ["vice principle", "principle", "committee", "internal committee"],
     },
     {
       icon: BarChart3,
@@ -216,6 +227,7 @@ const getNavItems = (
         "faculty",
         "hod",
         "committee",
+        "internal committee",
         "principle",
         "dean",
         "vice principle",
@@ -269,7 +281,7 @@ export function AppSidebar() {
   const navItems = getNavItems(user.role, dynamicForms, isFormsLoading);
   const shouldShowFullScreenLoader =
     isFormsLoading &&
-    ["faculty", "hod", "dean", "principle"].includes(
+    ["faculty", "hod", "dean", "principle", "internal committee"].includes(
       normalizeRoleForAccess(user.role),
     );
 
@@ -424,7 +436,7 @@ export function AppSidebar() {
                   {displayName}
                 </p>
                 <p className="text-xs text-sidebar-foreground/60 capitalize">
-                  {user.role}
+                  {formatRoleLabel(user.role)}
                 </p>
               </div>
               <Button

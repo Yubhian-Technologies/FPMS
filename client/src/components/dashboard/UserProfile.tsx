@@ -2,15 +2,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User, Mail, Building, GraduationCap, Briefcase } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatRoleLabel } from "@/lib/utils";
 
 interface UserProfileProps {
   user: {
-    id: string;
+    id?: string;
     name: string;
     email: string;
     role: string;
-    level: number;
+    level?: number;
     college?: string;
     department?: string;
     designation?: string;
@@ -20,12 +20,13 @@ interface UserProfileProps {
 
 export function UserProfile({ user }: UserProfileProps) {
   // Simple role-based styling (customize as needed)
-  const roleVariant = {
-    student: "secondary",
-    teacher: "default",
-    admin: "destructive",
-    faculty: "outline",
-  }[user.role.toLowerCase()] ?? "secondary";
+  const roleVariant =
+    {
+      student: "secondary",
+      teacher: "default",
+      admin: "destructive",
+      faculty: "outline",
+    }[user.role.toLowerCase()] ?? "secondary";
 
   const getInitials = (name: string) =>
     name
@@ -39,33 +40,27 @@ export function UserProfile({ user }: UserProfileProps) {
     <Card
       className={cn(
         "overflow-hidden border shadow-sm transition-all duration-200",
-        "hover:shadow-md hover:-translate-y-0.5 "
+        "hover:shadow-md hover:-translate-y-0.5 ",
       )}
     >
       {/* Header with avatar & name */}
       <CardHeader className="bg-gradient-to-b from-muted/40 to-transparent pb-6 pt-8 text-center">
-        
-
         <CardTitle className="text-2xl font-bold tracking-tight">
           {user.name}
         </CardTitle>
 
         <Badge
-          
           className={cn(
             "mt-1.5 px-3 py-1 text-sm font-medium bg-slate-100 text-black",
-            
           )}
         >
-          {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+          {formatRoleLabel(user.role)}
         </Badge>
       </CardHeader>
 
       <CardContent className="space-y-5 px-6 pb-6 pt-2">
         <div className="grid gap-4 text-sm">
           <InfoRow icon={Mail} label="Email" value={user.email} />
-
-         
 
           {user.college && (
             <InfoRow icon={Building} label="College" value={user.college} />
@@ -87,9 +82,6 @@ export function UserProfile({ user }: UserProfileProps) {
             />
           )}
         </div>
-
-        
-        
       </CardContent>
     </Card>
   );
@@ -111,9 +103,7 @@ function InfoRow({
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-sm font-medium text-foreground truncate">
-          {value}
-        </p>
+        <p className="text-sm font-medium text-foreground truncate">{value}</p>
       </div>
     </div>
   );

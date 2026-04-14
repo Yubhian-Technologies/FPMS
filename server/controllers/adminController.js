@@ -22,6 +22,34 @@ const isHodRole = (value) => {
   return normalized === "hod" || normalized.startsWith("hod");
 };
 
+const normalizeInternalCommitteeRole = (value) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\-_]+/g, " ")
+    .replace(/\s+/g, " ");
+
+  if (normalized.includes("internal") && normalized.includes("committee")) {
+    return "internal committee";
+  }
+
+  return normalized;
+};
+
+const isInternalCommitteeRole = (value) =>
+  normalizeInternalCommitteeRole(value) === "internal committee";
+
+const isPrincipalManagementRole = (value) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  return (
+    normalized === "principal" ||
+    normalized === "principle" ||
+    normalized === "admin"
+  );
+};
+
 export const adminLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -472,6 +500,495 @@ export const getHodRoleOption = async (req, res) => {
     });
   } catch (error) {
     console.error("Get HOD role option error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const getInternalCommitteeRoleOption = async (req, res) => {
+  try {
+    const superadminDoc = await db
+      .collection("superadmin")
+      .doc(SUPERADMIN_DOC_ID)
+      .get();
+
+    if (!superadminDoc.exists) {
+      return res.status(200).json({
+        success: true,
+        data: { name: "internal committee", level: 0 },
+      });
+    }
+
+    const data = superadminDoc.data() || {};
+    const roles = Array.isArray(data.roles) ? data.roles : [];
+
+    const roleOption = roles
+      .map((item) => ({
+        id: item.id,
+        name: String(item.name || "").trim(),
+        level: Number(item.level),
+      }))
+      .find(
+        (item) =>
+          item.name &&
+          Number.isFinite(item.level) &&
+          isInternalCommitteeRole(item.name),
+      );
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        id: roleOption?.id,
+        name: roleOption?.name || "internal committee",
+        level: Number(roleOption?.level ?? 0),
+      },
+    });
+  } catch (error) {
+    console.error("Get internal committee role option error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const getAllInternalCommittees = async (req, res) => {
+  try {
+    const actorRole = String(req.admin?.role || "")
+      .trim()
+      .toLowerCase();
+    if (!isPrincipalManagementRole(actorRole)) {
+      return res.status(403).json({
+        success: false,
+        message: "Only principal can manage internal committee",
+      });
+    }
+
+    const principalCollege = String(req.admin?.college || "")
+      .trim()
+      .toLowerCase();
+
+    if (!principalCollege) {
+      return res.status(400).json({
+        success: false,
+        message: "Principal college not found",
+      });
+    }
+
+    const snapshot = await db.collection(USERS_COLLECTION).get();
+    const members = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((item) => isInternalCommitteeRole(item.role || ""))
+      .filter(
+        (item) =>
+          String(item.college || "")
+            .trim()
+            .toLowerCase() === principalCollege,
+      );
+
+    return res.status(200).json({ success: true, data: members });
+  } catch (error) {
+    console.error("Get internal committee users error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const addInternalCommittee = async (req, res) => {
+  try {
+    const actorRole = String(req.admin?.role || "")
+      .trim()
+      .toLowerCase();
+    if (!isPrincipalManagementRole(actorRole)) {
+      return res.status(403).json({
+        success: false,
+        message: "Only principal can add internal committee users",
+      });
+    }
+
+    const principalCollege = String(req.admin?.college || "").trim();
+    if (!principalCollege) {
+      return res.status(400).json({
+        success: false,
+        message: "Principal college not found",
+      });
+    }
+
+    const {
+      name,
+      email,
+      password,
+      pass,
+      confirmPassword,
+      confirm_pass,
+      phone,
+      role,
+      level,
+      dateOfJoining,
+      experience,
+      hasPhd,
+    } = req.body || {};
+
+    const normalizedName = String(name || "").trim();
+    const normalizedEmail = String(email || "")
+      .trim()
+      .toLowerCase();
+    const normalizedPhone = String(phone || "").trim();
+    const resolvedPassword = String(password ?? pass ?? "");
+    const resolvedConfirmPassword = String(
+      confirmPassword ?? confirm_pass ?? "",
+    );
+    const normalizedRole = normalizeInternalCommitteeRole(
+      role || "internal committee",
+    );
+    const normalizedLevel = Number(level);
+
+    if (
+      !normalizedName ||
+      !normalizedEmail ||
+      !normalizedPhone ||
+      !resolvedPassword ||
+      level === undefined
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
+    }
+
+    if (!isInternalCommitteeRole(normalizedRole)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role for internal committee user",
+      });
+    }
+
+    if (!Number.isFinite(normalizedLevel)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid level",
+      });
+    }
+
+    if (resolvedPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters long",
+      });
+    }
+
+    if (
+      resolvedConfirmPassword &&
+      resolvedPassword !== resolvedConfirmPassword
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Password confirmation does not match",
+      });
+    }
+
+    try {
+      await auth.getUserByEmail(normalizedEmail);
+      return res.status(409).json({
+        success: false,
+        message: "User already exists",
+      });
+    } catch (error) {
+      if (error?.code && error.code !== "auth/user-not-found") {
+        throw error;
+      }
+    }
+
+    const existingCollegeMembersSnap = await db
+      .collection(USERS_COLLECTION)
+      .where("college", "==", principalCollege)
+      .get();
+
+    const existingInternalCommitteeMember = existingCollegeMembersSnap.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .find(
+        (item) =>
+          Boolean(item.internalCommittee) || isInternalCommitteeRole(item.role),
+      );
+
+    if (existingInternalCommitteeMember) {
+      return res.status(409).json({
+        success: false,
+        message: "Only one internal committee user is allowed per college",
+      });
+    }
+
+    const userRecord = await auth.createUser({
+      email: normalizedEmail,
+      password: resolvedPassword,
+      displayName: normalizedName,
+    });
+
+    await auth.setCustomUserClaims(userRecord.uid, {
+      role: normalizedRole,
+      level: normalizedLevel,
+      college: principalCollege,
+      internalCommittee: true,
+    });
+
+    const hashedPassword = await bcrypt.hash(resolvedPassword, 10);
+
+    await db
+      .collection(USERS_COLLECTION)
+      .doc(userRecord.uid)
+      .set(
+        {
+          uid: userRecord.uid,
+          name: normalizedName,
+          email: normalizedEmail,
+          phone: normalizedPhone,
+          password: hashedPassword,
+          role: normalizedRole,
+          level: normalizedLevel,
+          college: principalCollege,
+          internalCommittee: true,
+          hasPhd: Boolean(hasPhd),
+          ...(dateOfJoining ? { dateOfJoining: String(dateOfJoining) } : {}),
+          ...(experience !== undefined
+            ? { experience: Number(experience) }
+            : {}),
+          isActive: true,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+    return res.status(201).json({
+      success: true,
+      message: "Internal committee user added successfully",
+    });
+  } catch (error) {
+    console.error("Add internal committee user error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const updateInternalCommittee = async (req, res) => {
+  try {
+    const actorRole = String(req.admin?.role || "")
+      .trim()
+      .toLowerCase();
+    if (!isPrincipalManagementRole(actorRole)) {
+      return res.status(403).json({
+        success: false,
+        message: "Only principal can update internal committee users",
+      });
+    }
+
+    const principalCollege = String(req.admin?.college || "")
+      .trim()
+      .toLowerCase();
+    if (!principalCollege) {
+      return res.status(400).json({
+        success: false,
+        message: "Principal college not found",
+      });
+    }
+
+    const { id } = req.params;
+    const memberRef = db.collection(USERS_COLLECTION).doc(id);
+    const memberDoc = await memberRef.get();
+
+    if (!memberDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Internal committee user not found",
+      });
+    }
+
+    const currentData = memberDoc.data() || {};
+    const memberCollege = String(currentData.college || "")
+      .trim()
+      .toLowerCase();
+
+    if (memberCollege !== principalCollege) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied",
+      });
+    }
+
+    if (!isInternalCommitteeRole(currentData.role || "")) {
+      return res.status(400).json({
+        success: false,
+        message: "Selected user is not an internal committee member",
+      });
+    }
+
+    const {
+      name,
+      email,
+      phone,
+      level,
+      password,
+      pass,
+      confirmPassword,
+      confirm_pass,
+      dateOfJoining,
+      experience,
+      hasPhd,
+    } = req.body || {};
+
+    const updateData = {};
+    const authUpdatePayload = {};
+
+    if (name) {
+      updateData.name = String(name).trim();
+      authUpdatePayload.displayName = String(name).trim();
+    }
+    if (email) {
+      updateData.email = String(email).trim().toLowerCase();
+      authUpdatePayload.email = String(email).trim().toLowerCase();
+    }
+    if (phone !== undefined) updateData.phone = String(phone || "").trim();
+    if (level !== undefined) {
+      const normalizedLevel = Number(level);
+      if (!Number.isFinite(normalizedLevel)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid level",
+        });
+      }
+      updateData.level = normalizedLevel;
+    }
+    if (dateOfJoining !== undefined)
+      updateData.dateOfJoining = String(dateOfJoining || "");
+    if (experience !== undefined) updateData.experience = Number(experience);
+    if (hasPhd !== undefined) updateData.hasPhd = Boolean(hasPhd);
+    updateData.college = currentData.college || principalCollege;
+
+    const resolvedPassword = String(password ?? pass ?? "");
+    const resolvedConfirmPassword = String(
+      confirmPassword ?? confirm_pass ?? "",
+    );
+
+    if (resolvedPassword) {
+      if (resolvedPassword.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must be at least 6 characters long",
+        });
+      }
+      if (
+        resolvedConfirmPassword &&
+        resolvedPassword !== resolvedConfirmPassword
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Password confirmation does not match",
+        });
+      }
+      updateData.password = await bcrypt.hash(resolvedPassword, 10);
+      authUpdatePayload.password = resolvedPassword;
+    }
+
+    const nextLevel = Number(
+      updateData.level !== undefined ? updateData.level : currentData.level,
+    );
+    const nextEmail = String(updateData.email || currentData.email || "")
+      .trim()
+      .toLowerCase();
+    const nextName = String(updateData.name || currentData.name || "").trim();
+
+    if (nextName) authUpdatePayload.displayName = nextName;
+    if (nextEmail) authUpdatePayload.email = nextEmail;
+
+    if (Object.keys(authUpdatePayload).length > 0) {
+      await auth.updateUser(id, authUpdatePayload);
+    }
+
+    await auth.setCustomUserClaims(id, {
+      role: "internal committee",
+      level: Number.isFinite(nextLevel) ? nextLevel : 0,
+      college: String(currentData.college || "").trim(),
+      internalCommittee: true,
+    });
+
+    updateData.role = "internal committee";
+    updateData.internalCommittee = true;
+    updateData.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+
+    await memberRef.set(updateData, { merge: true });
+
+    return res.status(200).json({
+      success: true,
+      message: "Internal committee user updated successfully",
+    });
+  } catch (error) {
+    console.error("Update internal committee user error:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const deleteInternalCommittee = async (req, res) => {
+  try {
+    const actorRole = String(req.admin?.role || "")
+      .trim()
+      .toLowerCase();
+    if (!isPrincipalManagementRole(actorRole)) {
+      return res.status(403).json({
+        success: false,
+        message: "Only principal can delete internal committee users",
+      });
+    }
+
+    const principalCollege = String(req.admin?.college || "")
+      .trim()
+      .toLowerCase();
+    if (!principalCollege) {
+      return res.status(400).json({
+        success: false,
+        message: "Principal college not found",
+      });
+    }
+
+    const { id } = req.params;
+    const memberRef = db.collection(USERS_COLLECTION).doc(id);
+    const memberDoc = await memberRef.get();
+
+    if (!memberDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Internal committee user not found",
+      });
+    }
+
+    const currentData = memberDoc.data() || {};
+    const memberCollege = String(currentData.college || "")
+      .trim()
+      .toLowerCase();
+
+    if (memberCollege !== principalCollege) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied",
+      });
+    }
+
+    if (!isInternalCommitteeRole(currentData.role || "")) {
+      return res.status(400).json({
+        success: false,
+        message: "Selected user is not an internal committee member",
+      });
+    }
+
+    try {
+      await auth.deleteUser(id);
+    } catch (authError) {
+      if (authError?.code !== "auth/user-not-found") {
+        throw authError;
+      }
+    }
+
+    await memberRef.delete();
+
+    return res.status(200).json({
+      success: true,
+      message: "Internal committee user deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete internal committee user error:", error);
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };

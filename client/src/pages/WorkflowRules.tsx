@@ -21,6 +21,7 @@ import {
 import { Loader2, ChevronDown } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { api } from "@/api/api";
+import { formatRoleLabel } from "@/lib/utils";
 
 interface RoleOption {
   id?: string;
@@ -53,12 +54,18 @@ const normalizeRoleKey = (value: string) => {
     return "committee";
   }
 
+  if (cleaned === "internalcommittee" || cleaned === "internalcommitee") {
+    return "internal committee";
+  }
+
   return cleaned;
 };
 
 const isAllowedAppealReviewerRole = (value: string) => {
   const key = normalizeRoleKey(value);
-  return key === "principle" || key === "committee";
+  return (
+    key === "principle" || key === "committee" || key === "internal committee"
+  );
 };
 
 export default function WorkflowRules() {
@@ -200,7 +207,7 @@ export default function WorkflowRules() {
     if (!Array.isArray(selectedRoles) || selectedRoles.length === 0) {
       return "None";
     }
-    return selectedRoles.join(", ");
+    return selectedRoles.map((role) => formatRoleLabel(role)).join(", ");
   };
 
   const handleSave = async () => {
@@ -252,7 +259,7 @@ export default function WorkflowRules() {
                     {rules.map((item) => (
                       <TableRow key={item.role}>
                         <TableCell className="font-medium">
-                          {item.role}
+                          {formatRoleLabel(item.role)}
                         </TableCell>
                         <TableCell>
                           <DropdownMenu>
@@ -289,7 +296,7 @@ export default function WorkflowRules() {
                                     }
                                     onSelect={(event) => event.preventDefault()}
                                   >
-                                    {role.name}
+                                    {formatRoleLabel(role.name)}
                                   </DropdownMenuCheckboxItem>
                                 ))}
                             </DropdownMenuContent>
@@ -330,7 +337,7 @@ export default function WorkflowRules() {
                                     }
                                     onSelect={(event) => event.preventDefault()}
                                   >
-                                    {role.name}
+                                    {formatRoleLabel(role.name)}
                                   </DropdownMenuCheckboxItem>
                                 ))}
                             </DropdownMenuContent>

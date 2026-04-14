@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { api } from "@/api/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -72,15 +72,44 @@ export default function AppealReview() {
   const [openRole, setOpenRole] = useState<string | null>(null);
   const [openFaculty, setOpenFaculty] = useState<string | null>(null);
 
-  const canReviewAppeal =
-    user?.role === "dean" ||
-    user?.role === "principle" ||
-    user?.role === "committee" ||
-    String(user?.role || "")
-      .toLowerCase()
-      .includes("vice");
+  const normalizedUserRole = String(user?.role || "")
+    .trim()
+    .toLowerCase();
 
-  const isCommittee = user?.role === "committee";
+  const canReviewAppeal =
+    normalizedUserRole === "dean" ||
+    normalizedUserRole === "principle" ||
+    normalizedUserRole === "committee" ||
+    normalizedUserRole === "internal committee" ||
+    normalizedUserRole.includes("vice");
+
+  const isCommittee =
+    normalizedUserRole === "committee" ||
+    normalizedUserRole === "internal committee";
+  const isInternalCommittee = normalizedUserRole === "internal committee";
+  const currentUserCollege = String(user?.college || "")
+    .trim()
+    .toLowerCase();
+
+  const visibleQueue = useMemo(() => {
+    if (!isInternalCommittee || !currentUserCollege) return queue;
+    return queue.filter(
+      (item) =>
+        String(item.college || "")
+          .trim()
+          .toLowerCase() === currentUserCollege,
+    );
+  }, [queue, isInternalCommittee, currentUserCollege]);
+
+  const visibleResolvedItems = useMemo(() => {
+    if (!isInternalCommittee || !currentUserCollege) return resolvedItems;
+    return resolvedItems.filter(
+      (item) =>
+        String(item.college || "")
+          .trim()
+          .toLowerCase() === currentUserCollege,
+    );
+  }, [resolvedItems, isInternalCommittee, currentUserCollege]);
 
   const fetchQueue = async () => {
     setLoading(true);
@@ -164,7 +193,7 @@ export default function AppealReview() {
   }
 
   // ── Data preparation ────────────────────────────────────────
-  const facultyMap = [...queue, ...resolvedItems].reduce(
+  const facultyMap = [...visibleQueue, ...visibleResolvedItems].reduce(
     (acc, item) => {
       const email = (item.userEmail || "unknown").trim().toLowerCase();
       if (email === "unknown") return acc;
@@ -188,14 +217,24 @@ export default function AppealReview() {
 
   let facultyList = Object.entries(facultyMap)
     .filter(([email]) => email !== "unknown")
-    .map(([email, data]) => ({
-      email,
-      name: data.name,
-      role: data.role,
-      college: data.college,
-      total: data.items.length,
-      pending: data.items.filter((i) => i.appealerScore === null).length,
-    }));
+    .map(
+      ([email, data]: [
+        string,
+        {
+          name: string;
+          role: string;
+          college: string;
+          items: SubmissionItem[];
+        },
+      ]) => ({
+        email,
+        name: data.name,
+        role: data.role,
+        college: data.college,
+        total: data.items.length,
+        pending: data.items.filter((i) => i.appealerScore === null).length,
+      }),
+    );
 
   if (searchTerm.trim()) {
     const term = searchTerm.toLowerCase().trim();
@@ -542,7 +581,7 @@ export default function AppealReview() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {queue.length + resolvedItems.length}
+              {visibleQueue.length + visibleResolvedItems.length}
             </p>
           </CardContent>
         </Card>
@@ -554,7 +593,7 @@ export default function AppealReview() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-destructive">
-              {queue.length}
+              {visibleQueue.length}
             </p>
           </CardContent>
         </Card>
@@ -566,7 +605,7 @@ export default function AppealReview() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-green-600">
-              {resolvedItems.length}
+              {visibleResolvedItems.length}
             </p>
           </CardContent>
         </Card>

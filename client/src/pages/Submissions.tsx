@@ -37,6 +37,7 @@ import {
   Scale,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { formatRoleLabel } from "@/lib/utils";
 import { api } from "@/api/api";
 import { resolveEvidenceLink } from "@/lib/utils";
 import jsPDF from "jspdf";
@@ -390,7 +391,7 @@ export default function Submissions() {
     doc.setFontSize(11);
     doc.text(`Name: ${user.name || "Unknown"}`, 25, 62);
     doc.text(`Email: ${user.email}`, 25, 70);
-    doc.text(`Role: ${user.role?.toUpperCase() || "Faculty"}`, 25, 78);
+    doc.text(`Role: ${formatRoleLabel(user.role) || "Faculty"}`, 25, 78);
 
     let y = 110;
     doc.setFontSize(14);
